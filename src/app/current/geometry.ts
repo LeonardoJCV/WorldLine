@@ -208,7 +208,7 @@ export interface CompanionTrack {
   readonly extinct: boolean
 }
 
-// FIX: o lado precisa ser estável por worldline, não pela posição no array
+// FIX: lado fixo por worldline, não pela posição no array
 export function companionSide(id: string): 1 | -1 {
   return WORLDLINE_IDS.indexOf(id as WorldlineId) % 2 === 0 ? -1 : 1
 }
@@ -236,12 +236,15 @@ export function companionAt(
   tracks: readonly { readonly id: string; readonly points: Float32Array }[],
   x: number,
   y: number,
+  frame: Frame,
   radius = 6,
 ): string | null {
   for (const track of tracks) {
     for (let i = 0; i < track.points.length; i += 2) {
+      const py = track.points[i + 1] ?? 0
+      if (Math.abs(py - frame.centerY) <= radius) continue
       const dx = (track.points[i] ?? 0) - x
-      const dy = (track.points[i + 1] ?? 0) - y
+      const dy = py - y
       if (dx * dx + dy * dy <= radius * radius) return track.id
     }
   }

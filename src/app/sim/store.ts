@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { EventRecord } from '../../engine/events.ts'
+import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
   EndReason,
@@ -11,7 +12,6 @@ import type {
 } from '../../worker/protocol.ts'
 import type { MultiverseLink } from '../world/link.ts'
 import type { SimulationClient } from './client.ts'
-import { MODEL_VERSION } from '../../engine/params.ts'
 
 export type Mode = 'observe' | 'intervene'
 
@@ -46,6 +46,7 @@ export interface SimulationState {
   readonly decisions: readonly Decision[]
   readonly view: View | null
   readonly linkVersion: number | null
+  readonly branching: boolean
   create(seed: number): void
   open(link: MultiverseLink): void
   togglePlay(): void
@@ -105,6 +106,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     decisions: [],
     view: null,
     linkVersion: null,
+    branching: false,
     create(seed) {
       get().open({ version: MODEL_VERSION, seed, tick: 0, decisions: [], branches: [] })
     },
@@ -127,6 +129,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         decisions: [],
         view: null,
         linkVersion: link.version,
+        branching: false,
       })
       client.open(link.seed, link.tick, link.decisions, link.branches)
     },
@@ -179,7 +182,6 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     },
     setMode(mode) {
       set({ mode })
-      if (mode === 'intervene') get().setCursor(null)
     },
     select(index) {
       set({ selected: index })
@@ -192,12 +194,14 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     branch(allocation) {
       const { focus, cursor, present } = get()
       const tick = cursor ?? present?.tick ?? 0
+      set({ branching: true })
       client.branch(focus, tick, allocation).then(
         (id) => {
-          get().setFocus(id)
+          set({ branching: false })
           get().setCursor(null)
+          get().setFocus(id)
         },
-        (error: unknown) => set({ error: messageOf(error) }),
+        (error: unknown) => set({ branching: false, error: messageOf(error) }),
       )
     },
     remove(id) {

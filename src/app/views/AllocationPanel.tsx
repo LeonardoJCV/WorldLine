@@ -14,10 +14,13 @@ export function AllocationPanel() {
   const status = useSimulation((s) => s.present?.status ?? 'running')
   const current = useSimulation((s) => s.present?.allocation ?? DEFAULT_ALLOCATION)
   const observed = useSimulation((s) => s.inspected?.allocation ?? null)
+  const inspectedTick = useSimulation((s) => s.inspected?.tick ?? null)
   const decisions = useSimulation((s) => s.decisions)
   const cursor = useSimulation((s) => s.cursor)
   const full = useSimulation((s) => s.worlds.length >= MAX_WORLDLINES)
+  const branching = useSimulation((s) => s.branching)
   const inPast = cursor !== null
+  const awaitingInspect = inPast && inspectedTick !== cursor
   const pending = decisions.at(-1)
   const base = inPast
     ? (observed ?? current)
@@ -83,7 +86,12 @@ export function AllocationPanel() {
             type="button"
             className="allocation__apply"
             onClick={() => (inPast ? branch(draft) : decide(draft))}
-            disabled={blocked !== null || (!inPast && sameAllocation(draft, base))}
+            disabled={
+              blocked !== null ||
+              awaitingInspect ||
+              branching ||
+              (!inPast && sameAllocation(draft, base))
+            }
           >
             {inPast ? t('allocation.branch', { year }) : t('allocation.apply')}
           </button>

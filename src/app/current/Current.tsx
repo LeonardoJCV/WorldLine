@@ -234,7 +234,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
           select(hit.index)
           return
         }
-        const other = companionAt(companions, x, y)
+        const other = companionAt(companions, x, y, frame)
         if (other) {
           simulation.getState().setFocus(other as WorldlineId)
           return
@@ -249,7 +249,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
           return
         }
         event.currentTarget.style.cursor =
-          markerAt(markers, x, y, frame, LABEL_WIDTH) || companionAt(companions, x, y)
+          markerAt(markers, x, y, frame, LABEL_WIDTH) || companionAt(companions, x, y, frame)
             ? 'pointer'
             : ''
       }}

@@ -41,6 +41,7 @@ export function Observatory({
   const seed = useSimulation((s) => s.seed ?? 0)
   const worldFocus = useSimulation((s) => s.focus)
   const cursor = useSimulation((s) => s.cursor)
+  const inspectedTick = useSimulation((s) => s.inspected?.tick ?? null)
   const observed = useSimulation((s) => s.inspected ?? s.present)
   const linkVersion = useSimulation((s) => s.linkVersion)
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
@@ -71,7 +72,9 @@ export function Observatory({
         <StatePanel focus={focus} onFocus={setFocus} />
         <div className="band__main">
           {mode === 'intervene' ? (
-            <AllocationPanel key={`${seed}:${worldFocus}:${cursor === null ? 'now' : 'past'}`} />
+            <AllocationPanel
+              key={`${seed}:${worldFocus}:${cursor === null ? 'now' : (inspectedTick ?? 'pending')}`}
+            />
           ) : (
             <>
               <EventsPanel />
