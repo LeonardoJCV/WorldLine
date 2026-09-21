@@ -8,8 +8,10 @@ import { LABEL_WIDTH, drawCurrent } from './draw.ts'
 import {
   companionAt,
   companionPoints,
+  companionSide,
   layoutEvents,
   markerAt,
+  movingAverage,
   seedPhase,
   xToYear,
   type CompanionTrack,
@@ -79,7 +81,8 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
               id: world.info.id,
               from: result.from,
               to: result.to,
-              values: result.values,
+              // FIX: suaviza os saltos entre amostras (mesmo raio do minimapa)
+              values: movingAverage(result.values, 3),
               extinct: world.present.status === 'extinct',
             })),
         ),
@@ -107,10 +110,10 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
 
   const companions = useMemo(
     () =>
-      tracks.map((track, index) => ({
+      tracks.map((track) => ({
         id: track.id,
         extinct: track.extinct,
-        points: companionPoints(track, index, shownFrom, shownTo, frame),
+        points: companionPoints(track, companionSide(track.id), shownFrom, shownTo, frame),
       })),
     [tracks, shownFrom, shownTo, frame],
   )

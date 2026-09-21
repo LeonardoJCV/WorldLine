@@ -11,6 +11,7 @@ import {
   buildRibbons,
   companionAt,
   companionPoints,
+  companionSide,
   episodeY,
   eraLabelY,
   layoutEvents,
@@ -251,24 +252,31 @@ describe('companion tracks', () => {
   }
 
   it('spreads the track from the axis in proportion to the distance', () => {
-    const points = companionPoints(track, 0, 0, 100, frame)
+    const points = companionPoints(track, -1, 0, 100, frame)
     expect(points).toHaveLength(6)
     expect(points[0]).toBe(frame.left)
     expect(points[1]).toBe(frame.centerY)
     expect(points[5]).toBeCloseTo(frame.centerY - 0.5 * frame.height * COMPANION_SCALE, 5)
   })
 
-  it('alternates sides by index', () => {
+  it('flips to the other side when given a positive side', () => {
     const below = companionPoints(track, 1, 0, 100, frame)
     expect(below[5]).toBeGreaterThan(frame.centerY)
   })
 
   it('finds the track under the pointer', () => {
-    const points = companionPoints(track, 0, 0, 100, frame)
+    const points = companionPoints(track, -1, 0, 100, frame)
     const x = points[4] ?? 0
     const y = points[5] ?? 0
     expect(companionAt([{ id: 'B', points }], x + 2, y - 2)).toBe('B')
     expect(companionAt([{ id: 'B', points }], x, y + 40)).toBeNull()
+  })
+
+  it('derives a stable side from the worldline letter, independent of array order', () => {
+    expect(companionSide('A')).toBe(-1)
+    expect(companionSide('B')).toBe(1)
+    expect(companionSide('C')).toBe(-1)
+    expect(companionSide('B')).toBe(companionSide('B'))
   })
 })
 

@@ -1,6 +1,6 @@
 import { EVENTS, type EventId, type EventRecord } from '../../engine/events.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
-import type { Series } from '../../worker/protocol.ts'
+import { WORLDLINE_IDS, type Series, type WorldlineId } from '../../worker/protocol.ts'
 import { PLANET_BODY } from '../planet/uniforms.ts'
 import { STRANDS, normalize, type Row, type Strand } from './normalize.ts'
 
@@ -208,22 +208,26 @@ export interface CompanionTrack {
   readonly extinct: boolean
 }
 
+// FIX: o lado precisa ser estável por worldline, não pela posição no array
+export function companionSide(id: string): 1 | -1 {
+  return WORLDLINE_IDS.indexOf(id as WorldlineId) % 2 === 0 ? -1 : 1
+}
+
 export function companionPoints(
   track: CompanionTrack,
-  index: number,
+  side: 1 | -1,
   from: number,
   to: number,
   frame: Frame,
 ): Float32Array {
   const count = track.values.length
   const points = new Float32Array(count * 2)
-  const sign = index % 2 === 0 ? -1 : 1
   const span = Math.max(1, track.to - track.from)
   for (let i = 0; i < count; i++) {
     const year = count <= 1 ? track.to : track.from + (span * i) / (count - 1)
     points[i * 2] = yearToX(year, from, to, frame)
     points[i * 2 + 1] =
-      frame.centerY + sign * (track.values[i] ?? 0) * frame.height * COMPANION_SCALE
+      frame.centerY + side * (track.values[i] ?? 0) * frame.height * COMPANION_SCALE
   }
   return points
 }
