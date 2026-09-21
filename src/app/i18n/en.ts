@@ -1,0 +1,47 @@
+import type { EventId } from '../../engine/events.ts'
+import type { Variable } from '../../engine/state.ts'
+
+export const en = {
+  'app.name': 'WORLDLINE',
+  'app.tagline': 'Every decision creates a different future.',
+  'seed.label': 'Seed',
+  'transport.label': 'Time controls',
+  'transport.play': 'Play',
+  'transport.pause': 'Pause',
+  'transport.step': 'Advance one year',
+  'transport.speed.max': 'Max',
+  'transport.yearsPerSecond': '{speed} years per second',
+  'transport.fastest': 'As fast as possible',
+  'year.present': 'Present',
+  'year.label': 'Year',
+  'current.label': 'Worldline history from year 0 to {year}',
+  'current.value': 'Year {year}',
+  'current.returnToPresent': 'Return to the present',
+  'planet.label': 'The world in year {year}',
+  'legend.label': 'Variables',
+  'locale.switch': 'Português',
+  'ended.extinction': 'This civilisation went extinct.',
+  'ended.horizon': 'The simulation reached its horizon.',
+  'error.simulation': 'The simulation stopped: {message}',
+  'variable.population': 'Population',
+  'variable.food': 'Food',
+  'variable.energy': 'Energy',
+  'variable.technology': 'Technology',
+  'variable.economy': 'Economy',
+  'variable.environment': 'Environment',
+  'variable.stability': 'Stability',
+  'event.agricultural_revolution': 'Agricultural revolution',
+  'event.industrial_revolution': 'Industrial revolution',
+  'event.demographic_transition': 'Demographic transition',
+  'event.famine': 'Famine',
+  'event.epidemic': 'Epidemic',
+  'event.energy_crisis': 'Energy crisis',
+  'event.ecological_crisis': 'Ecological crisis',
+  'event.recession': 'Recession',
+  'event.civil_unrest': 'Civil unrest',
+  'event.golden_age': 'Golden age',
+  'event.extinction': 'Extinction',
+} as const satisfies Record<`event.${EventId}` | `variable.${Variable}`, string> &
+  Record<string, string>
+
+export type MessageKey = keyof typeof en
