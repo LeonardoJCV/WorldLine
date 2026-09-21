@@ -12,9 +12,7 @@ async function branchFromStart(page: Page) {
   await history.focus()
   await history.press('Home')
   const branch = page.getByRole('button', { name: 'Branch from year 0000' })
-  // Wait for the panel to settle on the observed allocation before editing: the
-  // sliders stay disabled until then, so editing too early would be discarded
-  // once the panel catches up.
+  // espera o painel carregar o ano observado
   await expect(branch).toBeEnabled()
   const agriculture = page.getByRole('slider', { name: /Agriculture/ })
   await agriculture.focus()
@@ -78,8 +76,7 @@ test('shows the allocation of the observed year, not the present, when branching
   const history = page.getByRole('slider', { name: /Worldline history/ })
   await history.focus()
   await history.press('Home')
-  // Year 0 is before the decision applied at year 5: the sliders must fall back
-  // to the default allocation, not the present (post-decision) one.
+  // ano 0 vem antes da decisão: volta à alocação padrão
   await expect(agriculture).toHaveValue('40')
 
   const branch = page.getByRole('button', { name: 'Branch from year 0000' })
@@ -91,8 +88,7 @@ test('shows the allocation of the observed year, not the present, when branching
   )
   await expect(page.getByText('vs A')).toBeVisible()
 
-  // The branch was made without touching the sliders, so up to the year of the
-  // original decision (5) it must retrace A exactly: no arrows in the "vs A" column.
+  // ramo copia A até a decisão: sem divergência em "vs A"
   await history.focus()
   await history.press('Home')
   for (let i = 0; i < 4; i++) await history.press('ArrowRight')
@@ -111,8 +107,7 @@ test('keeps the edited allocation when branching, so the new worldline actually 
   await page.getByRole('button', { name: 'Play' }).click()
   await page.waitForTimeout(1500)
   await page.getByRole('button', { name: 'Pause' }).click()
-  // The edited allocation must have stuck (not been discarded by a remount),
-  // so after enough years the branch measurably differs from its origin.
+  // alocação editada persiste no ramo
   await expect(page.getByText('Distance 0.00')).toHaveCount(0)
 })
 
