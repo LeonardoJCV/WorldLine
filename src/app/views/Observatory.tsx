@@ -5,6 +5,8 @@ import { stageLayout } from '../current/geometry.ts'
 import { Minimap } from '../current/Minimap.tsx'
 import type { Strand } from '../current/normalize.ts'
 import { ZoomControls } from '../current/ZoomControls.tsx'
+import { TIERS } from '../graphics/settings.ts'
+import { useTier } from '../graphics/store.ts'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { simulation, useSimulation } from '../sim/runtime.ts'
@@ -32,6 +34,7 @@ export function Observatory({
   }, [link])
   useLinkSync()
   const t = useT()
+  const tier = useTier()
   const stageRef = useRef<HTMLElement>(null)
   const size = useElementSize(stageRef)
   const [focus, setFocus] = useState<Strand | null>(null)
@@ -59,7 +62,12 @@ export function Observatory({
                 top: layout.planet.cy - layout.planet.size / 2,
               }}
             >
-              <Planet size={layout.planet.size} seed={seed} snapshot={observed} />
+              <Planet
+                size={layout.planet.size}
+                seed={seed}
+                snapshot={observed}
+                detail={TIERS[tier].focus}
+              />
             </div>
             <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
             <ZoomControls />

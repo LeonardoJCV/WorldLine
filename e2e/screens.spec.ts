@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { useGraphics } from './stage.ts'
 
 test.skip(!process.env.SCREENS, 'screenshots are captured on demand')
 
@@ -53,6 +54,16 @@ test('observatory intervene', async ({ page }) => {
   await page.waitForTimeout(300)
   await page.screenshot({ path: 'screens/observatory-intervene.png' })
 })
+
+for (const level of ['low', 'high', 'ultra'] as const) {
+  test(`genesis planet ${level}`, async ({ page }) => {
+    await useGraphics(page, level)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/')
+    await page.waitForTimeout(1500)
+    await page.screenshot({ path: `screens/genesis-planet-${level}.png` })
+  })
+}
 
 test('observatory multiverse', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })

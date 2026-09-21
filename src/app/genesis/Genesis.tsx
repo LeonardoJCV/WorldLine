@@ -2,6 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import { genesis } from '../../engine/genesis.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import { toSnapshot } from '../../worker/protocol.ts'
+import { TIERS } from '../graphics/settings.ts'
+import { useTier } from '../graphics/store.ts'
 import { formatCompact, formatDecimal } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
@@ -18,6 +20,7 @@ interface GenesisProps {
 export function Genesis({ onStart }: GenesisProps) {
   const t = useT()
   const locale = useLocale()
+  const tier = useTier()
   const [text, setText] = useState(() => String(randomSeed()))
   const seed = seedFromText(text)
   const preview = useMemo(() => (seed === null ? null : genesis(seed)), [seed])
@@ -93,7 +96,7 @@ export function Genesis({ onStart }: GenesisProps) {
       </section>
       <div className="genesis__planet" ref={planetRef}>
         {seed !== null && snapshot && planetSize > 0 && (
-          <Planet size={planetSize} seed={seed} snapshot={snapshot} />
+          <Planet size={planetSize} seed={seed} snapshot={snapshot} detail={TIERS[tier].focus} />
         )}
       </div>
     </div>

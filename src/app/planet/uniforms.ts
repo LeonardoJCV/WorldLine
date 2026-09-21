@@ -26,12 +26,14 @@ export interface PlanetState {
   readonly blight: number
   readonly unrest: number
   readonly extinct: number
+  readonly clouds: number
 }
 
 export const MAX_SATELLITES = 12
 export const CAMERA_DISTANCE = 6
 export const CAMERA_FOV = 30
 export const PLANET_BODY = 1 / (CAMERA_DISTANCE * Math.tan(((CAMERA_FOV / 2) * Math.PI) / 180))
+export const PLANET_LIGHT: readonly [number, number, number] = [-0.65, 0.35, 0.68]
 const VISUAL_CHANNEL = 4096
 
 const TEAL = hexToRgb('#1fa58a')
@@ -92,5 +94,6 @@ export function planetState(snapshot: Snapshot): PlanetState {
     blight: snapshot.active.includes('ecological_crisis') ? 1 : 0,
     unrest: snapshot.active.includes('civil_unrest') ? 1 : 0,
     extinct,
+    clouds: extinct ? 0.15 : 0.3 + 0.5 * unit(values.environment / 100),
   }
 }

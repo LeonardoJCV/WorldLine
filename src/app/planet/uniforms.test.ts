@@ -96,6 +96,14 @@ describe('planetState', () => {
     expect([state.famine, state.blight, state.unrest]).toEqual([1, 1, 1])
   })
 
+  it('thickens clouds with a healthy environment and thins them on a dead world', () => {
+    const lush = planetState(snapshot({ environment: 90 }))
+    const bare = planetState(snapshot({ environment: 10 }))
+    expect(lush.clouds).toBeGreaterThan(bare.clouds)
+    expect(lush.clouds).toBeLessThanOrEqual(0.8)
+    expect(planetState(snapshot({}, { status: 'extinct' })).clouds).toBe(0.15)
+  })
+
   it('goes dark after extinction', () => {
     const state = planetState(snapshot({ population: 500 }, { status: 'extinct' }))
     expect(state.extinct).toBe(1)

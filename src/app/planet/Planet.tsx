@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { PlanetDetail } from '../graphics/settings.ts'
+import { TIERS } from '../graphics/settings.ts'
+import { useGraphics, useTier } from '../graphics/store.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import { drawFallbackPlanet } from './fallback.ts'
@@ -6,27 +9,21 @@ import type { PlanetScene } from './scene.ts'
 import { planetPalette, planetState, type PlanetState } from './uniforms.ts'
 import type { Snapshot } from '../../worker/protocol.ts'
 
-function supportsWebGL(): boolean {
-  try {
-    const probe = document.createElement('canvas')
-    return Boolean(probe.getContext('webgl2') ?? probe.getContext('webgl'))
-  } catch {
-    return false
-  }
-}
-
 interface PlanetProps {
   readonly size: number
   readonly seed: number
   readonly snapshot: Snapshot | null
+  readonly detail: PlanetDetail
 }
 
-export function Planet({ size, seed, snapshot }: PlanetProps) {
+export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<PlanetScene | null>(null)
   const latest = useRef<{ size: number; state: PlanetState | null }>({ size, state: null })
-  const [renderer, setRenderer] = useState(() => (supportsWebGL() ? 'webgl' : 'fallback'))
+  const webgl = useGraphics((s) => s.webgl)
+  const tier = useTier()
+  const [renderer, setRenderer] = useState(() => (webgl ? 'webgl' : 'fallback'))
   const palette = useMemo(() => planetPalette(seed), [seed])
   const state = useMemo(() => (snapshot ? planetState(snapshot) : null), [snapshot])
 
@@ -43,7 +40,7 @@ export function Planet({ size, seed, snapshot }: PlanetProps) {
     void import('./scene.ts')
       .then(({ createPlanetScene }) => {
         if (disposed) return
-        const scene = createPlanetScene(canvas, palette, reducedMotion)
+        const scene = createPlanetScene(canvas, palette, detail, TIERS[tier].dpr, reducedMotion)
         sceneRef.current = scene
         scene.resize(latest.current.size, window.devicePixelRatio || 1)
         if (latest.current.state) scene.update(latest.current.state)
@@ -56,7 +53,7 @@ export function Planet({ size, seed, snapshot }: PlanetProps) {
       sceneRef.current?.dispose()
       sceneRef.current = null
     }
-  }, [renderer, palette])
+  }, [renderer, palette, detail, tier])
 
   useEffect(() => {
     sceneRef.current?.resize(size, window.devicePixelRatio || 1)
