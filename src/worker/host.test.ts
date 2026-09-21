@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
@@ -139,6 +139,21 @@ describe('SimulationHost', () => {
     expect(reply?.requestId).toBe(5)
     expect(reply?.snapshot.tick).toBe(120)
     expect(reply?.snapshot.values.technology).toBe(reference.present.technology)
+  })
+
+  it('reports an error and stops playback when a frame throws', () => {
+    const { host, sent, clock } = setup()
+    host.handle({ type: 'create', seed: SEED, decisions: [] })
+    const spy = vi.spyOn(Worldline.prototype, 'advance').mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    host.handle({ type: 'play', speed: 16 })
+    clock.advance(100)
+    expect(last(sent, 'error')?.message).toBe('boom')
+    const tick = last(sent, 'progress')?.present.tick
+    clock.advance(1000)
+    expect(last(sent, 'progress')?.present.tick).toBe(tick)
+    spy.mockRestore()
   })
 
   it('reports errors for requests before a world exists', () => {

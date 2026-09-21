@@ -3,14 +3,16 @@ import type { FromWorker, Series, Snapshot, Speed, ToWorker } from '../../worker
 
 export interface Port {
   send(message: ToWorker): void
-  listen(handler: (message: FromWorker) => void): void
+  listen(handler: (message: FromWorker) => void, onFailure: (message: string) => void): void
 }
 
 export function workerPort(worker: Worker): Port {
   return {
     send: (message) => worker.postMessage(message),
-    listen: (handler) => {
+    listen: (handler, onFailure) => {
       worker.onmessage = (event: MessageEvent<FromWorker>) => handler(event.data)
+      worker.onerror = (event) => onFailure(event.message || 'worker failed')
+      worker.onmessageerror = () => onFailure('worker message could not be read')
     },
   }
 }
@@ -36,7 +38,10 @@ export class SimulationClient {
 
   constructor(port: Port) {
     this.#port = port
-    port.listen((message) => this.#receive(message))
+    port.listen(
+      (message) => this.#receive(message),
+      (message) => this.#fail(message),
+    )
   }
 
   create(seed: number, decisions: readonly Decision[] = []): void {
@@ -85,6 +90,12 @@ export class SimulationClient {
       this.#pending.set(requestId, { resolve, reject })
       this.#port.send(message)
     })
+  }
+
+  #fail(message: string): void {
+    for (const pending of this.#pending.values()) pending.reject(new Error(message))
+    this.#pending.clear()
+    for (const listener of this.#listeners) listener({ type: 'error', message })
   }
 
   #receive(message: FromWorker): void {

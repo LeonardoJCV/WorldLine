@@ -3,17 +3,23 @@ import type { FromWorker } from '../../worker/protocol.ts'
 import { FakeClock } from '../../worker/testing.ts'
 import type { Port } from './client.ts'
 
-export function connectInProcess(): { readonly port: Port; readonly clock: FakeClock } {
+export function connectInProcess(): {
+  readonly port: Port
+  readonly clock: FakeClock
+  readonly fail: (message: string) => void
+} {
   const clock = new FakeClock()
   let handler: ((message: FromWorker) => void) | null = null
+  let onFailure: ((message: string) => void) | null = null
   const host = new SimulationHost((message) => queueMicrotask(() => handler?.(message)), clock)
   const port: Port = {
     send: (message) => queueMicrotask(() => host.handle(message)),
-    listen: (next) => {
+    listen: (next, failure) => {
       handler = next
+      onFailure = failure
     },
   }
-  return { port, clock }
+  return { port, clock, fail: (message) => onFailure?.(message) }
 }
 
 export function flush(): Promise<void> {

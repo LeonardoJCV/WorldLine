@@ -43,4 +43,15 @@ describe('SimulationClient', () => {
     await flush()
     expect(received).toEqual([])
   })
+
+  it('rejects pending requests and notifies subscribers when the worker fails', async () => {
+    const { port, fail } = connectInProcess()
+    const client = new SimulationClient(port)
+    const received: FromWorker[] = []
+    client.subscribe((message) => received.push(message))
+    const inspecting = client.inspect(3)
+    fail('crashed')
+    await expect(inspecting).rejects.toThrow('crashed')
+    expect(received).toContainEqual({ type: 'error', message: 'crashed' })
+  })
 })

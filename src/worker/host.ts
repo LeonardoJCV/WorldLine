@@ -154,22 +154,32 @@ export class SimulationHost {
     this.#timer = null
     const worldline = this.#worldline
     if (!worldline || !this.#playing) return
-    const now = this.#clock.now()
-    if (this.#speed === 'max') {
-      let advanced = 0
-      while (!worldline.ended && advanced < MAX_SLICE_YEARS && this.#clock.now() - now < SLICE_MS) {
-        advanced += worldline.advance(SLICE_STEP)
+    try {
+      const now = this.#clock.now()
+      if (this.#speed === 'max') {
+        let advanced = 0
+        while (
+          !worldline.ended &&
+          advanced < MAX_SLICE_YEARS &&
+          this.#clock.now() - now < SLICE_MS
+        ) {
+          advanced += worldline.advance(SLICE_STEP)
+        }
+      } else {
+        this.#carry += ((now - this.#last) / 1000) * this.#speed
+        const years = Math.floor(this.#carry)
+        this.#carry -= years
+        worldline.advance(years)
       }
-    } else {
-      this.#carry += ((now - this.#last) / 1000) * this.#speed
-      const years = Math.floor(this.#carry)
-      this.#carry -= years
-      worldline.advance(years)
+      this.#last = now
+      if (worldline.ended) this.#playing = false
+      this.#report()
+      if (this.#playing) this.#schedule()
+    } catch (error) {
+      this.#stop()
+      const message = error instanceof Error ? error.message : String(error)
+      this.#send({ type: 'error', message })
     }
-    this.#last = now
-    if (worldline.ended) this.#playing = false
-    this.#report()
-    if (this.#playing) this.#schedule()
   }
 
   #report(): void {
