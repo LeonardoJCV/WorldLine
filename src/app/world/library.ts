@@ -1,10 +1,10 @@
 import { openDB, type IDBPDatabase } from 'idb'
-import { isValidLink, type WorldLink } from './link.ts'
+import { isValidMultiverse, type MultiverseLink } from './link.ts'
 
 export interface SavedWorld {
   readonly id: string
   readonly name: string
-  readonly link: WorldLink
+  readonly link: MultiverseLink
   readonly savedAt: number
 }
 
@@ -20,22 +20,26 @@ function connect(): Promise<IDBPDatabase> {
   return database
 }
 
-function isSavedWorld(value: unknown): value is SavedWorld {
-  if (typeof value !== 'object' || value === null) return false
-  const world = value as Partial<SavedWorld>
-  return (
-    typeof world.id === 'string' &&
-    typeof world.name === 'string' &&
-    typeof world.savedAt === 'number' &&
-    typeof world.link === 'object' &&
-    world.link !== null &&
-    isValidLink(world.link)
-  )
+export function toSavedWorld(value: unknown): SavedWorld | null {
+  if (typeof value !== 'object' || value === null) return null
+  const world = value as Partial<SavedWorld> & { link?: unknown }
+  if (typeof world.id !== 'string' || typeof world.name !== 'string') return null
+  if (typeof world.savedAt !== 'number' || typeof world.link !== 'object' || world.link === null) {
+    return null
+  }
+  const raw = world.link as Partial<MultiverseLink>
+  const link = { ...raw, branches: raw.branches ?? [] } as MultiverseLink
+  return isValidMultiverse(link)
+    ? { id: world.id, name: world.name, savedAt: world.savedAt, link }
+    : null
 }
 
 export async function listWorlds(): Promise<SavedWorld[]> {
   const all: unknown[] = await (await connect()).getAll(STORE)
-  return all.filter(isSavedWorld).sort((a, b) => b.savedAt - a.savedAt)
+  return all
+    .map(toSavedWorld)
+    .filter((world): world is SavedWorld => world !== null)
+    .sort((a, b) => b.savedAt - a.savedAt)
 }
 
 export async function saveWorld(world: SavedWorld): Promise<void> {

@@ -1,9 +1,10 @@
 import { SECTORS, type Allocation, type Decision } from '../../engine/state.ts'
-import { isValidLink, type WorldLink } from './link.ts'
+import type { BranchSpec } from '../../worker/protocol.ts'
+import { isValidMultiverse, type MultiverseLink } from './link.ts'
 
 export interface WorldFile {
   readonly name: string
-  readonly link: WorldLink
+  readonly link: MultiverseLink
 }
 
 export function serializeWorld(file: WorldFile): string {
@@ -15,6 +16,7 @@ export function serializeWorld(file: WorldFile): string {
       seed: file.link.seed,
       tick: file.link.tick,
       decisions: file.link.decisions,
+      branches: file.link.branches,
     },
     null,
     2,
@@ -36,6 +38,27 @@ function toDecision(value: unknown): Decision | null {
   return { tick: value.tick, allocation: allocation as Allocation }
 }
 
+function toDecisions(value: unknown): Decision[] | null {
+  if (!Array.isArray(value)) return null
+  const decisions = value.map(toDecision)
+  return decisions.some((decision) => decision === null) ? null : (decisions as Decision[])
+}
+
+function toBranch(value: unknown): BranchSpec | null {
+  if (!isRecord(value) || typeof value.parent !== 'number' || typeof value.fork !== 'number') {
+    return null
+  }
+  const decisions = toDecisions(value.decisions)
+  return decisions === null ? null : { parent: value.parent, fork: value.fork, decisions }
+}
+
+function toBranches(value: unknown): BranchSpec[] | null {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) return null
+  const branches = value.map(toBranch)
+  return branches.some((branch) => branch === null) ? null : (branches as BranchSpec[])
+}
+
 export function parseWorldFile(text: string): WorldFile | null {
   let data: unknown
   try {
@@ -45,14 +68,17 @@ export function parseWorldFile(text: string): WorldFile | null {
   }
   if (!isRecord(data) || data.format !== 'worldline' || typeof data.name !== 'string') return null
   if (typeof data.version !== 'number' || typeof data.seed !== 'number') return null
-  if (typeof data.tick !== 'number' || !Array.isArray(data.decisions)) return null
-  const decisions = data.decisions.map(toDecision)
-  if (decisions.some((decision) => decision === null)) return null
-  const link: WorldLink = {
+  if (typeof data.tick !== 'number') return null
+  const decisions = toDecisions(data.decisions)
+  if (decisions === null) return null
+  const branches = toBranches(data.branches)
+  if (branches === null) return null
+  const link: MultiverseLink = {
     version: data.version,
     seed: data.seed,
     tick: data.tick,
-    decisions: decisions.filter((decision): decision is Decision => decision !== null),
+    decisions,
+    branches,
   }
-  return isValidLink(link) ? { name: data.name, link } : null
+  return isValidMultiverse(link) ? { name: data.name, link } : null
 }

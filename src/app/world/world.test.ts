@@ -3,7 +3,19 @@ import { describe, expect, it } from 'vitest'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import { parseWorldFile, serializeWorld } from './file.ts'
-import { decodeLink, encodeLink, isValidLink, linkHash, type WorldLink } from './link.ts'
+import {
+  decodeLink,
+  decodeMultiverse,
+  encodeLink,
+  encodeMultiverse,
+  isValidLink,
+  isValidMultiverse,
+  linkHash,
+  toMultiverse,
+  type MultiverseLink,
+  type WorldLink,
+} from './link.ts'
+import { toSavedWorld } from './library.ts'
 import { parseRoute } from './route.ts'
 import { seedFromText } from './seed.ts'
 
@@ -93,7 +105,9 @@ describe('world link', () => {
   })
 
   it('builds the observatory hash', () => {
-    expect(linkHash({ version: 1, seed: 482913, tick: 0, decisions: [] })).toBe('#/w/AQAHXmEAAAAA')
+    expect(linkHash(toMultiverse({ version: 1, seed: 482913, tick: 0, decisions: [] }))).toBe(
+      '#/w/AQAHXmEAAAAA',
+    )
   })
 
   it('rejects malformed payloads from untrusted storage without throwing', () => {
@@ -118,14 +132,14 @@ describe('parseRoute', () => {
   it('opens the observatory for a world link', () => {
     expect(parseRoute('#/w/AQAHXmEAAAAA', '')).toEqual({
       screen: 'observatory',
-      link: { version: 1, seed: 482913, tick: 0, decisions: [] },
+      link: { version: 1, seed: 482913, tick: 0, decisions: [], branches: [] },
     })
   })
 
   it('opens the observatory for a seed query, words included', () => {
     expect(parseRoute('', '?seed=atlantis')).toEqual({
       screen: 'observatory',
-      link: { version: MODEL_VERSION, seed: 3286682525, tick: 0, decisions: [] },
+      link: { version: MODEL_VERSION, seed: 3286682525, tick: 0, decisions: [], branches: [] },
     })
   })
 
@@ -137,13 +151,13 @@ describe('parseRoute', () => {
 
 describe('world file', () => {
   it('round-trips through readable JSON', () => {
-    const text = serializeWorld({ name: 'Harvest years', link: sample })
+    const text = serializeWorld({ name: 'Harvest years', link: toMultiverse(sample) })
     expect(JSON.parse(text)).toMatchObject({
       format: 'worldline',
       name: 'Harvest years',
       seed: 482913,
     })
-    expect(parseWorldFile(text)).toEqual({ name: 'Harvest years', link: sample })
+    expect(parseWorldFile(text)).toEqual({ name: 'Harvest years', link: toMultiverse(sample) })
   })
 
   it('rejects files that are not worlds', () => {
@@ -151,8 +165,87 @@ describe('world file', () => {
     expect(parseWorldFile(JSON.stringify({ format: 'other' }))).toBeNull()
     expect(
       parseWorldFile(
-        serializeWorld({ name: 'x', link: sample }).replace('"agriculture": 5', '"agriculture": 6'),
+        serializeWorld({ name: 'x', link: toMultiverse(sample) }).replace(
+          '"agriculture": 5',
+          '"agriculture": 6',
+        ),
       ),
     ).toBeNull()
+  })
+})
+
+const tree: MultiverseLink = {
+  ...sample,
+  branches: [
+    { parent: 0, fork: 100, decisions: [{ tick: 100, allocation: starved }] },
+    { parent: 1, fork: 200, decisions: [] },
+  ],
+}
+
+describe('multiverse link', () => {
+  it('round-trips a tree of worldlines', () => {
+    expect(decodeMultiverse(encodeMultiverse(tree))).toEqual(tree)
+  })
+
+  it('keeps single worlds on the short #/w/ form and trees on #/m/', () => {
+    expect(linkHash(toMultiverse({ version: 1, seed: 482913, tick: 0, decisions: [] }))).toBe(
+      '#/w/AQAHXmEAAAAA',
+    )
+    expect(linkHash(tree)).toMatch(/^#\/m\/[A-Za-z0-9_-]+$/)
+  })
+
+  it('rejects impossible trees', () => {
+    expect(isValidMultiverse({ ...tree, branches: [{ parent: 1, fork: 10, decisions: [] }] })).toBe(
+      false,
+    )
+    expect(
+      isValidMultiverse({ ...tree, branches: [{ parent: 0, fork: tree.tick + 1, decisions: [] }] }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...tree,
+        branches: [{ parent: 0, fork: 100, decisions: [{ tick: 90, allocation: starved }] }],
+      }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...tree,
+        branches: Array.from({ length: 6 }, () => ({ parent: 0, fork: 1, decisions: [] })),
+      }),
+    ).toBe(false)
+    expect(isValidMultiverse({ ...tree, branches: undefined } as unknown as MultiverseLink)).toBe(
+      false,
+    )
+  })
+
+  it('routes #/m/ links and converts older links', () => {
+    expect(parseRoute(linkHash(tree), '')).toEqual({ screen: 'observatory', link: tree })
+    expect(parseRoute('#/w/AQAHXmEAAAAA', '')).toEqual({
+      screen: 'observatory',
+      link: { version: 1, seed: 482913, tick: 0, decisions: [], branches: [] },
+    })
+  })
+
+  it('writes branches to world files and reads files without them', () => {
+    const text = serializeWorld({ name: 'Two futures', link: tree })
+    expect(parseWorldFile(text)).toEqual({ name: 'Two futures', link: tree })
+    const legacy = serializeWorld({ name: 'Old', link: toMultiverse(sample) }).replace(
+      /,\s*"branches": \[\]/,
+      '',
+    )
+    expect(parseWorldFile(legacy)?.link.branches).toEqual([])
+  })
+})
+
+describe('library', () => {
+  it('converts saved worlds tolerantly', () => {
+    const legacyRow = {
+      id: 'a',
+      name: 'Old world',
+      savedAt: 1,
+      link: { version: MODEL_VERSION, seed: 482913, tick: 0, decisions: [] },
+    }
+    expect(toSavedWorld(legacyRow)?.link.branches).toEqual([])
+    expect(toSavedWorld({ ...legacyRow, link: { ...legacyRow.link, branches: 'x' } })).toBeNull()
   })
 })
