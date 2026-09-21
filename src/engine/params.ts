@@ -5,6 +5,7 @@ export const CHECKPOINT_INTERVAL = 256
 export const EXTINCTION_THRESHOLD = 1000
 export const MAX_SEED = 0xffffffff
 export const CAUSAL_WINDOW = 50
+export const MODEL_VERSION = 1
 
 export const DEFAULT_ALLOCATION: Allocation = {
   agriculture: 40,
