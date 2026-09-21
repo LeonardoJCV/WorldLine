@@ -57,6 +57,27 @@ export function formatMetric(metric: Metric, value: number, locale: Locale): str
   }
 }
 
+export function formatCondition(metric: Metric, value: number, locale: Locale): string {
+  switch (metric) {
+    case 'population':
+    case 'food':
+      return formatCompact(value, locale)
+    case 'technology':
+    case 'environment':
+    case 'stability':
+      return formatDecimal(value, locale, 1)
+    case 'energy':
+    case 'economy':
+    case 'foodSecurity':
+    case 'crowding':
+    case 'energyRatio':
+    case 'economyTrend':
+      return formatDecimal(value, locale, 2)
+    case 'birthRate':
+      return `${formatDecimal(value * 100, locale, 2)}%`
+  }
+}
+
 export function formatVariable(
   variable: Variable,
   values: Readonly<Record<Variable, number>>,

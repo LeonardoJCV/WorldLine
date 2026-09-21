@@ -295,7 +295,7 @@ button.state__row:hover,
 }
 
 .causal__scroll {
-  max-height: 220px;
+  max-height: 264px;
   overflow: auto;
 }
 

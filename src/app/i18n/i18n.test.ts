@@ -3,6 +3,7 @@ import { en } from './en.ts'
 import {
   formatChange,
   formatCompact,
+  formatCondition,
   formatDecimal,
   formatMetric,
   formatPercent,
@@ -109,5 +110,11 @@ describe('interaction formatting', () => {
   it('maps metrics to their labels', () => {
     expect(metricKey('crowding')).toBe('metric.crowding')
     expect(metricKey('environment')).toBe('variable.environment')
+  })
+
+  it('formats conditions with enough precision to distinguish close values', () => {
+    expect(formatCondition('technology', 40.3, 'en')).toBe('40.3')
+    expect(formatCondition('energy', 1.2, 'pt-BR')).toBe('1,20')
+    expect(formatCondition('birthRate', 0.0199, 'en')).toBe('1.99%')
   })
 })
