@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
+import { Minimap } from '../current/Minimap.tsx'
 import type { Strand } from '../current/normalize.ts'
+import { ZoomControls } from '../current/ZoomControls.tsx'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { useSimulation } from '../sim/runtime.ts'
@@ -40,6 +42,8 @@ export function Observatory() {
               <Planet size={layout.planet.size} />
             </div>
             <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
+            <ZoomControls />
+            <Minimap frame={layout.frame} />
           </>
         )}
       </main>

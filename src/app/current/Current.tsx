@@ -6,7 +6,7 @@ import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import { LABEL_WIDTH, drawCurrent } from './draw.ts'
 import { layoutEvents, markerAt, seedPhase, xToYear, type Frame } from './geometry.ts'
 import type { Strand } from './normalize.ts'
-import { resolveView } from './view.ts'
+import { resolveView, zoomView } from './view.ts'
 
 interface CurrentProps {
   readonly width: number
@@ -103,7 +103,23 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     t,
   ])
 
-  const { setCursor, select } = simulation.getState()
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const state = simulation.getState()
+      const tick = state.present?.tick ?? 0
+      const shown = resolveView(state.view, tick)
+      const rect = canvas.getBoundingClientRect()
+      const focusYear = xToYear(event.clientX - rect.left, shown.from, shown.to, frame)
+      state.setView(zoomView(state.view, tick, focusYear, event.deltaY > 0 ? 1.25 : 0.8))
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [frame])
+
+  const { setCursor, select, setView } = simulation.getState()
 
   const pointAt = (event: PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -111,6 +127,17 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
+    const zoomKeys: Record<string, number> = { '+': 0.8, '=': 0.8, '-': 1.25 }
+    if (Object.hasOwn(zoomKeys, event.key)) {
+      event.preventDefault()
+      setView(zoomView(view, present, cursor ?? present, zoomKeys[event.key] ?? 1))
+      return
+    }
+    if (event.key === '0') {
+      event.preventDefault()
+      setView(null)
+      return
+    }
     const base = cursor ?? present
     const stride = event.shiftKey ? 10 : 1
     const moves: Record<string, number | null> = {

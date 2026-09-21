@@ -438,3 +438,40 @@ button.causal__node:hover {
   border-color: var(--starlight);
   font-weight: 600;
 }
+
+.zoom {
+  position: absolute;
+  top: 12px;
+  left: var(--gutter);
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.zoom button {
+  min-width: 32px;
+  padding: 4px 10px;
+  background: rgb(10 11 30 / 0.7);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.zoom button:hover:not(:disabled) {
+  border-color: var(--dim);
+}
+
+.zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.minimap {
+  position: absolute;
+  bottom: 10px;
+  display: block;
+  border-radius: 4px;
+  cursor: grab;
+  touch-action: none;
+}
