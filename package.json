@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json",
+    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.engine.json && tsc -p tsconfig.node.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
