@@ -278,6 +278,7 @@ function causesOf(
   for (const entry of active) {
     const other = defs[entry.def]
     if (!other) continue
+    if (entry.start === s.tick) continue
     if (other.kind === 'era' && s.tick - entry.start > CAUSAL_WINDOW) continue
     if (other.influences.some(involved)) causes.push({ kind: 'event', record: entry.record })
   }

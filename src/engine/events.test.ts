@@ -193,6 +193,19 @@ describe('evaluateEvents', () => {
     const withEra = evaluateEvents(recentEra, makeMetrics({ foodSecurity: 0.8 }), 1, 5, defs)
     expect(withEra.started[0]?.causes).toContainEqual({ kind: 'event', record: 4 })
   })
+
+  it('does not link a cause that started in the same year', () => {
+    const defs = [awakening, shortage]
+    const outcome = evaluateEvents(
+      world(defs),
+      makeMetrics({ technology: 25, foodSecurity: 0.8 }),
+      1,
+      5,
+      defs,
+    )
+    expect(outcome.started.map((r) => r.event)).toEqual(['agricultural_revolution', 'famine'])
+    expect(outcome.started[1]?.causes).not.toContainEqual({ kind: 'event', record: 5 })
+  })
 })
 
 describe('collectModifiers', () => {
