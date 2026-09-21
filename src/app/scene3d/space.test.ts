@@ -67,4 +67,19 @@ describe('axisOffsets', () => {
     ])
     expect(Array.from(offsets.get('B') ?? []).every((v) => v === 0)).toBe(true)
   })
+
+  it('leaves the parent axis smoothly at the fork instead of jumping', () => {
+    const distance = new Float32Array(SAMPLES).fill(0.5)
+    const offsets = axisOffsets([
+      { id: 'A', parent: null, distance: null },
+      { id: 'B', parent: 'A', distance, fork: 40 },
+    ])
+    const b = offsets.get('B') ?? new Float32Array()
+    expect(Math.hypot(b[40 * 2] ?? 0, b[40 * 2 + 1] ?? 0)).toBeCloseTo(0, 5)
+    const early = Math.hypot(b[41 * 2] ?? 0, b[41 * 2 + 1] ?? 0)
+    const late = Math.hypot(b[80 * 2] ?? 0, b[80 * 2 + 1] ?? 0)
+    expect(early).toBeGreaterThan(0)
+    expect(early).toBeLessThan(late)
+    expect(late).toBeCloseTo(SPREAD * 0.5, 5)
+  })
 })

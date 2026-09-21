@@ -7,6 +7,8 @@ export interface Pose {
 
 export const RAIL_BACK = 10.5
 export const RAIL_OFFSET: Vec3 = [-3, 4, 15.5]
+export const FOCUS_RADIUS = 0.9
+export const OTHER_RADIUS = 0.45
 
 export function railPose(head: Vec3): Pose {
   const target: Vec3 = [head[0] - RAIL_BACK, head[1], head[2]]

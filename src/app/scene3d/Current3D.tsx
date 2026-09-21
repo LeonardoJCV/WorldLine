@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react'
 import { EVENTS } from '../../engine/events.ts'
 import type { WorldlineId } from '../../worker/protocol.ts'
 import { useT } from '../i18n/index.ts'
@@ -10,7 +18,14 @@ import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
-import { type Vec3, pickTarget, yearAtPointer, type ScreenTarget } from './camera.ts'
+import {
+  FOCUS_RADIUS,
+  OTHER_RADIUS,
+  pickTarget,
+  yearAtPointer,
+  type ScreenTarget,
+  type Vec3,
+} from './camera.ts'
 import { axisPoint, buildPath, headPoint, type PathData } from './path.ts'
 import type { CurrentScene, SceneMarker, SceneWorld } from './scene.ts'
 import { SAMPLES, axisOffsets, resample } from './space.ts'
@@ -28,6 +43,8 @@ interface Label {
   readonly point: Vec3
   readonly text: string
   readonly className: string
+  // FEAT: afasta o rótulo do ponto na direção diagonal, em unidades de mundo (ex.: raio do planeta)
+  readonly radius?: number
 }
 
 const ERA_EVENTS = new Set(EVENTS.filter((def) => def.kind === 'era').map((def) => def.id))
@@ -103,7 +120,19 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
             if (!el) continue
             const projected = scene.project(label.point)
             el.style.visibility = projected.visible ? 'visible' : 'hidden'
-            el.style.transform = `translate(${projected.x}px, ${projected.y}px)`
+            let x = projected.x
+            let y = projected.y
+            if (label.radius) {
+              const edge = scene.project([
+                label.point[0],
+                label.point[1] + label.radius,
+                label.point[2],
+              ])
+              const offset = Math.hypot(edge.x - projected.x, edge.y - projected.y)
+              x += offset * 0.7
+              y -= offset * 0.7
+            }
+            el.style.transform = `translate(${x}px, ${y}px)`
           }
         })
       })
@@ -161,6 +190,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
 
   const sceneWorlds = useMemo<SceneWorld[]>(() => {
     if (!fetched) return []
+    const span = Math.max(1, fetched.to - fetched.from)
     const offsets = axisOffsets(
       worlds.map((world) => {
         const d = fetched.distances.get(world.info.id)
@@ -168,6 +198,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           id: world.info.id,
           parent: world.info.parent,
           distance: d ? resample(d.values, d.from, d.to, fetched.from, fetched.to) : null,
+          fork: ((world.info.fork - fetched.from) / span) * (SAMPLES - 1),
         }
       }),
     )
@@ -269,6 +300,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
                 point: world.head,
                 text: world.key.split(':')[0] ?? '',
                 className: 'scene3d__letter',
+                radius: world.focused ? FOCUS_RADIUS : OTHER_RADIUS,
               },
             ]
           : [],
@@ -351,14 +383,17 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     return list
   }
 
-  const yearAt = (x: number, y: number): number | null => {
-    const scene = sceneRef.current
-    if (!scene || !focusPath || !fetched) return null
-    const a = axisPoint(focusPath, 0)
-    const b = axisPoint(focusPath, 1)
-    if (!a || !b) return null
-    return yearAtPointer({ x, y }, scene.project(a), scene.project(b), fetched.from, fetched.to)
-  }
+  const yearAt = useCallback(
+    (x: number, y: number): number | null => {
+      const scene = sceneRef.current
+      if (!scene || !focusPath || !fetched) return null
+      const a = axisPoint(focusPath, 0)
+      const b = axisPoint(focusPath, 1)
+      if (!a || !b) return null
+      return yearAtPointer({ x, y }, scene.project(a), scene.project(b), fetched.from, fetched.to)
+    },
+    [focusPath, fetched],
+  )
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -367,12 +402,15 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
       if (event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
       event.preventDefault()
       const rect = canvas.getBoundingClientRect()
-      const year = yearAt(event.clientX - rect.left, event.clientY - rect.top) ?? cursor ?? present
-      simulation.getState().setView(zoomView(view, present, year, event.deltaY > 0 ? 1.25 : 0.8))
+      const state = simulation.getState()
+      const presentTick = state.present?.tick ?? 0
+      const year =
+        yearAt(event.clientX - rect.left, event.clientY - rect.top) ?? state.cursor ?? presentTick
+      state.setView(zoomView(state.view, presentTick, year, event.deltaY > 0 ? 1.25 : 0.8))
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
-  }, [view, present, cursor, focusPath, fetched])
+  }, [yearAt])
 
   return (
     <div className="scene3d" style={{ width, height }}>

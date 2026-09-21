@@ -16,6 +16,7 @@ import {
   PointsMaterial,
   RingGeometry,
   Scene,
+  ShaderMaterial,
   SphereGeometry,
   Vector2,
   Vector3,
@@ -31,12 +32,10 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { MEASURE_DELAY_MS, MEASURE_FRAMES, TIERS, type Tier } from '../graphics/settings.ts'
 import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
 import { PLANET_LIGHT, type PlanetPalette, type PlanetState } from '../planet/uniforms.ts'
-import { approach, railPose, RAIL_OFFSET, type Vec3 } from './camera.ts'
+import { approach, FOCUS_RADIUS, OTHER_RADIUS, railPose, RAIL_OFFSET, type Vec3 } from './camera.ts'
 import { axisPoint, type PathData } from './path.ts'
 import { createStream, particleCounts, type Stream } from './streams.ts'
 
-export const FOCUS_RADIUS = 0.9
-export const OTHER_RADIUS = 0.45
 const VOID = 0x0a0b1e
 const BLOOM_SCALE = 0.22
 const BLOOM_THRESHOLD = 0.2
@@ -236,22 +235,37 @@ export function createCurrentScene(
   scene.add(markerGroup)
   const markerGeometry = {
     event: new SphereGeometry(0.07, 12, 8),
-    decision: new OctahedronGeometry(0.1),
-    fork: new SphereGeometry(0.12, 16, 12),
+    decision: new OctahedronGeometry(0.08),
+    fork: new SphereGeometry(0.09, 16, 12),
   }
   const markerMaterial = {
     event: new MeshBasicMaterial({ color: 0xe6e4f5 }),
     selected: new MeshBasicMaterial({ color: 0xffffff }),
-    decision: new MeshBasicMaterial({ color: 0xc9aeff }),
-    fork: new MeshBasicMaterial({ color: 0xffffff }),
+    decision: new MeshBasicMaterial({ color: 0x6a5a94 }),
+    fork: new MeshBasicMaterial({ color: 0x9a8fc4 }),
   }
 
   const cursorPlane = new Mesh(
-    new PlaneGeometry(7, 7),
-    new MeshBasicMaterial({
-      color: 0xe6e4f5,
+    new PlaneGeometry(4, 4),
+    new ShaderMaterial({
+      uniforms: { uColor: { value: new Color(0xe6e4f5) } },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform vec3 uColor;
+        void main() {
+          float d = length(vUv - 0.5) * 2.0;
+          float a = smoothstep(1.0, 0.0, d) * 0.05;
+          gl_FragColor = vec4(uColor, a);
+        }
+      `,
       transparent: true,
-      opacity: 0.05,
       depthWrite: false,
       side: DoubleSide,
     }),
@@ -377,7 +391,7 @@ export function createCurrentScene(
       for (const geometry of Object.values(markerGeometry)) geometry.dispose()
       for (const material of Object.values(markerMaterial)) material.dispose()
       cursorPlane.geometry.dispose()
-      ;(cursorPlane.material as MeshBasicMaterial).dispose()
+      ;(cursorPlane.material as ShaderMaterial).dispose()
       cursorRing.geometry.dispose()
       ;(cursorRing.material as MeshBasicMaterial).dispose()
       renderPass?.dispose()

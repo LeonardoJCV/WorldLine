@@ -50,7 +50,10 @@ export interface Lineage {
   readonly id: WorldlineId
   readonly parent: WorldlineId | null
   readonly distance: Float32Array | null
+  readonly fork?: number
 }
+
+const OFFSET_RAMP = 6
 
 export function axisOffsets(lineages: readonly Lineage[]): Map<WorldlineId, Float32Array> {
   const offsets = new Map<WorldlineId, Float32Array>()
@@ -60,8 +63,12 @@ export function axisOffsets(lineages: readonly Lineage[]): Map<WorldlineId, Floa
     if (base && lineage.distance) {
       const [dy, dz] = branchDirection(lineage.id)
       const smooth = movingAverage(lineage.distance, SMOOTHING)
+      const fork = lineage.fork ?? 0
       for (let i = 0; i < SAMPLES; i++) {
-        const reach = SPREAD * (smooth[i] ?? 0)
+        // FIX: sai do eixo do pai com raio zero e cresce suavemente após a bifurcação
+        const ramp = Math.min(1, Math.max(0, (i - fork) / OFFSET_RAMP))
+        const eased = ramp * ramp * (3 - 2 * ramp)
+        const reach = SPREAD * (smooth[i] ?? 0) * eased
         own[i * 2] = (base[i * 2] ?? 0) + dy * reach
         own[i * 2 + 1] = (base[i * 2 + 1] ?? 0) + dz * reach
       }

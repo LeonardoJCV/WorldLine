@@ -90,19 +90,21 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
         >
           {t('locale.switch')}
         </button>
-        <p className="year">
-          <span className="year__label">
-            {cursor === null ? t('year.present') : t('year.label')}
-          </span>
-          <span className="year__value" data-testid="year">
-            {formatYear(cursor ?? now)}
-          </span>
-        </p>
-        {cursor !== null && (
-          <button type="button" className="year__return" onClick={() => setCursor(null)}>
-            {t('current.returnToPresent')}
-          </button>
-        )}
+        <div className="topbar__year">
+          <p className="year">
+            <span className="year__label">
+              {cursor === null ? t('year.present') : t('year.label')}
+            </span>
+            <span className="year__value" data-testid="year">
+              {formatYear(cursor ?? now)}
+            </span>
+          </p>
+          {cursor !== null && (
+            <button type="button" className="year__return" onClick={() => setCursor(null)}>
+              {t('current.returnToPresent')}
+            </button>
+          )}
+        </div>
       </div>
     </header>
   )
