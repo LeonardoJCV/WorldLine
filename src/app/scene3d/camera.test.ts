@@ -7,6 +7,7 @@ import {
   eraOffsets,
   ERA_ROW,
   pickTarget,
+  pinchFactor,
   railPose,
   yearAtPointer,
 } from './camera.ts'
@@ -96,5 +97,13 @@ describe('eraOffsets', () => {
         { x: 100, y: 0 },
       ]),
     ).toEqual([0, ERA_ROW, ERA_ROW * 2])
+  })
+})
+
+describe('pinchFactor', () => {
+  it('zooms in when the fingers spread and out when they close', () => {
+    expect(pinchFactor(100, 200)).toBe(0.5)
+    expect(pinchFactor(200, 100)).toBe(2)
+    expect(pinchFactor(0, 100)).toBe(1)
   })
 })

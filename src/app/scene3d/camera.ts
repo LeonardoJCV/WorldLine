@@ -82,3 +82,8 @@ export function eraOffsets(points: readonly { x: number; y: number }[]): number[
   }
   return offsets
 }
+
+export function pinchFactor(start: number, distance: number): number {
+  if (!(start > 0) || !(distance > 0)) return 1
+  return Math.min(Math.max(start / distance, 0.05), 20)
+}

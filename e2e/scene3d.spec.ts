@@ -156,3 +156,40 @@ test('keeps the 3D scene alive when the level changes', async ({ page }) => {
   expect(lost).toBe(false)
   expect(errors).toEqual([])
 })
+
+test.describe('touch', () => {
+  test.use({ hasTouch: true })
+
+  test('orbits with two fingers without scrubbing and pinches to zoom time', async ({ page }) => {
+    await useGraphics(page, 'low')
+    await page.goto('/?seed=482913')
+    await page.getByRole('button', { name: '×256' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await page.waitForTimeout(1500)
+    await page.getByRole('button', { name: 'Pause' }).click()
+    const current = page.getByRole('slider', { name: /Worldline history/ })
+    const box = await current.boundingBox()
+    if (!box) throw new Error('scene is not visible')
+    const present = await page.getByTestId('year').textContent()
+    const session = await page.context().newCDPSession(page)
+    const y = box.y + box.height * 0.5
+    const touch = (
+      type: 'touchStart' | 'touchMove' | 'touchEnd',
+      points: { x: number; y: number; id: number }[],
+    ) => session.send('Input.dispatchTouchEvent', { type, touchPoints: points })
+    await touch('touchStart', [{ x: box.x + box.width * 0.3, y, id: 1 }])
+    await touch('touchStart', [
+      { x: box.x + box.width * 0.3, y, id: 1 },
+      { x: box.x + box.width * 0.4, y, id: 2 },
+    ])
+    for (let step = 1; step <= 5; step++) {
+      await touch('touchMove', [
+        { x: box.x + box.width * (0.3 - step * 0.04), y, id: 1 },
+        { x: box.x + box.width * (0.4 + step * 0.04), y, id: 2 },
+      ])
+    }
+    await touch('touchEnd', [])
+    await expect(page.getByTestId('year')).toHaveText(present ?? '')
+    await expect(page.getByRole('button', { name: 'Show all' })).toBeEnabled()
+  })
+})

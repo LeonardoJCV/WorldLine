@@ -16,6 +16,7 @@ import { graphicsStore, useGraphics, useTier } from '../graphics/store.ts'
 import { planetPalette, planetState } from '../planet/uniforms.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
+import type { View } from '../sim/store.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import {
@@ -23,6 +24,7 @@ import {
   FOCUS_RADIUS,
   OTHER_RADIUS,
   pickTarget,
+  pinchFactor,
   yearAtPointer,
   type ScreenTarget,
   type Vec3,
@@ -47,6 +49,13 @@ interface Label {
   readonly className: string
   // FEAT: afasta o rótulo do ponto na direção diagonal, em unidades de mundo (ex.: raio do planeta)
   readonly radius?: number
+}
+
+interface TouchState {
+  readonly points: Map<number, { x: number; y: number }>
+  before: number | null
+  pinch: { distance: number; view: View | null; year: number } | null
+  ended: boolean
 }
 
 const ERA_EVENTS = new Set(EVENTS.filter((def) => def.kind === 'era').map((def) => def.id))
@@ -382,6 +391,57 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     [focusPath, fetched],
   )
 
+  const touchRef = useRef<TouchState>({
+    points: new Map(),
+    before: null,
+    pinch: null,
+    ended: false,
+  })
+
+  const pinchSpread = (): { distance: number; x: number; y: number } | null => {
+    const [first, second] = [...touchRef.current.points.values()]
+    if (!first || !second) return null
+    return {
+      distance: Math.hypot(first.x - second.x, first.y - second.y),
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    }
+  }
+
+  const startPinch = () => {
+    const touch = touchRef.current
+    const spread = pinchSpread()
+    const state = simulation.getState()
+    // FIX: o segundo dedo desfaz a varredura do primeiro e passa a controlar o zoom
+    state.setCursor(touch.before)
+    touch.ended = true
+    if (!spread) return
+    const presentTick = state.present?.tick ?? 0
+    touch.pinch = {
+      distance: spread.distance,
+      view: state.view,
+      year: yearAt(spread.x, spread.y) ?? touch.before ?? presentTick,
+    }
+  }
+
+  const movePinch = () => {
+    const pinch = touchRef.current.pinch
+    const spread = pinchSpread()
+    if (!pinch || !spread) return
+    const state = simulation.getState()
+    const presentTick = state.present?.tick ?? 0
+    const factor = pinchFactor(pinch.distance, spread.distance)
+    state.setView(zoomView(pinch.view, presentTick, pinch.year, factor))
+  }
+
+  const releaseTouch = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerType !== 'touch') return
+    const touch = touchRef.current
+    touch.points.delete(event.pointerId)
+    if (touch.points.size < 2) touch.pinch = null
+    if (touch.points.size === 0) touch.ended = false
+  }
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -420,6 +480,17 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           const rect = event.currentTarget.getBoundingClientRect()
           const x = event.clientX - rect.left
           const y = event.clientY - rect.top
+          const touch = touchRef.current
+          if (event.pointerType === 'touch') {
+            touch.points.set(event.pointerId, { x, y })
+            if (touch.points.size === 1) {
+              touch.before = simulation.getState().cursor
+              touch.pinch = null
+            } else {
+              startPinch()
+              return
+            }
+          }
           const hit = pickTarget(targets(), x, y)
           if (hit?.kind === 'world') {
             simulation.getState().setFocus(hit.key as WorldlineId)
@@ -437,6 +508,15 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           const rect = event.currentTarget.getBoundingClientRect()
           const x = event.clientX - rect.left
           const y = event.clientY - rect.top
+          const touch = touchRef.current
+          if (event.pointerType === 'touch' && touch.points.has(event.pointerId)) {
+            touch.points.set(event.pointerId, { x, y })
+            if (touch.pinch) {
+              movePinch()
+              return
+            }
+            if (touch.ended) return
+          }
           if (event.buttons & 1) {
             const year = yearAt(x, y)
             if (year !== null) simulation.getState().setCursor(year)
@@ -444,6 +524,8 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           }
           event.currentTarget.style.cursor = pickTarget(targets(), x, y) ? 'pointer' : ''
         }}
+        onPointerUp={releaseTouch}
+        onPointerCancel={releaseTouch}
         onDoubleClick={() => simulation.getState().setCursor(null)}
         onKeyDown={(event: KeyboardEvent<HTMLCanvasElement>) => {
           const effect = currentKey(event.key, event.shiftKey, { present, cursor, view })
