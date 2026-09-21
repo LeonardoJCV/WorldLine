@@ -11,10 +11,15 @@ async function branchFromStart(page: Page) {
   const history = page.getByRole('slider', { name: /Worldline history/ })
   await history.focus()
   await history.press('Home')
+  const branch = page.getByRole('button', { name: 'Branch from year 0000' })
+  // Wait for the panel to settle on the observed allocation before editing: the
+  // sliders stay disabled until then, so editing too early would be discarded
+  // once the panel catches up.
+  await expect(branch).toBeEnabled()
   const agriculture = page.getByRole('slider', { name: /Agriculture/ })
   await agriculture.focus()
   for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
-  await page.getByRole('button', { name: 'Branch from year 0000' }).click()
+  await branch.click()
 }
 
 test('branches from the past into a new focused worldline', async ({ page }) => {
@@ -95,6 +100,20 @@ test('shows the allocation of the observed year, not the present, when branching
   await expect(
     page.locator('.state__origin[data-direction="up"], .state__origin[data-direction="down"]'),
   ).toHaveCount(0)
+})
+
+test('keeps the edited allocation when branching, so the new worldline actually diverges', async ({
+  page,
+}) => {
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(1500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  // The edited allocation must have stuck (not been discarded by a remount),
+  // so after enough years the branch measurably differs from its origin.
+  await expect(page.getByText('Distance 0.00')).toHaveCount(0)
 })
 
 test('stops branching at six worldlines', async ({ page }) => {

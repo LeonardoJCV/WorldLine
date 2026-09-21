@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.skip(!process.env.SCREENS, 'screenshots are captured on demand')
 
@@ -66,6 +66,7 @@ test('observatory multiverse', async ({ page }) => {
   await history.focus()
   await history.press('Home')
   for (let i = 0; i < 6; i++) await history.press('Shift+ArrowRight')
+  await expect(page.getByRole('button', { name: /Branch from year/ })).toBeEnabled()
   const industry = page.getByRole('slider', { name: /Industry/ })
   await industry.focus()
   for (let i = 0; i < 25; i++) await industry.press('ArrowRight')

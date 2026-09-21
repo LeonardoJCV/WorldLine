@@ -54,7 +54,7 @@ export function AllocationPanel() {
               max={100}
               step={1}
               value={draft[sector]}
-              disabled={blocked !== null}
+              disabled={blocked !== null || awaitingInspect}
               onChange={(event) => setDraft(rebalance(draft, sector, Number(event.target.value)))}
             />
             <output className="allocation__value">{formatPercent(draft[sector], locale)}</output>
