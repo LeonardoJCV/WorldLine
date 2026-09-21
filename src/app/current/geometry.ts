@@ -1,0 +1,169 @@
+import { EVENTS, type EventId, type EventRecord } from '../../engine/events.ts'
+import { VARIABLES, type Variable } from '../../engine/state.ts'
+import type { Series } from '../../worker/protocol.ts'
+import { STRANDS, normalize, type Row, type Strand } from './normalize.ts'
+
+export interface Frame {
+  readonly left: number
+  readonly right: number
+  readonly centerY: number
+  readonly height: number
+}
+
+export interface StageLayout {
+  readonly frame: Frame
+  readonly planet: { readonly size: number; readonly cx: number; readonly cy: number }
+  readonly stacked: boolean
+}
+
+export const WAVELENGTH = 180
+export const MIN_WIDTH = 1
+export const MAX_WIDTH = 8
+export const ERA_ROWS = 3
+export const EPISODE_ROWS = 4
+const NARROW = 720
+const LABEL_GAP = 8
+const BAND_GAP = 4
+
+export function stageLayout(width: number, height: number): StageLayout {
+  const gutter = Math.max(16, Math.round(width * 0.03))
+  if (width < NARROW) {
+    const size = Math.round(Math.min(width * 0.62, height * 0.45))
+    const cy = gutter + size / 2
+    const top = cy + size / 2
+    const centerY = top + (height - top) / 2
+    return {
+      planet: { size, cx: width / 2, cy },
+      frame: { left: gutter, right: width - gutter, centerY, height: height - top },
+      stacked: true,
+    }
+  }
+  const size = Math.round(Math.min(width * 0.36, height * 0.82, 520))
+  const cx = width - gutter - size / 2
+  const cy = height / 2
+  return {
+    planet: { size, cx, cy },
+    frame: { left: gutter, right: cx - size / 2 - size * 0.02, centerY: cy, height },
+    stacked: false,
+  }
+}
+
+export function yearToX(year: number, from: number, to: number, frame: Frame): number {
+  const span = Math.max(1, to - from)
+  return frame.left + ((frame.right - frame.left) * (year - from)) / span
+}
+
+export function xToYear(x: number, from: number, to: number, frame: Frame): number {
+  const span = Math.max(1, to - from)
+  const year = from + ((x - frame.left) / Math.max(1, frame.right - frame.left)) * span
+  return Math.min(to, Math.max(from, Math.round(year)))
+}
+
+export function seedPhase(seed: number): number {
+  return ((seed % 360) * Math.PI) / 180
+}
+
+export interface Ribbon {
+  readonly strand: Strand
+  readonly xs: Float32Array
+  readonly top: Float32Array
+  readonly bottom: Float32Array
+}
+
+function jitter(strand: number, column: number): number {
+  const s = Math.sin(strand * 127.1 + column * 311.7) * 43758.5453
+  return (s - Math.floor(s)) * 2 - 1
+}
+
+function rows(series: Series): Row[] {
+  const count = series.population.length
+  return Array.from({ length: count }, (_, i) => {
+    const row = {} as Record<Variable, number>
+    for (const variable of VARIABLES) row[variable] = series[variable][i] ?? 0
+    return row
+  })
+}
+
+export function buildRibbons(series: Series, frame: Frame, phase: number): Ribbon[] {
+  const samples = rows(series)
+  const count = samples.length
+  const xs = new Float32Array(count)
+  for (let i = 0; i < count; i++) {
+    xs[i] = count <= 1 ? frame.right : frame.left + ((frame.right - frame.left) * i) / (count - 1)
+  }
+  const amplitude = frame.height * 0.07
+
+  return STRANDS.map((strand, s) => {
+    const top = new Float32Array(count)
+    const bottom = new Float32Array(count)
+    const offset = (s * Math.PI * 2) / STRANDS.length
+    for (let i = 0; i < count; i++) {
+      const row = samples[i]
+      const x = xs[i] ?? 0
+      if (!row) continue
+      const loose = 1 - Math.min(Math.max(row.stability / 100, 0), 1)
+      const wave = Math.sin(((frame.right - x) / WAVELENGTH) * Math.PI * 2 + phase + offset)
+      const center =
+        frame.centerY +
+        amplitude * (1 + 1.2 * loose) * wave +
+        jitter(s, i) * loose * loose * frame.height * 0.02
+      const half = (MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * normalize(strand, row)) / 2
+      top[i] = center - half
+      bottom[i] = center + half
+    }
+    return { strand, xs, top, bottom }
+  })
+}
+
+export type MarkerKind = 'era' | 'episode' | 'pulse'
+
+export interface Marker {
+  readonly kind: MarkerKind
+  readonly event: EventId
+  readonly index: number
+  readonly x: number
+  readonly x2: number
+  readonly row: number
+}
+
+const KIND_OF = new Map<EventId, MarkerKind>(
+  EVENTS.map((def) => [
+    def.id,
+    def.kind === 'era' ? 'era' : def.kind === 'condition' ? 'episode' : 'pulse',
+  ]),
+)
+
+export function layoutEvents(
+  records: readonly EventRecord[],
+  from: number,
+  to: number,
+  present: number,
+  frame: Frame,
+  labelWidth: number,
+): Marker[] {
+  const eraRows: number[] = []
+  const episodeRows: number[] = []
+  const markers: Marker[] = []
+
+  records.forEach((record, index) => {
+    const end = record.end ?? present
+    if (end < from || record.start > to) return
+    const kind = KIND_OF.get(record.event) ?? 'pulse'
+    const x = yearToX(record.start, from, to, frame)
+    const x2 = yearToX(Math.min(end, to), from, to, frame)
+    let row = 0
+    if (kind === 'era') {
+      row = eraRows.findIndex((right) => x >= right + LABEL_GAP)
+      if (row === -1 && eraRows.length < ERA_ROWS) row = eraRows.length
+      if (row !== -1) eraRows[row] = x + labelWidth
+    } else if (kind === 'episode') {
+      row = episodeRows.findIndex((right) => x >= right + BAND_GAP)
+      if (row === -1)
+        row = episodeRows.length < EPISODE_ROWS ? episodeRows.length : EPISODE_ROWS - 1
+      episodeRows[row] = Math.max(x2, episodeRows[row] ?? 0)
+    }
+    markers.push({ kind, event: record.event, index, x, x2, row })
+  })
+
+  return markers
+}
