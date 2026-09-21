@@ -19,6 +19,8 @@ export default defineConfig({
         launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
       },
     },
+    { name: 'firefox', testMatch: /verify\.spec\.ts/, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: /verify\.spec\.ts/, use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',

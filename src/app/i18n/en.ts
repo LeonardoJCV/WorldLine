@@ -105,6 +105,23 @@ export const en = {
   'library.invalid': 'This file is not a WORLDLINE world.',
   'library.unavailable': 'Saving is unavailable in this browser.',
   'library.meta': 'Year {year}, saved {date}',
+  'verify.title': 'Reproducibility',
+  'verify.lead':
+    'WORLDLINE promises that the same seed and the same decisions always produce the same history, in any browser. This page re-runs reference worlds here, in your browser, and compares the fingerprint of each one with the value recorded in the repository.',
+  'verify.running': 'Running the reference worlds…',
+  'verify.passed': 'All {count} fingerprints match in this browser.',
+  'verify.failed': '{failed} of {count} fingerprints differ in this browser.',
+  'verify.seed': 'Seed',
+  'verify.decisions': 'Decisions',
+  'verify.year': 'Year',
+  'verify.expected': 'Expected',
+  'verify.computed': 'Computed',
+  'verify.result': 'Result',
+  'verify.match': 'Match',
+  'verify.mismatch': 'Differs',
+  'verify.script.steady': 'None',
+  'verify.script.shifting': 'Three shifts',
+  'verify.back': 'Open WORLDLINE',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

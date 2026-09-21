@@ -1,18 +1,10 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { GOLDEN_CASES, GOLDEN_SCRIPTS } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
 import { VARIABLES, type Allocation, type Decision } from './state.ts'
 import { Worldline } from './worldline.ts'
-
-const SCRIPTS: Record<string, Decision[]> = {
-  steady: [],
-  shifting: [
-    { tick: 100, allocation: { agriculture: 25, industry: 55, research: 20, conservation: 0 } },
-    { tick: 600, allocation: { agriculture: 50, industry: 10, research: 20, conservation: 20 } },
-    { tick: 1500, allocation: { agriculture: 30, industry: 20, research: 40, conservation: 10 } },
-  ],
-}
 
 const allocation = fc
   .tuple(
@@ -40,26 +32,10 @@ const script = (maxTick: number) =>
 const seed = fc.integer({ min: 0, max: 0xffffffff })
 
 describe('golden hashes', () => {
-  it('pins the timeline for reference seeds and scripts', () => {
-    const golden: Record<string, string> = {}
-    for (const s of [1, 482913, 0xffffffff]) {
-      for (const [name, decisions] of Object.entries(SCRIPTS)) {
-        const w = new Worldline(s, decisions)
-        w.advance(5000)
-        const last = w.present.tick
-        golden[`${s}/${name}`] = `${w.hashAt(Math.min(1000, last))} ${w.hashAt(last)}@${last}`
-      }
-    }
-    expect(golden).toMatchInlineSnapshot(`
-      {
-        "1/shifting": "aeb1cbca ddcfedc9@5000",
-        "1/steady": "177ac51d 537a5d92@5000",
-        "4294967295/shifting": "ae5e39c0 795871e1@5000",
-        "4294967295/steady": "648dbea4 68b49e5f@5000",
-        "482913/shifting": "4f80c4a1 1c51ab0d@5000",
-        "482913/steady": "470d2965 a42a4111@5000",
-      }
-    `)
+  it.each(GOLDEN_CASES)('seed $seed, $script, year $year', ({ seed, script, year, hash }) => {
+    const w = new Worldline(seed, GOLDEN_SCRIPTS[script])
+    w.advance(year)
+    expect(w.hashAt(year)).toBe(hash)
   })
 })
 
