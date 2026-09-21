@@ -48,6 +48,7 @@
 .transport button,
 .mode button,
 .locale,
+.topbar__new,
 .year__return {
   background: transparent;
   border: 1px solid var(--haze);
@@ -60,6 +61,7 @@
 .transport button:hover:not(:disabled),
 .mode button:hover:not(:disabled),
 .locale:hover,
+.topbar__new:hover,
 .year__return:hover {
   border-color: var(--dim);
 }

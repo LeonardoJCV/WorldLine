@@ -75,4 +75,16 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'zoom.fit': 'Ver tudo',
   'minimap.label': 'História inteira; mova a janela para percorrer o tempo',
   'minimap.value': 'Mostrando os anos {from} a {to}',
+  'genesis.lead':
+    'Crie um mundo a partir de uma semente, deixe-o correr por milênios e mude o seu rumo. Toda regra é determinística: a mesma semente e as mesmas decisões levam sempre à mesma história.',
+  'genesis.seedLabel': 'Semente (um número ou uma palavra)',
+  'genesis.hint': 'Mundo nº {seed}',
+  'genesis.invalid': 'Use uma palavra, ou um número inteiro até 4294967295.',
+  'genesis.random': 'Outra semente',
+  'genesis.start': 'Iniciar worldline',
+  'genesis.traits': 'Condições iniciais',
+  'genesis.fertility': 'Fertilidade do solo',
+  'nav.newWorld': 'Novo mundo',
+  'link.version':
+    'Este link foi criado com o modelo v{version}; o mundo pode diferir do que foi compartilhado.',
 }

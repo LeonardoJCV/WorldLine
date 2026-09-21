@@ -77,6 +77,18 @@ export const en = {
   'zoom.fit': 'Show all',
   'minimap.label': 'Whole history; move the window to travel through time',
   'minimap.value': 'Showing years {from} to {to}',
+  'genesis.lead':
+    'Create a world from a seed, let it run for millennia, and change its course. Every rule is deterministic: the same seed and the same decisions always lead to the same history.',
+  'genesis.seedLabel': 'Seed (a number or a word)',
+  'genesis.hint': 'World #{seed}',
+  'genesis.invalid': 'Use a word, or a whole number up to 4294967295.',
+  'genesis.random': 'Another seed',
+  'genesis.start': 'Start worldline',
+  'genesis.traits': 'Initial conditions',
+  'genesis.fertility': 'Soil fertility',
+  'nav.newWorld': 'New world',
+  'link.version':
+    'This link was made with model v{version}; the world may differ from what was shared.',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

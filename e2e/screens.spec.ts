@@ -20,6 +20,16 @@ for (const viewport of VIEWPORTS) {
   })
 }
 
+for (const viewport of VIEWPORTS) {
+  test(`genesis ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/')
+    await page.getByLabel('Seed (a number or a word)').fill('atlantis')
+    await page.waitForTimeout(2000)
+    await page.screenshot({ path: `screens/genesis-${viewport.name}.png` })
+  })
+}
+
 test('observatory causal chain', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?seed=482913')

@@ -1,0 +1,136 @@
+.genesis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 32px;
+  min-height: 100dvh;
+  padding: clamp(24px, 5vw, 72px) var(--gutter);
+  background:
+    radial-gradient(90% 70% at 75% 50%, rgb(58 42 107 / 0.5), transparent 65%), var(--void);
+}
+
+.genesis__intro {
+  display: grid;
+  gap: 20px;
+  max-width: 46ch;
+}
+
+.genesis__tagline {
+  margin: 0;
+  font-stretch: 125%;
+  font-weight: 300;
+  font-size: clamp(2.25rem, 4.6vw, 4rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.genesis__lead {
+  margin: 0;
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+.genesis__form {
+  display: grid;
+  gap: 8px;
+}
+
+.genesis__field {
+  display: grid;
+  gap: 6px;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.genesis__field input {
+  padding: 10px 12px;
+  background: rgb(10 11 30 / 0.6);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--starlight);
+  font: inherit;
+  font-size: var(--text-lg);
+  font-stretch: 112%;
+}
+
+.genesis__field input[aria-invalid='true'] {
+  border-color: var(--dim);
+}
+
+.genesis__hint {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.genesis__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.genesis__actions button {
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.genesis__start:not(:disabled) {
+  background: var(--nebula);
+  border-color: var(--starlight);
+  font-weight: 600;
+}
+
+.genesis__actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.genesis__traits dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin: 0;
+}
+
+.genesis__traits dt {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.genesis__traits dd {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.genesis__planet {
+  display: grid;
+  place-items: center;
+  height: min(80vh, 720px);
+  min-height: 320px;
+}
+
+.genesis__planet .planet {
+  animation: genesis-arrive 1.4s ease-out both;
+}
+
+@keyframes genesis-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+@media (max-width: 900px) {
+  .genesis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .genesis__planet {
+    order: -1;
+    height: 50vh;
+  }
+}

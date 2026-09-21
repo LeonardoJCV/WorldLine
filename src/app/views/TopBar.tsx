@@ -7,7 +7,7 @@ import type { Mode } from '../sim/store.ts'
 const OPTIONS: readonly Speed[] = [...SPEEDS, 'max']
 const MODES: readonly Mode[] = ['observe', 'intervene']
 
-export function TopBar() {
+export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const t = useT()
   const locale = useLocale()
   const seed = useSimulation((s) => s.seed)
@@ -29,6 +29,9 @@ export function TopBar() {
             {t('seed.label')} <output data-testid="seed">{seed}</output>
           </span>
         )}
+        <button type="button" className="topbar__new" onClick={onLeave}>
+          {t('nav.newWorld')}
+        </button>
       </div>
       <div className="mode" role="group" aria-label={t('mode.label')}>
         {MODES.map((option) => (

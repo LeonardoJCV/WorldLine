@@ -1,26 +1,43 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Genesis } from './app/genesis/Genesis.tsx'
 import { useLocale } from './app/i18n/index.ts'
 import { simulation } from './app/sim/runtime.ts'
 import { Observatory } from './app/views/Observatory.tsx'
-import { MAX_SEED } from './engine/params.ts'
+import { linkHash, type WorldLink } from './app/world/link.ts'
+import { parseRoute, type Route } from './app/world/route.ts'
 
-function initialSeed(): number {
-  const param = new URLSearchParams(window.location.search).get('seed')
-  const parsed = param === null ? Number.NaN : Number(param)
-  if (Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_SEED) return parsed
-  return crypto.getRandomValues(new Uint32Array(1))[0] ?? 0
+function currentRoute(): Route {
+  return parseRoute(window.location.hash, window.location.search)
 }
 
 export function App() {
   const locale = useLocale()
+  const [route, setRoute] = useState<Route>(currentRoute)
 
   useEffect(() => {
     document.documentElement.lang = locale
   }, [locale])
 
   useEffect(() => {
-    simulation.getState().create(initialSeed())
+    const onHashChange = () => setRoute(currentRoute())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  return <Observatory />
+  useEffect(() => {
+    if (route.screen === 'observatory') simulation.getState().open(route.link)
+  }, [route])
+
+  const start = (link: WorldLink) => {
+    history.pushState(null, '', `${window.location.pathname}${linkHash(link)}`)
+    setRoute({ screen: 'observatory', link })
+  }
+
+  const leave = () => {
+    simulation.getState().pause()
+    history.pushState(null, '', window.location.pathname)
+    setRoute({ screen: 'genesis' })
+  }
+
+  return route.screen === 'genesis' ? <Genesis onStart={start} /> : <Observatory onLeave={leave} />
 }

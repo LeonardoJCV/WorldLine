@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { MODEL_VERSION } from '../../engine/params.ts'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
 import { Minimap } from '../current/Minimap.tsx'
@@ -7,6 +8,7 @@ import { ZoomControls } from '../current/ZoomControls.tsx'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { useSimulation } from '../sim/runtime.ts'
+import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
@@ -15,7 +17,8 @@ import { TopBar } from './TopBar.tsx'
 import { useElementSize } from './useElementSize.ts'
 import './observatory.css'
 
-export function Observatory() {
+export function Observatory({ onLeave }: { readonly onLeave: () => void }) {
+  useLinkSync()
   const t = useT()
   const stageRef = useRef<HTMLElement>(null)
   const size = useElementSize(stageRef)
@@ -25,11 +28,12 @@ export function Observatory() {
   const mode = useSimulation((s) => s.mode)
   const seed = useSimulation((s) => s.seed ?? 0)
   const observed = useSimulation((s) => s.inspected ?? s.present)
+  const linkVersion = useSimulation((s) => s.linkVersion)
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
 
   return (
     <div className="observatory">
-      <TopBar />
+      <TopBar onLeave={onLeave} />
       <main className="stage" ref={stageRef}>
         {size && layout && (
           <>
@@ -61,6 +65,9 @@ export function Observatory() {
           )}
         </div>
         <div className="notices" role="status">
+          {linkVersion !== null && linkVersion !== MODEL_VERSION && (
+            <p>{t('link.version', { version: linkVersion })}</p>
+          )}
           {ended !== null && (
             <p>{t(ended === 'extinction' ? 'ended.extinction' : 'ended.horizon')}</p>
           )}
