@@ -1,0 +1,65 @@
+@import '@fontsource-variable/archivo/wdth.css';
+
+:root {
+  color-scheme: dark;
+  --void: #0a0b1e;
+  --nebula: #1b1440;
+  --haze: #3a2a6b;
+  --starlight: #e6e4f5;
+  --dim: #8e88b5;
+  --present: #ffffff;
+  --v-population: #ee77ae;
+  --v-food: #f2d35e;
+  --v-energy: #c9501e;
+  --v-technology: #3574d8;
+  --v-economy: #c9aeff;
+  --v-environment: #1fa58a;
+  --font: 'Archivo Variable', system-ui, sans-serif;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.25rem;
+  --radius: 6px;
+  --gutter: clamp(16px, 2.5vw, 32px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--void);
+  color: var(--starlight);
+  font-family: var(--font);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--starlight);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

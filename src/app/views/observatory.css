@@ -1,0 +1,144 @@
+.observatory {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  background:
+    radial-gradient(120% 80% at 85% 50%, rgb(58 42 107 / 0.45), transparent 60%),
+    radial-gradient(90% 60% at 10% 100%, rgb(27 20 64 / 0.8), transparent 70%), var(--void);
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 16px var(--gutter);
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.wordmark {
+  font-stretch: 125%;
+  font-weight: 650;
+  font-size: var(--text-lg);
+  letter-spacing: 0.06em;
+}
+
+.topbar__seed {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.topbar__seed output {
+  color: var(--starlight);
+}
+
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.transport button,
+.locale,
+.year__return {
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.transport button:hover:not(:disabled),
+.locale:hover,
+.year__return:hover {
+  border-color: var(--dim);
+}
+
+.transport button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.transport button[aria-pressed='true'] {
+  background: var(--nebula);
+  border-color: var(--dim);
+}
+
+.transport__play {
+  min-width: 104px;
+  font-weight: 600;
+}
+
+.transport__speeds {
+  display: flex;
+  gap: 4px;
+}
+
+.transport__speeds button {
+  padding: 6px 8px;
+  font-stretch: 87%;
+}
+
+.topbar__end {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.year {
+  display: grid;
+  justify-items: end;
+  margin: 0;
+  line-height: 1;
+}
+
+.year__label {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.year__value {
+  font-stretch: 125%;
+  font-weight: 300;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  letter-spacing: -0.02em;
+}
+
+.stage {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+}
+
+.observatory__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 8px var(--gutter) 16px;
+}
+
+.notices {
+  color: var(--dim);
+  min-height: 1.5rem;
+}
+
+.notices p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .topbar__end {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
