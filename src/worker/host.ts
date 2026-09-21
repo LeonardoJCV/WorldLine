@@ -113,9 +113,7 @@ export class SimulationHost {
   }
 
   #decide(allocation: Allocation): void {
-    const worldline = this.#require()
-    worldline.decide(allocation)
-    if (!worldline.ended) worldline.advance(1)
+    this.#require().decide(allocation)
     this.#report()
   }
 

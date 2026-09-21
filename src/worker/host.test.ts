@@ -96,11 +96,13 @@ describe('SimulationHost', () => {
     expect(closed).toBeDefined()
   })
 
-  it('applies a decision at the present year', () => {
+  it('applies a decision from the present year onward without moving time', () => {
     const { host, sent } = setup()
     host.handle({ type: 'create', seed: SEED, decisions: [] })
     host.handle({ type: 'step', years: 10 })
     host.handle({ type: 'decide', allocation: starved })
+    expect(last(sent, 'progress')?.present.tick).toBe(10)
+    host.handle({ type: 'step', years: 1 })
     expect(last(sent, 'progress')?.present.allocation).toEqual(starved)
   })
 
