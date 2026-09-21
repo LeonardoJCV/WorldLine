@@ -67,6 +67,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput, data: Range
   ctx.font = FONT
   ctx.textBaseline = 'middle'
   for (const marker of markers) {
+    ctx.textAlign = 'left'
     if (marker.kind === 'era') {
       const y = eraBase - Math.max(marker.row, 0) * 20
       ctx.strokeStyle = AXIS
