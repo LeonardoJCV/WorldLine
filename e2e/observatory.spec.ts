@@ -187,19 +187,6 @@ test('applies a decision in intervene mode', async ({ page }) => {
   await expect(agriculture).toHaveValue('45')
 })
 
-test('keeps decisions in the present', async ({ page }) => {
-  const step = page.getByRole('button', { name: 'Advance one year' })
-  for (let i = 0; i < 3; i++) await step.click()
-  await page.getByRole('button', { name: 'Intervene' }).click()
-  await page.getByRole('slider', { name: /Worldline history/ }).focus()
-  await page.getByRole('slider', { name: /Worldline history/ }).press('Home')
-  const panel = page.getByRole('region', { name: 'Allocation of effort' })
-  await expect(panel.getByText('Decisions happen in the present.')).toBeVisible()
-  await expect(panel.getByRole('slider', { name: /Agriculture/ })).toBeDisabled()
-  await panel.getByRole('button', { name: 'Return to the present' }).click()
-  await expect(panel.getByRole('slider', { name: /Agriculture/ })).toBeEnabled()
-})
-
 test('zooms into a window of history and back', async ({ page }) => {
   await page.getByRole('button', { name: '×256' }).click()
   await page.getByRole('button', { name: 'Play' }).click()

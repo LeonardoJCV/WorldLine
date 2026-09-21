@@ -20,13 +20,28 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
   const t = useT()
   const locale = useLocale()
   const snapshot = useSimulation((s) => s.inspected ?? s.present)
+  const originId = useSimulation(
+    (s) => s.worlds.find((world) => world.info.id === s.focus)?.info.parent ?? null,
+  )
+  const origin = useSimulation((s) => {
+    const parent = s.worlds.find((world) => world.info.id === s.focus)?.info.parent ?? null
+    if (parent === null) return null
+    if (s.cursor !== null) return s.inspectedOrigin
+    const world = s.worlds.find((candidate) => candidate.info.id === parent)
+    return world && world.present.tick === s.present?.tick ? world.present : null
+  })
+  const comparing = originId !== null
 
   return (
     <section className="panel state" aria-labelledby="state-title">
       <h2 className="panel__title" id="state-title">
         {t('state.title', { year: formatYear(snapshot?.tick ?? 0) })}
       </h2>
-      <ul className="state__list" aria-label={t('legend.label')}>
+      {comparing && <p className="state__versus">{t('state.versus', { id: originId })}</p>}
+      <ul
+        className={comparing ? 'state__list state__list--compare' : 'state__list'}
+        aria-label={t('legend.label')}
+      >
         {ROWS.map((variable) => {
           const change = snapshot
             ? formatChange(
@@ -36,6 +51,10 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
                 locale,
               )
             : null
+          const versus =
+            comparing && snapshot
+              ? formatChange(variable, snapshot.values[variable], origin?.values[variable], locale)
+              : null
           const content = (
             <>
               <span
@@ -56,6 +75,15 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
               >
                 {change?.text ?? ''}
               </span>
+              {comparing && (
+                <span
+                  className="state__origin"
+                  data-direction={versus?.direction ?? 'flat'}
+                  title={originId !== null ? t('state.origin', { id: originId }) : undefined}
+                >
+                  {versus?.text ?? ''}
+                </span>
+              )}
             </>
           )
           return (

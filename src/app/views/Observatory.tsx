@@ -17,6 +17,7 @@ import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
 import { useElementSize } from './useElementSize.ts'
 import { WorldActions } from './WorldActions.tsx'
+import { WorldsStrip } from './WorldsStrip.tsx'
 import './observatory.css'
 
 export function Observatory({
@@ -38,6 +39,8 @@ export function Observatory({
   const error = useSimulation((s) => s.error)
   const mode = useSimulation((s) => s.mode)
   const seed = useSimulation((s) => s.seed ?? 0)
+  const worldFocus = useSimulation((s) => s.focus)
+  const cursor = useSimulation((s) => s.cursor)
   const observed = useSimulation((s) => s.inspected ?? s.present)
   const linkVersion = useSimulation((s) => s.linkVersion)
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
@@ -64,10 +67,11 @@ export function Observatory({
         )}
       </main>
       <footer className="band">
+        <WorldsStrip />
         <StatePanel focus={focus} onFocus={setFocus} />
         <div className="band__main">
           {mode === 'intervene' ? (
-            <AllocationPanel key={seed ?? 0} />
+            <AllocationPanel key={`${seed}:${worldFocus}:${cursor === null ? 'now' : 'past'}`} />
           ) : (
             <>
               <EventsPanel />

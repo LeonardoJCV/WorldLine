@@ -11,6 +11,7 @@ export function EventsPanel() {
   const t = useT()
   const events = useSimulation((s) => s.events)
   const selected = useSimulation((s) => s.selected)
+  const fork = useSimulation((s) => s.worlds.find((w) => w.info.id === s.focus)?.info.fork ?? 0)
   const select = simulation.getState().select
 
   const recent = useMemo(() => {
@@ -41,6 +42,9 @@ export function EventsPanel() {
               >
                 <span className="events__year">{formatYear(record.start)}</span>
                 <span>{t(`event.${record.event}`)}</span>
+                {record.start < fork && (
+                  <span className="events__inherited">{t('events.inherited')}</span>
+                )}
                 {record.end === null && EPISODES.has(record.event) && (
                   <span className="events__ongoing">{t('events.ongoing')}</span>
                 )}

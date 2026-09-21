@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { DEFAULT_ALLOCATION } from '../../engine/params.ts'
+import { DEFAULT_ALLOCATION, HORIZON } from '../../engine/params.ts'
 import { SECTORS, type Allocation } from '../../engine/state.ts'
+import { MAX_WORLDLINES } from '../../worker/protocol.ts'
 import { formatPercent, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { rebalance, sameAllocation } from '../intervene/allocation.ts'
@@ -10,16 +11,30 @@ export function AllocationPanel() {
   const t = useT()
   const locale = useLocale()
   const present = useSimulation((s) => s.present?.tick ?? 0)
+  const status = useSimulation((s) => s.present?.status ?? 'running')
   const current = useSimulation((s) => s.present?.allocation ?? DEFAULT_ALLOCATION)
+  const observed = useSimulation((s) => s.inspected?.allocation ?? null)
   const decisions = useSimulation((s) => s.decisions)
   const cursor = useSimulation((s) => s.cursor)
-  const ended = useSimulation((s) => s.ended)
+  const full = useSimulation((s) => s.worlds.length >= MAX_WORLDLINES)
+  const inPast = cursor !== null
   const pending = decisions.at(-1)
-  const base = pending !== undefined && pending.tick === present ? pending.allocation : current
+  const base = inPast
+    ? (observed ?? current)
+    : pending !== undefined && pending.tick === present
+      ? pending.allocation
+      : current
   const [draft, setDraft] = useState<Allocation>(base)
-  const { decide, setCursor } = simulation.getState()
-  const blocked =
-    ended !== null ? t('allocation.ended') : cursor !== null ? t('allocation.returnFirst') : null
+  const { decide, branch, setCursor } = simulation.getState()
+  const ended = status === 'extinct' || present >= HORIZON
+  const blocked = inPast
+    ? full
+      ? t('allocation.limit')
+      : null
+    : ended
+      ? t('allocation.ended')
+      : null
+  const year = formatYear(cursor ?? present)
 
   return (
     <section className="panel allocation" aria-labelledby="allocation-title">
@@ -45,8 +60,9 @@ export function AllocationPanel() {
       </div>
       <div className="allocation__footer">
         <p className="panel__empty">
-          {blocked ?? t('allocation.effect', { year: formatYear(present) })}
-          {cursor !== null && ended === null && (
+          {blocked ??
+            (inPast ? t('allocation.branchHint', { year }) : t('allocation.effect', { year }))}
+          {inPast && (
             <>
               {' '}
               <button type="button" className="link" onClick={() => setCursor(null)}>
@@ -66,10 +82,10 @@ export function AllocationPanel() {
           <button
             type="button"
             className="allocation__apply"
-            onClick={() => decide(draft)}
-            disabled={blocked !== null || sameAllocation(draft, base)}
+            onClick={() => (inPast ? branch(draft) : decide(draft))}
+            disabled={blocked !== null || (!inPast && sameAllocation(draft, base))}
           >
-            {t('allocation.apply')}
+            {inPast ? t('allocation.branch', { year }) : t('allocation.apply')}
           </button>
         </div>
       </div>
