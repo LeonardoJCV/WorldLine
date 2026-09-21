@@ -91,8 +91,7 @@ export class Worldline {
   advance(years: number): number {
     let advanced = 0
     while (advanced < years && !this.ended) {
-      const decision = this.#decisions[this.#nextDecision]
-      const due = decision?.tick === this.#state.tick ? decision : undefined
+      const due = this.#dueDecision(this.#nextDecision, this.#state.tick)
       if (due) this.#nextDecision++
       const result = step(this.#state, this.world, this.records.length, due)
       this.records.push(...result.started)
@@ -139,8 +138,7 @@ export class Worldline {
     let index = this.#decisions.findIndex((d) => d.tick >= base)
     if (index === -1) index = this.#decisions.length
     while (state.tick < tick) {
-      const decision = this.#decisions[index]
-      const due = decision?.tick === state.tick ? decision : undefined
+      const due = this.#dueDecision(index, state.tick)
       if (due) index++
       const result = step(state, this.world, records, due)
       records += result.started.length
@@ -191,6 +189,11 @@ export class Worldline {
     const child = new Worldline(this.seed, inherited, { parent: this, tick })
     child.advance(tick)
     return child
+  }
+
+  #dueDecision(index: number, tick: number): Decision | undefined {
+    const decision = this.#decisions[index]
+    return decision?.tick === tick ? decision : undefined
   }
 
   #record(state: WorldState): void {

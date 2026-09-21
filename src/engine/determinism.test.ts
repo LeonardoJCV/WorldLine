@@ -90,7 +90,7 @@ describe('determinism properties', () => {
     )
   })
 
-  it('a fork without new decisions stays on its parent', () => {
+  it("a fork that replays its parent's decisions stays on its parent", () => {
     fc.assert(
       fc.property(seed, script(1999), fc.integer({ min: 0, max: 1500 }), (s, decisions, at) => {
         const parent = new Worldline(s, decisions)

@@ -5,7 +5,7 @@ const FNV_PRIME = 0x01000193
 const view = new DataView(new ArrayBuffer(8))
 
 function feed(hash: number, value: number): number {
-  view.setFloat64(0, value)
+  view.setFloat64(0, value, false)
   for (let i = 0; i < 8; i++) hash = Math.imul(hash ^ view.getUint8(i), FNV_PRIME)
   return hash >>> 0
 }

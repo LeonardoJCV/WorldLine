@@ -37,7 +37,6 @@ export function step(
   return {
     state: {
       ...integrated,
-      tick: s.tick + 1,
       eras: outcome.eras,
       active: outcome.active,
       lastEnded: outcome.lastEnded,
