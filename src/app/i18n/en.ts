@@ -24,7 +24,7 @@ export const en = {
   'ended.horizon': 'The simulation reached its horizon.',
   'error.simulation': 'The simulation stopped: {message}',
   'variable.population': 'Population',
-  'variable.food': 'Food',
+  'variable.food': 'Food reserve',
   'variable.energy': 'Energy',
   'variable.technology': 'Technology',
   'variable.economy': 'Economy',

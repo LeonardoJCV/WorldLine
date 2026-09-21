@@ -23,7 +23,13 @@ import {
   ringFragment,
   ringVertex,
 } from './shaders.ts'
-import { MAX_SATELLITES, type PlanetPalette, type PlanetState } from './uniforms.ts'
+import {
+  CAMERA_DISTANCE,
+  CAMERA_FOV,
+  MAX_SATELLITES,
+  type PlanetPalette,
+  type PlanetState,
+} from './uniforms.ts'
 
 export interface PlanetScene {
   update(state: PlanetState): void
@@ -41,8 +47,8 @@ export function createPlanetScene(
   const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setClearColor(0x000000, 0)
   const scene = new Scene()
-  const camera = new PerspectiveCamera(30, 1, 0.1, 20)
-  camera.position.set(0, 0, 4.6)
+  const camera = new PerspectiveCamera(CAMERA_FOV, 1, 0.1, 20)
+  camera.position.set(0, 0, CAMERA_DISTANCE)
   const system = new Group()
   system.rotation.z = palette.tilt
   scene.add(system)
@@ -82,7 +88,7 @@ export function createPlanetScene(
   const planet = new Mesh(sphere, planetMaterial)
   system.add(planet)
 
-  const atmosphereGeometry = new SphereGeometry(1.12, 64, 48)
+  const atmosphereGeometry = new SphereGeometry(1.1, 64, 48)
   const atmosphereMaterial = new ShaderMaterial({
     vertexShader: atmosphereVertex,
     fragmentShader: atmosphereFragment,
@@ -97,7 +103,7 @@ export function createPlanetScene(
   })
   system.add(new Mesh(atmosphereGeometry, atmosphereMaterial))
 
-  const ringGeometry = new RingGeometry(1.45, 1.95, 160, 1)
+  const ringGeometry = new RingGeometry(1.25, 1.55, 160, 1)
   const ringMaterial = new ShaderMaterial({
     vertexShader: ringVertex,
     fragmentShader: ringFragment,
@@ -107,13 +113,13 @@ export function createPlanetScene(
     depthWrite: false,
   })
   const ring = new Mesh(ringGeometry, ringMaterial)
-  ring.rotation.x = Math.PI * 0.5 - 0.12
+  ring.rotation.x = Math.PI * 0.5 - 0.38
   system.add(ring)
 
   const positions = new Float32Array(MAX_SATELLITES * 3)
   for (let i = 0; i < MAX_SATELLITES; i++) {
     const angle = (i / MAX_SATELLITES) * Math.PI * 2 + i * 0.37
-    const radius = 1.3 + (i % 4) * 0.08
+    const radius = 1.2 + (i % 4) * 0.07
     positions.set(
       [Math.cos(angle) * radius, Math.sin(i * 1.7) * 0.35, Math.sin(angle) * radius],
       i * 3,

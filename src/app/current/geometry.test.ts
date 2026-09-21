@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { EventRecord } from '../../engine/events.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { Series } from '../../worker/protocol.ts'
+import { PLANET_BODY } from '../planet/uniforms.ts'
 import {
   ERA_ROWS,
   MAX_WIDTH,
@@ -119,8 +120,11 @@ describe('stageLayout', () => {
   it('lets the current flow into the planet on wide stages', () => {
     const layout = stageLayout(1400, 600)
     expect(layout.stacked).toBe(false)
-    expect(layout.frame.right).toBeLessThan(layout.planet.cx - layout.planet.size / 2 + 1)
     expect(layout.frame.centerY).toBe(layout.planet.cy)
+    const edge = layout.planet.cx - (layout.planet.size / 2) * PLANET_BODY
+    const margin = layout.planet.cx - (layout.planet.size / 2) * PLANET_BODY * 1.1
+    expect(layout.frame.right).toBeGreaterThan(margin)
+    expect(layout.frame.right).toBeLessThan(edge)
   })
 
   it('stacks planet above the current on narrow stages', () => {

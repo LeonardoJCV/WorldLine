@@ -102,9 +102,9 @@ uniform float uHaze;
 varying vec3 vNormalView;
 
 void main() {
-  float intensity = pow(clamp(0.72 - dot(vNormalView, vec3(0.0, 0.0, 1.0)), 0.0, 1.5), 3.0);
+  float intensity = pow(clamp(0.68 - dot(vNormalView, vec3(0.0, 0.0, 1.0)), 0.0, 1.5), 5.0);
   vec3 color = mix(uClear, uSmog, uHaze);
-  gl_FragColor = vec4(color, clamp(intensity * (0.45 + 0.35 * uHaze), 0.0, 1.0));
+  gl_FragColor = vec4(color, clamp(intensity * (0.22 + 0.3 * uHaze), 0.0, 1.0));
 }
 `
 
@@ -123,8 +123,8 @@ uniform float uRing;
 varying float vRadius;
 
 void main() {
-  float bands = 0.55 + 0.45 * sin(vRadius * 70.0);
-  float edge = smoothstep(1.45, 1.55, vRadius) * (1.0 - smoothstep(1.85, 1.95, vRadius));
-  gl_FragColor = vec4(0.79, 0.68, 1.0, uRing * 0.32 * bands * edge);
+  float bands = 0.6 + 0.4 * sin(vRadius * 38.0);
+  float edge = smoothstep(1.25, 1.32, vRadius) * (1.0 - smoothstep(1.48, 1.55, vRadius));
+  gl_FragColor = vec4(0.79, 0.68, 1.0, uRing * 0.22 * bands * edge);
 }
 `

@@ -24,7 +24,7 @@ export function Planet({ size }: PlanetProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<PlanetScene | null>(null)
   const latest = useRef<{ size: number; state: PlanetState | null }>({ size, state: null })
-  const [renderer] = useState(() => (supportsWebGL() ? 'webgl' : 'fallback'))
+  const [renderer, setRenderer] = useState(() => (supportsWebGL() ? 'webgl' : 'fallback'))
   const seed = useSimulation((s) => s.seed ?? 0)
   const snapshot = useSimulation((s) => s.inspected ?? s.present)
   const palette = useMemo(() => planetPalette(seed), [seed])
@@ -40,13 +40,17 @@ export function Planet({ size }: PlanetProps) {
     if (!canvas) return
     let disposed = false
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    void import('./scene.ts').then(({ createPlanetScene }) => {
-      if (disposed) return
-      const scene = createPlanetScene(canvas, palette, reducedMotion)
-      sceneRef.current = scene
-      scene.resize(latest.current.size, window.devicePixelRatio || 1)
-      if (latest.current.state) scene.update(latest.current.state)
-    })
+    void import('./scene.ts')
+      .then(({ createPlanetScene }) => {
+        if (disposed) return
+        const scene = createPlanetScene(canvas, palette, reducedMotion)
+        sceneRef.current = scene
+        scene.resize(latest.current.size, window.devicePixelRatio || 1)
+        if (latest.current.state) scene.update(latest.current.state)
+      })
+      .catch(() => {
+        if (!disposed) setRenderer('fallback')
+      })
     return () => {
       disposed = true
       sceneRef.current?.dispose()
@@ -76,6 +80,7 @@ export function Planet({ size }: PlanetProps) {
 
   return (
     <canvas
+      key={renderer}
       ref={canvasRef}
       className="planet"
       data-renderer={renderer}

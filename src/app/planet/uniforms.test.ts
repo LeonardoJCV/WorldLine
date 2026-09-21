@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { EventId } from '../../engine/events.ts'
 import { Era, type Variable } from '../../engine/state.ts'
 import type { Snapshot } from '../../worker/protocol.ts'
+import { hexToRgb } from '../theme/color.ts'
 import { MAX_SATELLITES, planetPalette, planetState } from './uniforms.ts'
 
 function snapshot(
@@ -49,6 +50,17 @@ describe('planetPalette', () => {
           expect(channel).toBeLessThanOrEqual(1)
         }
       }
+    }
+  })
+
+  it('pushes vegetation toward teal or rose, never a grey midpoint', () => {
+    const teal = hexToRgb('#1fa58a')
+    const rose = hexToRgb('#e86ba6')
+    for (let seed = 0; seed < 200; seed++) {
+      const [r, g, b] = planetPalette(seed * 7919).vegetation
+      const toTeal = Math.hypot(r - teal[0], g - teal[1], b - teal[2])
+      const toRose = Math.hypot(r - rose[0], g - rose[1], b - rose[2])
+      expect(Math.min(toTeal, toRose)).toBeLessThan(0.2)
     }
   })
 })

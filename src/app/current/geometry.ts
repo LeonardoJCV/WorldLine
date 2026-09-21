@@ -1,6 +1,7 @@
 import { EVENTS, type EventId, type EventRecord } from '../../engine/events.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { Series } from '../../worker/protocol.ts'
+import { PLANET_BODY } from '../planet/uniforms.ts'
 import { STRANDS, normalize, type Row, type Strand } from './normalize.ts'
 
 export interface Frame {
@@ -28,7 +29,7 @@ const BAND_GAP = 4
 export function stageLayout(width: number, height: number): StageLayout {
   const gutter = Math.max(16, Math.round(width * 0.03))
   if (width < NARROW) {
-    const size = Math.round(Math.min(width * 0.62, height * 0.45))
+    const size = Math.round(Math.min(width * 0.8, height * 0.5))
     const cy = gutter + size / 2
     const top = cy + size / 2
     const centerY = top + (height - top) / 2
@@ -38,12 +39,12 @@ export function stageLayout(width: number, height: number): StageLayout {
       stacked: true,
     }
   }
-  const size = Math.round(Math.min(width * 0.36, height * 0.82, 520))
+  const size = Math.round(Math.min(width * 0.42, height * 0.96, 640))
   const cx = width - gutter - size / 2
   const cy = height / 2
   return {
     planet: { size, cx, cy },
-    frame: { left: gutter, right: cx - size / 2 - size * 0.02, centerY: cy, height },
+    frame: { left: gutter, right: cx - (size / 2) * PLANET_BODY * 1.04, centerY: cy, height },
     stacked: false,
   }
 }

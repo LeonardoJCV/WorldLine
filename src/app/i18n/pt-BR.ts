@@ -23,7 +23,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'ended.horizon': 'A simulação chegou ao horizonte.',
   'error.simulation': 'A simulação parou: {message}',
   'variable.population': 'População',
-  'variable.food': 'Comida',
+  'variable.food': 'Reserva de comida',
   'variable.energy': 'Energia',
   'variable.technology': 'Tecnologia',
   'variable.economy': 'Economia',

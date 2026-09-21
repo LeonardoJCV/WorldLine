@@ -29,6 +29,9 @@ export interface PlanetState {
 }
 
 export const MAX_SATELLITES = 12
+export const CAMERA_DISTANCE = 6
+export const CAMERA_FOV = 30
+export const PLANET_BODY = 1 / (CAMERA_DISTANCE * Math.tan(((CAMERA_FOV / 2) * Math.PI) / 180))
 const VISUAL_CHANNEL = 4096
 
 const TEAL = hexToRgb('#1fa58a')
@@ -56,12 +59,13 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 export function planetPalette(seed: number): PlanetPalette {
   const draw = (k: number) => uniform(seed, 0, VISUAL_CHANNEL + k)
   const sea = draw(4)
+  const hue = draw(5)
   return {
     offset: [draw(0) * 100, draw(1) * 100, draw(2) * 100],
     seaLevel: 0.44 + draw(3) * 0.12,
     oceanDeep: mixRgb(DEEP, VIOLET_SEA, sea),
     oceanShallow: mixRgb(SHALLOW, HAZE, sea * 0.6),
-    vegetation: mixRgb(TEAL, ROSE, draw(5)),
+    vegetation: mixRgb(TEAL, ROSE, hue < 0.5 ? hue * 0.3 : 1 - (1 - hue) * 0.3),
     arid: mixRgb(OCHRE, RUST, draw(6)),
     snow: SNOW,
     atmosphere: mixRgb(SKY, LAVENDER, draw(7)),
