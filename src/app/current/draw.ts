@@ -30,6 +30,11 @@ export interface DrawInput {
   readonly phase: number
   readonly label: (event: EventId) => string
   readonly yearLabel: (year: number) => string
+  readonly companions: readonly {
+    readonly id: string
+    readonly points: Float32Array
+    readonly extinct: boolean
+  }[]
 }
 
 const AXIS = 'rgba(142, 136, 181, 0.28)'
@@ -174,6 +179,32 @@ function drawPresent(ctx: CanvasRenderingContext2D, frame: Frame): void {
   ctx.restore()
 }
 
+function drawCompanions(ctx: CanvasRenderingContext2D, input: DrawInput): void {
+  ctx.save()
+  ctx.strokeStyle = 'rgba(230, 228, 245, 0.45)'
+  ctx.fillStyle = INK
+  ctx.lineWidth = 1.5
+  ctx.font = FONT_STRONG
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  for (const track of input.companions) {
+    const count = track.points.length / 2
+    if (count < 2) continue
+    ctx.beginPath()
+    for (let i = 0; i < count; i++) {
+      const x = track.points[i * 2] ?? 0
+      const y = track.points[i * 2 + 1] ?? 0
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+    const x = track.points[(count - 1) * 2] ?? 0
+    const y = track.points[(count - 1) * 2 + 1] ?? 0
+    ctx.fillText(track.extinct ? `${track.id} ×` : track.id, x + 6, y)
+  }
+  ctx.restore()
+}
+
 export function drawCurrent(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   const { frame, data } = input
   ctx.clearRect(0, 0, input.width, input.height)
@@ -183,6 +214,7 @@ export function drawCurrent(ctx: CanvasRenderingContext2D, input: DrawInput): vo
   ctx.moveTo(frame.left, frame.centerY)
   ctx.lineTo(frame.right, frame.centerY)
   ctx.stroke()
+  drawCompanions(ctx, input)
   if (data && data.series.population.length >= 2) {
     drawRibbons(ctx, input, data)
     drawEvents(ctx, input)

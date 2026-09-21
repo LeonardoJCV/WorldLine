@@ -4,10 +4,13 @@ import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { Series } from '../../worker/protocol.ts'
 import { PLANET_BODY } from '../planet/uniforms.ts'
 import {
+  COMPANION_SCALE,
   ERA_ROWS,
   MAX_WIDTH,
   MIN_WIDTH,
   buildRibbons,
+  companionAt,
+  companionPoints,
   episodeY,
   eraLabelY,
   layoutEvents,
@@ -235,6 +238,37 @@ describe('layoutEvents', () => {
       120,
     )
     expect(markers).toEqual([])
+  })
+})
+
+describe('companion tracks', () => {
+  const track = {
+    id: 'B',
+    from: 0,
+    to: 100,
+    values: Float32Array.from([0, 0.25, 0.5]),
+    extinct: false,
+  }
+
+  it('spreads the track from the axis in proportion to the distance', () => {
+    const points = companionPoints(track, 0, 0, 100, frame)
+    expect(points).toHaveLength(6)
+    expect(points[0]).toBe(frame.left)
+    expect(points[1]).toBe(frame.centerY)
+    expect(points[5]).toBeCloseTo(frame.centerY - 0.5 * frame.height * COMPANION_SCALE, 5)
+  })
+
+  it('alternates sides by index', () => {
+    const below = companionPoints(track, 1, 0, 100, frame)
+    expect(below[5]).toBeGreaterThan(frame.centerY)
+  })
+
+  it('finds the track under the pointer', () => {
+    const points = companionPoints(track, 0, 0, 100, frame)
+    const x = points[4] ?? 0
+    const y = points[5] ?? 0
+    expect(companionAt([{ id: 'B', points }], x + 2, y - 2)).toBe('B')
+    expect(companionAt([{ id: 'B', points }], x, y + 40)).toBeNull()
   })
 })
 

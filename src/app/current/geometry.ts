@@ -198,6 +198,52 @@ export function episodeY(frame: Frame, row: number): number {
   return frame.centerY + frame.height * 0.2 + row * EPISODE_ROW_HEIGHT
 }
 
+export const COMPANION_SCALE = 0.4
+
+export interface CompanionTrack {
+  readonly id: string
+  readonly from: number
+  readonly to: number
+  readonly values: Float32Array
+  readonly extinct: boolean
+}
+
+export function companionPoints(
+  track: CompanionTrack,
+  index: number,
+  from: number,
+  to: number,
+  frame: Frame,
+): Float32Array {
+  const count = track.values.length
+  const points = new Float32Array(count * 2)
+  const sign = index % 2 === 0 ? -1 : 1
+  const span = Math.max(1, track.to - track.from)
+  for (let i = 0; i < count; i++) {
+    const year = count <= 1 ? track.to : track.from + (span * i) / (count - 1)
+    points[i * 2] = yearToX(year, from, to, frame)
+    points[i * 2 + 1] =
+      frame.centerY + sign * (track.values[i] ?? 0) * frame.height * COMPANION_SCALE
+  }
+  return points
+}
+
+export function companionAt(
+  tracks: readonly { readonly id: string; readonly points: Float32Array }[],
+  x: number,
+  y: number,
+  radius = 6,
+): string | null {
+  for (const track of tracks) {
+    for (let i = 0; i < track.points.length; i += 2) {
+      const dx = (track.points[i] ?? 0) - x
+      const dy = (track.points[i + 1] ?? 0) - y
+      if (dx * dx + dy * dy <= radius * radius) return track.id
+    }
+  }
+  return null
+}
+
 export function markerAt(
   markers: readonly Marker[],
   x: number,

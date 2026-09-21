@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
+import type { WorldlineId } from '../../worker/protocol.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import { LABEL_WIDTH, drawCurrent } from './draw.ts'
-import { layoutEvents, markerAt, seedPhase, xToYear, type Frame } from './geometry.ts'
+import {
+  companionAt,
+  companionPoints,
+  layoutEvents,
+  markerAt,
+  seedPhase,
+  xToYear,
+  type CompanionTrack,
+  type Frame,
+} from './geometry.ts'
 import type { Strand } from './normalize.ts'
 import { resolveView, zoomView } from './view.ts'
 
@@ -19,8 +29,10 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [data, setData] = useState<RangeResult | null>(null)
+  const [tracks, setTracks] = useState<readonly CompanionTrack[]>([])
   const hasWorld = useSimulation((s) => s.present !== null)
   const worldFocus = useSimulation((s) => s.focus)
+  const worlds = useSimulation((s) => s.worlds)
   const present = useSimulation((s) => s.present?.tick ?? 0)
   const cursor = useSimulation((s) => s.cursor)
   const events = useSimulation((s) => s.events)
@@ -54,9 +66,53 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     }
   }, [hasWorld, worldFocus, from, to, columns])
 
+  useEffect(() => {
+    if (!hasWorld) return
+    let cancelled = false
+    const others = worlds.filter((world) => world.info.id !== worldFocus)
+    const frameId = requestAnimationFrame(() => {
+      Promise.all(
+        others.map((world) =>
+          client
+            .distance(world.info.id, worldFocus, from, to, columns)
+            .then((result): CompanionTrack => ({
+              id: world.info.id,
+              from: result.from,
+              to: result.to,
+              values: result.values,
+              extinct: world.present.status === 'extinct',
+            })),
+        ),
+      ).then(
+        (list) => {
+          if (!cancelled) setTracks(list)
+        },
+        (error: unknown) => {
+          if (!cancelled) {
+            simulation.setState({ error: error instanceof Error ? error.message : String(error) })
+          }
+        },
+      )
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frameId)
+    }
+  }, [hasWorld, worlds, worldFocus, from, to, columns])
+
   const markers = useMemo(
     () => (data ? layoutEvents(events, data.from, data.to, present, frame, LABEL_WIDTH) : []),
     [data, events, present, frame],
+  )
+
+  const companions = useMemo(
+    () =>
+      tracks.map((track, index) => ({
+        id: track.id,
+        extinct: track.extinct,
+        points: companionPoints(track, index, shownFrom, shownTo, frame),
+      })),
+    [tracks, shownFrom, shownTo, frame],
   )
 
   useEffect(() => {
@@ -84,6 +140,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         phase: seedPhase(seed),
         label: (event) => t(`event.${event}`),
         yearLabel: formatYear,
+        companions,
       })
     })
     return () => cancelAnimationFrame(frameId)
@@ -102,6 +159,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     focus,
     seed,
     t,
+    companions,
   ])
 
   useEffect(() => {
@@ -173,6 +231,11 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
           select(hit.index)
           return
         }
+        const other = companionAt(companions, x, y)
+        if (other) {
+          simulation.getState().setFocus(other as WorldlineId)
+          return
+        }
         event.currentTarget.setPointerCapture(event.pointerId)
         setCursor(xToYear(x, shownFrom, shownTo, frame))
       }}
@@ -182,9 +245,10 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
           setCursor(xToYear(x, shownFrom, shownTo, frame))
           return
         }
-        event.currentTarget.style.cursor = markerAt(markers, x, y, frame, LABEL_WIDTH)
-          ? 'pointer'
-          : ''
+        event.currentTarget.style.cursor =
+          markerAt(markers, x, y, frame, LABEL_WIDTH) || companionAt(companions, x, y)
+            ? 'pointer'
+            : ''
       }}
       onDoubleClick={() => setCursor(null)}
       onKeyDown={onKeyDown}
