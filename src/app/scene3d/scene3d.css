@@ -11,8 +11,9 @@
 
 .scene3d__recenter {
   position: absolute;
+  top: 12px;
   right: var(--gutter);
-  bottom: 12px;
+  z-index: 1;
   padding: 4px 10px;
   background: rgba(10, 11, 30, 0.7);
   border: 1px solid var(--haze);

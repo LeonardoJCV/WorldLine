@@ -11,7 +11,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 24px;
+  column-gap: 14px;
   row-gap: 12px;
   padding: 16px var(--gutter);
 }
@@ -20,13 +20,13 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px 16px;
+  gap: 6px 10px;
 }
 
 .topbar__brand {
   display: flex;
   align-items: baseline;
-  gap: 16px;
+  gap: 10px;
 }
 
 .topbar__seed {
@@ -42,7 +42,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .transport button,
@@ -53,7 +53,7 @@
   background: transparent;
   border: 1px solid var(--haze);
   border-radius: var(--radius);
-  padding: 6px 12px;
+  padding: 6px 10px;
   font-size: var(--text-sm);
   white-space: nowrap;
   cursor: pointer;
@@ -85,11 +85,11 @@
 
 .transport__speeds {
   display: flex;
-  gap: 4px;
+  gap: 3px;
 }
 
 .transport__speeds button {
-  padding: 6px 8px;
+  padding: 6px 7px;
   font-stretch: 87%;
 }
 
@@ -101,7 +101,7 @@
 .topbar__end {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .graphics {

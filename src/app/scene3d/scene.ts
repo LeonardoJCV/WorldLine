@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   FogExp2,
   Line,
   LineBasicMaterial,
@@ -29,6 +30,9 @@ import { createStream, particleCounts, type Stream } from './streams.ts'
 export const FOCUS_RADIUS = 0.9
 export const OTHER_RADIUS = 0.45
 const VOID = 0x0a0b1e
+const BLOOM_SCALE = 0.35
+const BLOOM_THRESHOLD = 0.75
+const BLOOM_RADIUS = 0.25
 
 export interface SceneWorld {
   readonly key: string
@@ -100,6 +104,7 @@ export function createCurrentScene(
   const renderer = new WebGLRenderer({ canvas, antialias: spec.bloom === 0, alpha: true })
   renderer.setClearColor(VOID, 1)
   const scene = new Scene()
+  scene.background = new Color(VOID)
   scene.fog = new FogExp2(VOID, 0.022)
   const camera = new PerspectiveCamera(38, 1, 0.1, 200)
   const stars = starField(options.seed)
@@ -124,7 +129,12 @@ export function createCurrentScene(
   if (spec.bloom > 0) {
     composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    bloom = new UnrealBloomPass(new Vector2(1, 1), spec.bloom, 0.55, 0.12)
+    bloom = new UnrealBloomPass(
+      new Vector2(1, 1),
+      spec.bloom * BLOOM_SCALE,
+      BLOOM_RADIUS,
+      BLOOM_THRESHOLD,
+    )
     composer.addPass(bloom)
     composer.addPass(new OutputPass())
   }

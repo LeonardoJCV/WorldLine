@@ -19,6 +19,15 @@ export const OTHERS_WEIGHT = 0.4
 export const OTHERS_BRIGHTNESS = 0.35
 export const FLOW_SPEED = 0.03
 
+export const INTENSITY_REFERENCE = 8000
+export const MIN_INTENSITY = 0.32
+export const MAX_INTENSITY = 1.8
+
+export function streamIntensity(count: number): number {
+  if (count <= 0) return MAX_INTENSITY
+  return Math.min(MAX_INTENSITY, Math.max(MIN_INTENSITY, Math.sqrt(INTENSITY_REFERENCE / count)))
+}
+
 const vertex = `
 uniform sampler2D uPath;
 uniform float uSamples;
@@ -26,6 +35,7 @@ uniform vec2 uAlive;
 uniform float uTime;
 uniform float uEmphasis;
 uniform float uPixelRatio;
+uniform float uIntensity;
 
 attribute vec3 aSeed;
 attribute vec3 aColor;
@@ -55,9 +65,17 @@ void main() {
   vec3 position = axis.xyz + vec3(0.0, cos(angle), sin(angle)) * radius;
   vec4 view = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * view;
-  gl_PointSize = clamp((0.5 + value) * 2.2 * uPixelRatio * (12.0 / -view.z), 1.0, 12.0);
+  gl_PointSize = clamp(
+    (0.5 + value) * 2.2 * uPixelRatio * (12.0 / -view.z) * sqrt(uIntensity),
+    1.0,
+    14.0
+  );
   vColor = aColor;
-  vAlpha = step(0.5, second.z) * (0.25 + 0.75 * value) * uEmphasis * (0.35 + 0.65 * smoothstep(0.0, 0.5, u));
+  vAlpha = min(
+    1.0,
+    step(0.5, second.z) * (0.25 + 0.75 * value) * uEmphasis *
+      (0.35 + 0.65 * smoothstep(0.0, 0.5, u)) * uIntensity
+  );
 }
 `
 
@@ -135,6 +153,7 @@ export function createStream(count: number, seed: number): Stream {
     uTime: { value: 0 },
     uEmphasis: { value: 1 },
     uPixelRatio: { value: 1 },
+    uIntensity: { value: streamIntensity(count) },
   }
   const material = new ShaderMaterial({
     vertexShader: vertex,
