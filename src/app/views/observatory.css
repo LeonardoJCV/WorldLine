@@ -191,3 +191,12 @@
   min-width: 3.5ch;
   text-align: right;
 }
+
+.planet-slot {
+  position: absolute;
+  pointer-events: none;
+}
+
+.planet {
+  display: block;
+}

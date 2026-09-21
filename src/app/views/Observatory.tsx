@@ -3,6 +3,7 @@ import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
 import type { Strand } from '../current/normalize.ts'
 import { useT } from '../i18n/index.ts'
+import { Planet } from '../planet/Planet.tsx'
 import { useSimulation } from '../sim/runtime.ts'
 import { Legend } from './Legend.tsx'
 import { TopBar } from './TopBar.tsx'
@@ -23,7 +24,18 @@ export function Observatory() {
       <TopBar />
       <main className="stage" ref={stageRef}>
         {size && layout && (
-          <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
+          <>
+            <div
+              className="planet-slot"
+              style={{
+                left: layout.planet.cx - layout.planet.size / 2,
+                top: layout.planet.cy - layout.planet.size / 2,
+              }}
+            >
+              <Planet size={layout.planet.size} />
+            </div>
+            <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
+          </>
         )}
       </main>
       <footer className="observatory__footer">

@@ -82,3 +82,38 @@ test('lists every variable in the legend', async ({ page }) => {
     await expect(legend.getByText(name)).toBeVisible()
   }
 })
+
+test('renders the planet with WebGL', async ({ page }) => {
+  await expect(page.getByRole('img', { name: /The world in year/ })).toHaveAttribute(
+    'data-renderer',
+    'webgl',
+  )
+})
+
+test('falls back to a 2D planet without WebGL', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      options?: unknown,
+    ) {
+      if (type.startsWith('webgl')) return null
+      return original.call(this, type as '2d', options as CanvasRenderingContext2DSettings)
+    } as typeof original
+  })
+  await page.reload()
+  await expect(page.getByRole('img', { name: /The world in year/ })).toHaveAttribute(
+    'data-renderer',
+    'fallback',
+  )
+})
+
+test('shows the world at the observed year', async ({ page }) => {
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  for (let i = 0; i < 5; i++) await step.click()
+  await expect(page.getByTestId('year')).toHaveText('0005')
+  await page.getByRole('slider').focus()
+  await page.getByRole('slider').press('Home')
+  await expect(page.getByRole('img', { name: 'The world in year 0000' })).toBeVisible()
+})
