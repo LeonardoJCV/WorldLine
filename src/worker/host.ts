@@ -1,9 +1,16 @@
-import { VARIABLES, type Allocation, type Decision, type Variable } from '../engine/state.ts'
+import {
+  VARIABLES,
+  type Allocation,
+  type Decision,
+  type Variable,
+  type WorldState,
+} from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
   toSnapshot,
   type EventUpdate,
   type FromWorker,
+  type Snapshot,
   type Speed,
   type ToWorker,
 } from './protocol.ts'
@@ -79,6 +86,15 @@ export class SimulationHost {
     return this.#worldline
   }
 
+  #snapshot(state: WorldState): Snapshot {
+    const worldline = this.#require()
+    if (state.tick === 0) return toSnapshot(state, null)
+    const previous = {} as Record<Variable, number>
+    for (const variable of VARIABLES)
+      previous[variable] = worldline.valueAt(variable, state.tick - 1)
+    return toSnapshot(state, previous)
+  }
+
   #create(seed: number, decisions: readonly Decision[]): void {
     this.#stop()
     this.#worldline = new Worldline(seed, decisions)
@@ -135,7 +151,7 @@ export class SimulationHost {
   #inspect(requestId: number, tick: number): void {
     const worldline = this.#require()
     const clamped = Math.max(0, Math.min(Math.round(tick), worldline.present.tick))
-    this.#send({ type: 'inspect', requestId, snapshot: toSnapshot(worldline.stateAt(clamped)) })
+    this.#send({ type: 'inspect', requestId, snapshot: this.#snapshot(worldline.stateAt(clamped)) })
   }
 
   #schedule(): void {
@@ -203,9 +219,13 @@ export class SimulationHost {
     this.#open = open
     this.#send({
       type: 'progress',
-      present: toSnapshot(worldline.present),
+      present: this.#snapshot(worldline.present),
       playing: this.#playing,
       events,
+      decisions: worldline.decisions.map((d) => ({
+        tick: d.tick,
+        allocation: { ...d.allocation },
+      })),
     })
     if (worldline.ended && !this.#endReported) {
       this.#endReported = true

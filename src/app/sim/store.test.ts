@@ -81,4 +81,60 @@ describe('simulation store', () => {
     expect(store.getState().ended).toBe('horizon')
     expect(store.getState().playing).toBe(false)
   })
+
+  it('selects an event and moves the cursor to its start', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(200)
+    await flush()
+    const index = store.getState().events.findIndex((r) => r.event === 'golden_age')
+    const start = store.getState().events[index]?.start
+    store.getState().select(index)
+    await flush()
+    expect(store.getState().selected).toBe(index)
+    expect(store.getState().cursor).toBe(start)
+    expect(store.getState().inspected?.tick).toBe(start)
+  })
+
+  it('records decisions made at the present', async () => {
+    const { store } = setup()
+    const allocation = { agriculture: 60, industry: 20, research: 10, conservation: 10 }
+    store.getState().create(482913)
+    store.getState().step(30)
+    await flush()
+    store.getState().decide(allocation)
+    await flush()
+    expect(store.getState().decisions).toEqual([{ tick: 30, allocation }])
+  })
+
+  it('returns to the present when intervening', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(50)
+    await flush()
+    store.getState().setCursor(10)
+    await flush()
+    store.getState().setMode('intervene')
+    expect(store.getState().mode).toBe('intervene')
+    expect(store.getState().cursor).toBeNull()
+  })
+
+  it('starts a new world observing its whole history', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(50)
+    await flush()
+    store.getState().setView({ span: 20, end: 40 })
+    store.getState().setMode('intervene')
+    store.getState().select(0)
+    store.getState().create(7)
+    await flush()
+    const state = store.getState()
+    expect([state.mode, state.view, state.selected, state.decisions]).toEqual([
+      'observe',
+      null,
+      null,
+      [],
+    ])
+  })
 })

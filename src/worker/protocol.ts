@@ -14,6 +14,7 @@ export type Speed = (typeof SPEEDS)[number] | 'max'
 export interface Snapshot {
   readonly tick: number
   readonly values: Readonly<Record<Variable, number>>
+  readonly previous: Readonly<Record<Variable, number>> | null
   readonly eras: number
   readonly active: readonly EventId[]
   readonly allocation: Allocation
@@ -50,6 +51,7 @@ export type FromWorker =
       readonly present: Snapshot
       readonly playing: boolean
       readonly events: readonly EventUpdate[]
+      readonly decisions: readonly Decision[]
     }
   | {
       readonly type: 'range'
@@ -62,12 +64,16 @@ export type FromWorker =
   | { readonly type: 'ended'; readonly reason: EndReason }
   | { readonly type: 'error'; readonly message: string; readonly requestId?: number }
 
-export function toSnapshot(state: WorldState): Snapshot {
+export function toSnapshot(
+  state: WorldState,
+  previous: Readonly<Record<Variable, number>> | null = null,
+): Snapshot {
   const values = {} as Record<Variable, number>
   for (const variable of VARIABLES) values[variable] = state[variable]
   return {
     tick: state.tick,
     values,
+    previous,
     eras: state.eras,
     active: state.active.flatMap((entry) => {
       const def = EVENTS[entry.def]

@@ -1,7 +1,15 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { EventRecord } from '../../engine/events.ts'
+import type { Allocation, Decision } from '../../engine/state.ts'
 import type { EndReason, EventUpdate, Snapshot, Speed } from '../../worker/protocol.ts'
 import type { SimulationClient } from './client.ts'
+
+export type Mode = 'observe' | 'intervene'
+
+export interface View {
+  readonly span: number
+  readonly end: number | null
+}
 
 export interface SimulationState {
   readonly seed: number | null
@@ -13,12 +21,20 @@ export interface SimulationState {
   readonly error: string | null
   readonly cursor: number | null
   readonly inspected: Snapshot | null
+  readonly mode: Mode
+  readonly selected: number | null
+  readonly decisions: readonly Decision[]
+  readonly view: View | null
   create(seed: number): void
   togglePlay(): void
   pause(): void
   setSpeed(speed: Speed): void
   step(years: number): void
   setCursor(tick: number | null): void
+  setMode(mode: Mode): void
+  select(index: number | null): void
+  decide(allocation: Allocation): void
+  setView(view: View | null): void
 }
 
 export type SimulationStore = StoreApi<SimulationState>
@@ -44,6 +60,10 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     error: null,
     cursor: null,
     inspected: null,
+    mode: 'observe',
+    selected: null,
+    decisions: [],
+    view: null,
     create(seed) {
       set({
         seed,
@@ -54,6 +74,10 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         error: null,
         cursor: null,
         inspected: null,
+        mode: 'observe',
+        selected: null,
+        decisions: [],
+        view: null,
       })
       client.create(seed)
     },
@@ -90,6 +114,21 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         (error: unknown) => set({ error: error instanceof Error ? error.message : String(error) }),
       )
     },
+    setMode(mode) {
+      set({ mode })
+      if (mode === 'intervene') get().setCursor(null)
+    },
+    select(index) {
+      set({ selected: index })
+      const record = index === null ? undefined : get().events[index]
+      if (record) get().setCursor(record.start)
+    },
+    decide(allocation) {
+      client.decide(allocation)
+    },
+    setView(view) {
+      set({ view })
+    },
   }))
 
   client.subscribe((message) => {
@@ -99,6 +138,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
           present: message.present,
           playing: message.playing,
           events: upsert(store.getState().events, message.events),
+          decisions: message.decisions,
         })
         break
       case 'ended':

@@ -141,19 +141,46 @@ describe('SimulationHost', () => {
     expect(reply?.snapshot.values.technology).toBe(reference.present.technology)
   })
 
+  it('reports the previous year alongside each snapshot', () => {
+    const { host, sent } = setup()
+    host.handle({ type: 'create', seed: SEED, decisions: [] })
+    expect(last(sent, 'progress')?.present.previous).toBeNull()
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'inspect', requestId: 9, tick: 4 })
+    const reference = new Worldline(SEED)
+    reference.advance(10)
+    expect(last(sent, 'progress')?.present.previous?.population).toBe(
+      reference.valueAt('population', 9),
+    )
+    expect(last(sent, 'inspect')?.snapshot.previous?.technology).toBe(
+      reference.valueAt('technology', 3),
+    )
+  })
+
+  it('reports the decision log with each progress', () => {
+    const { host, sent } = setup()
+    host.handle({ type: 'create', seed: SEED, decisions: [] })
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'decide', allocation: starved })
+    expect(last(sent, 'progress')?.decisions).toEqual([{ tick: 10, allocation: starved }])
+  })
+
   it('reports an error and stops playback when a frame throws', () => {
     const { host, sent, clock } = setup()
     host.handle({ type: 'create', seed: SEED, decisions: [] })
     const spy = vi.spyOn(Worldline.prototype, 'advance').mockImplementationOnce(() => {
       throw new Error('boom')
     })
-    host.handle({ type: 'play', speed: 16 })
-    clock.advance(100)
-    expect(last(sent, 'error')?.message).toBe('boom')
-    const tick = last(sent, 'progress')?.present.tick
-    clock.advance(1000)
-    expect(last(sent, 'progress')?.present.tick).toBe(tick)
-    spy.mockRestore()
+    try {
+      host.handle({ type: 'play', speed: 16 })
+      clock.advance(100)
+      expect(last(sent, 'error')?.message).toBe('boom')
+      const tick = last(sent, 'progress')?.present.tick
+      clock.advance(1000)
+      expect(last(sent, 'progress')?.present.tick).toBe(tick)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('reports errors for requests before a world exists', () => {

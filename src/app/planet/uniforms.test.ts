@@ -25,6 +25,7 @@ function snapshot(
     active: extra.active ?? [],
     allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
     status: extra.status ?? 'running',
+    previous: null,
   }
 }
 
