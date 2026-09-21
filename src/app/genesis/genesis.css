@@ -2,30 +2,31 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   align-items: center;
-  gap: 32px;
+  gap: 48px;
   min-height: 100dvh;
-  padding: clamp(24px, 5vw, 72px) var(--gutter);
+  padding: clamp(24px, 4vw, 56px) var(--gutter);
   background:
     radial-gradient(90% 70% at 75% 50%, rgb(58 42 107 / 0.5), transparent 65%), var(--void);
 }
 
 .genesis__intro {
   display: grid;
-  gap: 20px;
-  max-width: 46ch;
+  gap: 16px;
+  max-width: 36rem;
 }
 
 .genesis__tagline {
   margin: 0;
   font-stretch: 125%;
   font-weight: 300;
-  font-size: clamp(2.25rem, 4.6vw, 4rem);
+  font-size: clamp(2.25rem, 4vw, 3.5rem);
   line-height: 1.04;
   letter-spacing: -0.02em;
 }
 
 .genesis__lead {
   margin: 0;
+  max-width: 52ch;
   color: var(--dim);
   line-height: 1.6;
 }
@@ -131,6 +132,7 @@
 
   .genesis__planet {
     order: -1;
-    height: 50vh;
+    height: 40vh;
+    min-height: 260px;
   }
 }
