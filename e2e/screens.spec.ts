@@ -31,3 +31,15 @@ test('observatory causal chain', async ({ page }) => {
   await page.waitForTimeout(400)
   await page.screenshot({ path: 'screens/observatory-causal.png' })
 })
+
+test('observatory intervene', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'screens/observatory-intervene.png' })
+})

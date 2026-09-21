@@ -167,3 +167,35 @@ test('traces the causes of a selected event', async ({ page }) => {
   await expect(chain.getByText('Stability')).toBeVisible()
   await expect(chain.getByText('Food security')).toBeVisible()
 })
+
+test('applies a decision in intervene mode', async ({ page }) => {
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const agriculture = page.getByRole('slider', { name: /Agriculture/ })
+  await agriculture.focus()
+  for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
+  await expect(agriculture).toHaveValue('45')
+  const values = await Promise.all(
+    ['Agriculture', 'Industry', 'Research', 'Conservation'].map(async (name) =>
+      Number(await page.getByRole('slider', { name: new RegExp(name) }).inputValue()),
+    ),
+  )
+  expect(values.reduce((sum, value) => sum + value, 0)).toBe(100)
+  const apply = page.getByRole('button', { name: 'Apply decision' })
+  await apply.click()
+  await expect(apply).toBeDisabled()
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(agriculture).toHaveValue('45')
+})
+
+test('keeps decisions in the present', async ({ page }) => {
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  for (let i = 0; i < 3; i++) await step.click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  await page.getByRole('slider', { name: /Worldline history/ }).focus()
+  await page.getByRole('slider', { name: /Worldline history/ }).press('Home')
+  const panel = page.getByRole('region', { name: 'Allocation of effort' })
+  await expect(panel.getByText('Decisions happen in the present.')).toBeVisible()
+  await expect(panel.getByRole('slider', { name: /Agriculture/ })).toBeDisabled()
+  await panel.getByRole('button', { name: 'Return to the present' }).click()
+  await expect(panel.getByRole('slider', { name: /Agriculture/ })).toBeEnabled()
+})

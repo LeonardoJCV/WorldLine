@@ -46,6 +46,7 @@
 }
 
 .transport button,
+.mode button,
 .locale,
 .year__return {
   background: transparent;
@@ -57,6 +58,7 @@
 }
 
 .transport button:hover:not(:disabled),
+.mode button:hover:not(:disabled),
 .locale:hover,
 .year__return:hover {
   border-color: var(--dim);
@@ -67,7 +69,8 @@
   cursor: default;
 }
 
-.transport button[aria-pressed='true'] {
+.transport button[aria-pressed='true'],
+.mode button[aria-pressed='true'] {
   background: var(--nebula);
   border-color: var(--dim);
 }
@@ -85,6 +88,11 @@
 .transport__speeds button {
   padding: 6px 8px;
   font-stretch: 87%;
+}
+
+.mode {
+  display: flex;
+  gap: 4px;
 }
 
 .topbar__end {
@@ -359,4 +367,74 @@ button.causal__node:hover {
 .causal__detail {
   color: var(--dim);
   font-size: 0.75rem;
+}
+
+.band__main > .allocation {
+  grid-column: 1 / -1;
+}
+
+.allocation__rows {
+  display: grid;
+  gap: 6px;
+  max-width: 520px;
+}
+
+.allocation__row {
+  display: grid;
+  grid-template-columns: 12ch 1fr 5ch;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--text-sm);
+}
+
+.allocation__row input {
+  accent-color: var(--starlight);
+}
+
+.allocation__name {
+  color: var(--dim);
+}
+
+.allocation__value {
+  text-align: right;
+}
+
+.allocation__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  max-width: 520px;
+  margin-top: 12px;
+}
+
+.allocation__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.allocation__actions button,
+.link {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.link {
+  padding: 2px 8px;
+}
+
+.allocation__actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.allocation__apply:not(:disabled) {
+  background: var(--nebula);
+  border-color: var(--starlight);
+  font-weight: 600;
 }

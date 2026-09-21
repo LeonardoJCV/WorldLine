@@ -2,8 +2,10 @@ import { SPEEDS, type Speed } from '../../worker/protocol.ts'
 import { formatYear } from '../i18n/format.ts'
 import { localeStore, useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
+import type { Mode } from '../sim/store.ts'
 
 const OPTIONS: readonly Speed[] = [...SPEEDS, 'max']
+const MODES: readonly Mode[] = ['observe', 'intervene']
 
 export function TopBar() {
   const t = useT()
@@ -14,7 +16,8 @@ export function TopBar() {
   const playing = useSimulation((s) => s.playing)
   const speed = useSimulation((s) => s.speed)
   const ended = useSimulation((s) => s.ended)
-  const { togglePlay, step, setSpeed, setCursor } = simulation.getState()
+  const mode = useSimulation((s) => s.mode)
+  const { togglePlay, step, setSpeed, setCursor, setMode } = simulation.getState()
   const other = locale === 'en' ? 'pt-BR' : 'en'
 
   return (
@@ -26,6 +29,18 @@ export function TopBar() {
             {t('seed.label')} <output data-testid="seed">{seed}</output>
           </span>
         )}
+      </div>
+      <div className="mode" role="group" aria-label={t('mode.label')}>
+        {MODES.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={mode === option}
+            onClick={() => setMode(option)}
+          >
+            {t(`mode.${option}`)}
+          </button>
+        ))}
       </div>
 
       <div className="transport" role="group" aria-label={t('transport.label')}>

@@ -5,6 +5,7 @@ import type { Strand } from '../current/normalize.ts'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { useSimulation } from '../sim/runtime.ts'
+import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
 import { StatePanel } from './StatePanel.tsx'
@@ -19,6 +20,8 @@ export function Observatory() {
   const [focus, setFocus] = useState<Strand | null>(null)
   const ended = useSimulation((s) => s.ended)
   const error = useSimulation((s) => s.error)
+  const mode = useSimulation((s) => s.mode)
+  const seed = useSimulation((s) => s.seed)
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
 
   return (
@@ -43,8 +46,14 @@ export function Observatory() {
       <footer className="band">
         <StatePanel focus={focus} onFocus={setFocus} />
         <div className="band__main">
-          <EventsPanel />
-          <CausalPanel />
+          {mode === 'intervene' ? (
+            <AllocationPanel key={seed ?? 0} />
+          ) : (
+            <>
+              <EventsPanel />
+              <CausalPanel />
+            </>
+          )}
         </div>
         <div className="notices" role="status">
           {ended !== null && (
