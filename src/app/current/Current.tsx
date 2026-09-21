@@ -77,7 +77,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         decisions,
         from: shownFrom,
         to: shownTo,
-        present,
+        followsPresent: view === null || view.end === null,
         cursor,
         focus,
         phase: seedPhase(seed),
@@ -96,7 +96,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     decisions,
     shownFrom,
     shownTo,
-    present,
+    view,
     cursor,
     focus,
     seed,
@@ -107,6 +107,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     const canvas = canvasRef.current
     if (!canvas) return
     const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
       event.preventDefault()
       const state = simulation.getState()
       const tick = state.present?.tick ?? 0

@@ -224,6 +224,18 @@ describe('layoutEvents', () => {
     expect(markers).toHaveLength(1)
     expect(markers[0]?.x2).toBe(yearToX(80, 20, 100, frame))
   })
+
+  it('drops eras that happened before the window', () => {
+    const markers = layoutEvents(
+      [record('agricultural_revolution', 10, null)],
+      50,
+      100,
+      100,
+      frame,
+      120,
+    )
+    expect(markers).toEqual([])
+  })
 })
 
 describe('markerAt', () => {

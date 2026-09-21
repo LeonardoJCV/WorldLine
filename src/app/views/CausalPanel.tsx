@@ -24,7 +24,7 @@ export function CausalPanel() {
   useEffect(() => {
     const element = scrollRef.current
     if (element) element.scrollLeft = element.scrollWidth
-  }, [tree])
+  }, [selected])
 
   const root = selected === null ? undefined : events[selected]
   if (!tree || !root) {

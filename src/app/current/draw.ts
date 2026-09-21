@@ -24,7 +24,7 @@ export interface DrawInput {
   readonly decisions: readonly Decision[]
   readonly from: number
   readonly to: number
-  readonly present: number
+  readonly followsPresent: boolean
   readonly cursor: number | null
   readonly focus: Strand | null
   readonly phase: number
@@ -189,5 +189,5 @@ export function drawCurrent(ctx: CanvasRenderingContext2D, input: DrawInput): vo
   }
   drawDecisions(ctx, input)
   drawCursor(ctx, input)
-  if (input.to >= input.present) drawPresent(ctx, frame)
+  if (input.followsPresent) drawPresent(ctx, frame)
 }

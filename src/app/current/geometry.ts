@@ -162,9 +162,9 @@ export function layoutEvents(
   const markers: Marker[] = []
 
   records.forEach((record, index) => {
-    const end = record.end ?? present
-    if (end < from || record.start > to) return
     const kind = KIND_OF.get(record.event) ?? 'pulse'
+    const end = kind === 'episode' ? (record.end ?? present) : (record.end ?? record.start)
+    if (end < from || record.start > to) return
     const x = yearToX(Math.max(record.start, from), from, to, frame)
     const x2 = yearToX(Math.min(end, to), from, to, frame)
     let row = 0
