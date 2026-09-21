@@ -168,10 +168,10 @@ ${noise}
 
 void main() {
   vec3 p = normalize(vPosition);
-  float density = smoothstep(0.45, 0.75, fbm(p * 3.0 + uOffset + vec3(uTime * 0.01, 0.0, 0.0), 6)) * uClouds;
+  float density = smoothstep(0.52, 0.82, fbm(p * 3.0 + uOffset + vec3(uTime * 0.01, 0.0, 0.0), 6)) * uClouds;
   float day = smoothstep(-0.2, 0.3, dot(normalize(vNormal), uLight));
-  vec3 tint = mix(vec3(1.0), uSmog, uHaze * 0.7);
-  gl_FragColor = vec4(tint * (0.05 + 0.95 * day), density * 0.85);
+  vec3 tint = mix(vec3(0.85), uSmog, uHaze * 0.7);
+  gl_FragColor = vec4(tint * (0.05 + 0.95 * day), density * 0.6);
 }
 `
 

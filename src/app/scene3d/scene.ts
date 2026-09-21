@@ -30,9 +30,9 @@ import { createStream, particleCounts, type Stream } from './streams.ts'
 export const FOCUS_RADIUS = 0.9
 export const OTHER_RADIUS = 0.45
 const VOID = 0x0a0b1e
-const BLOOM_SCALE = 0.35
-const BLOOM_THRESHOLD = 0.75
-const BLOOM_RADIUS = 0.25
+const BLOOM_SCALE = 0.22
+const BLOOM_THRESHOLD = 0.2
+const BLOOM_RADIUS = 0.18
 
 export interface SceneWorld {
   readonly key: string

@@ -18,6 +18,7 @@ import { SAMPLES } from './space.ts'
 export const OTHERS_WEIGHT = 0.4
 export const OTHERS_BRIGHTNESS = 0.35
 export const FLOW_SPEED = 0.03
+export const JITTER = 0.06
 
 export const INTENSITY_REFERENCE = 8000
 export const MIN_INTENSITY = 0.32
@@ -39,6 +40,7 @@ uniform float uIntensity;
 
 attribute vec3 aSeed;
 attribute vec3 aColor;
+attribute vec3 aJitter;
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -62,18 +64,18 @@ void main() {
     : strand < 3.5 ? first.w : strand < 4.5 ? second.x : second.y;
   float radius = 0.42 * (1.0 + 1.3 * (1.0 - axis.w)) * (1.0 + 0.08 * aSeed.z);
   float angle = u * 36.0 + strand * 1.0471976 + uTime * 0.15;
-  vec3 position = axis.xyz + vec3(0.0, cos(angle), sin(angle)) * radius;
+  vec3 position = axis.xyz + vec3(0.0, cos(angle), sin(angle)) * radius + aJitter;
   vec4 view = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * view;
   gl_PointSize = clamp(
-    (0.5 + value) * 2.2 * uPixelRatio * (12.0 / -view.z) * sqrt(uIntensity),
-    1.0,
-    14.0
+    (0.7 + 0.6 * value) * 3.2 * uPixelRatio * (14.0 / -view.z) * sqrt(uIntensity),
+    1.5,
+    20.0
   );
   vColor = aColor;
   vAlpha = min(
     1.0,
-    step(0.5, second.z) * (0.25 + 0.75 * value) * uEmphasis *
+    step(0.5, second.z) * (0.55 + 0.45 * value) * uEmphasis *
       (0.35 + 0.65 * smoothstep(0.0, 0.5, u)) * uIntensity
   );
 }
@@ -121,6 +123,7 @@ export function createStream(count: number, seed: number): Stream {
   geometry.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3))
   const seeds = new Float32Array(count * 3)
   const colors = new Float32Array(count * 3)
+  const jitters = new Float32Array(count * 3)
   let state = seed >>> 0 || 1
   const next = () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0
@@ -131,9 +134,14 @@ export function createStream(count: number, seed: number): Stream {
     const [r, g, b] = hexToRgb(STRAND_COLORS[STRANDS[strand] ?? 'population'])
     seeds.set([strand, next(), next() * 2 - 1], i * 3)
     colors.set([r, g, b], i * 3)
+    jitters.set(
+      [(next() * 2 - 1) * JITTER, (next() * 2 - 1) * JITTER, (next() * 2 - 1) * JITTER],
+      i * 3,
+    )
   }
   geometry.setAttribute('aSeed', new BufferAttribute(seeds, 3))
   geometry.setAttribute('aColor', new BufferAttribute(colors, 3))
+  geometry.setAttribute('aJitter', new BufferAttribute(jitters, 3))
 
   const texture = new DataTexture(
     new Float32Array(SAMPLES * PATH_ROWS * 4),
