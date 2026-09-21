@@ -194,6 +194,12 @@ describe('multiverse link', () => {
     expect(linkHash(tree)).toMatch(/^#\/m\/[A-Za-z0-9_-]+$/)
   })
 
+  it('rejects damaged or invalid multiverse payloads without throwing', () => {
+    expect(decodeMultiverse('')).toBeNull()
+    expect(decodeMultiverse('not base64!')).toBeNull()
+    expect(decodeMultiverse(encodeMultiverse(tree).slice(0, -5))).toBeNull()
+  })
+
   it('rejects impossible trees', () => {
     expect(isValidMultiverse({ ...tree, branches: [{ parent: 1, fork: 10, decisions: [] }] })).toBe(
       false,

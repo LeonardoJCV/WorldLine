@@ -268,8 +268,17 @@ describe('companion tracks', () => {
     const points = companionPoints(track, -1, 0, 100, frame)
     const x = points[4] ?? 0
     const y = points[5] ?? 0
-    expect(companionAt([{ id: 'B', points }], x + 2, y - 2)).toBe('B')
-    expect(companionAt([{ id: 'B', points }], x, y + 40)).toBeNull()
+    expect(companionAt([{ id: 'B', points }], x + 2, y - 2, frame)).toBe('B')
+    expect(companionAt([{ id: 'B', points }], x, y + 40, frame)).toBeNull()
+  })
+
+  it('ignores points on the axis, so the cursor stays scrubbable before the fork', () => {
+    const flat = { ...track, values: Float32Array.from([0, 0, 0]) }
+    const points = companionPoints(flat, -1, 0, 100, frame)
+    const x = points[2] ?? 0
+    const y = points[3] ?? 0
+    expect(y).toBe(frame.centerY)
+    expect(companionAt([{ id: 'B', points }], x, y, frame)).toBeNull()
   })
 
   it('derives a stable side from the worldline letter, independent of array order', () => {

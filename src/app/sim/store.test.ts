@@ -107,7 +107,7 @@ describe('simulation store', () => {
     expect(store.getState().decisions).toEqual([{ tick: 30, allocation }])
   })
 
-  it('returns to the present when intervening', async () => {
+  it('keeps the cursor on the observed year when entering Intervene', async () => {
     const { store } = setup()
     store.getState().create(482913)
     store.getState().step(50)
@@ -116,7 +116,7 @@ describe('simulation store', () => {
     await flush()
     store.getState().setMode('intervene')
     expect(store.getState().mode).toBe('intervene')
-    expect(store.getState().cursor).toBeNull()
+    expect(store.getState().cursor).toBe(10)
   })
 
   it('starts a new world observing its whole history', async () => {
@@ -173,6 +173,21 @@ describe('simulation store', () => {
     expect(state.focus).toBe('B')
     expect(state.cursor).toBeNull()
     expect(state.decisions).toEqual([{ tick: 40, allocation: starved }])
+  })
+
+  it('marks branching while the request is in flight, to guard against double clicks', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(100)
+    await flush()
+    store.getState().setCursor(40)
+    await flush()
+    expect(store.getState().branching).toBe(false)
+    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    expect(store.getState().branching).toBe(true)
+    await flush()
+    await flush()
+    expect(store.getState().branching).toBe(false)
   })
 
   it('shows the focused worldline and compares it with its origin', async () => {

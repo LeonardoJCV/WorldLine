@@ -201,6 +201,16 @@ describe('SimulationHost: the multiverse', () => {
     host.handle({ type: 'step', years: 300 })
     host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 120, allocation: balanced })
     expect(world(sent, 'B')?.present.values).toEqual(world(sent, 'A')?.present.values)
+    host.handle({
+      type: 'distance',
+      requestId: 2,
+      world: 'B',
+      reference: 'A',
+      from: 0,
+      to: 300,
+      buckets: 301,
+    })
+    expect(Array.from(last(sent, 'distance')?.values ?? [])).toEqual(new Array(301).fill(0))
   })
 
   it('advances every worldline together', () => {

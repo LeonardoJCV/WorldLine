@@ -58,6 +58,45 @@ test('keeps the multiverse in the link across a reload', async ({ page }) => {
   await expect(page.getByTestId('year')).toHaveText('0005')
 })
 
+test('shows the allocation of the observed year, not the present, when branching before a later decision', async ({
+  page,
+}) => {
+  await worldAtYear(page, 5)
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const agriculture = page.getByRole('slider', { name: /Agriculture/ })
+  await agriculture.focus()
+  for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
+  await page.getByRole('button', { name: 'Apply decision' }).click()
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  for (let i = 0; i < 3; i++) await step.click()
+
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  // Year 0 is before the decision applied at year 5: the sliders must fall back
+  // to the default allocation, not the present (post-decision) one.
+  await expect(agriculture).toHaveValue('40')
+
+  const branch = page.getByRole('button', { name: 'Branch from year 0000' })
+  await expect(branch).toBeEnabled()
+  await branch.click()
+  await expect(page.getByRole('button', { name: 'Focus on worldline B' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByText('vs A')).toBeVisible()
+
+  // The branch was made without touching the sliders, so up to the year of the
+  // original decision (5) it must retrace A exactly: no arrows in the "vs A" column.
+  await history.focus()
+  await history.press('Home')
+  for (let i = 0; i < 4; i++) await history.press('ArrowRight')
+  await expect(page.locator('.state__origin')).toHaveCount(7)
+  await expect(
+    page.locator('.state__origin[data-direction="up"], .state__origin[data-direction="down"]'),
+  ).toHaveCount(0)
+})
+
 test('stops branching at six worldlines', async ({ page }) => {
   await worldAtYear(page, 5)
   for (let i = 0; i < 5; i++) {
