@@ -45,3 +45,40 @@ test('runs without console errors', async ({ page }) => {
   await page.waitForTimeout(800)
   expect(errors).toEqual([])
 })
+
+test('moves through time with the keyboard', async ({ page }) => {
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  for (let i = 0; i < 12; i++) await step.click()
+  await expect(page.getByTestId('year')).toHaveText('0012')
+  const current = page.getByRole('slider')
+  await current.focus()
+  await current.press('ArrowLeft')
+  await expect(page.getByTestId('year')).toHaveText('0011')
+  await current.press('Shift+ArrowLeft')
+  await expect(page.getByTestId('year')).toHaveText('0001')
+  await current.press('End')
+  await expect(page.getByTestId('year')).toHaveText('0012')
+  await expect(page.getByRole('button', { name: 'Return to the present' })).toHaveCount(0)
+})
+
+test('scrubs the past with the pointer', async ({ page }) => {
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(1500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const current = page.getByRole('slider')
+  const box = await current.boundingBox()
+  if (!box) throw new Error('current is not visible')
+  await page.mouse.click(box.x + 40, box.y + box.height / 2)
+  await expect(page.getByRole('button', { name: 'Return to the present' })).toBeVisible()
+  const year = Number(await page.getByTestId('year').textContent())
+  const present = Number(await current.getAttribute('aria-valuemax'))
+  expect(year).toBeLessThan(present / 2)
+})
+
+test('lists every variable in the legend', async ({ page }) => {
+  const legend = page.getByRole('list', { name: 'Variables' })
+  for (const name of ['Population', 'Food', 'Energy', 'Technology', 'Economy', 'Environment']) {
+    await expect(legend.getByText(name)).toBeVisible()
+  }
+})
