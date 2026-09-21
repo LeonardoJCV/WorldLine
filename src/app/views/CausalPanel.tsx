@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
-import { formatCondition, formatYear, metricKey } from '../i18n/format.ts'
+import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 
@@ -58,10 +58,8 @@ export function CausalPanel() {
       }
       case 'condition': {
         const { metric, value, op, threshold } = node.cause
-        return [
-          t(metricKey(metric)),
-          `${formatCondition(metric, value, locale)} ${op} ${formatCondition(metric, threshold, locale)}`,
-        ]
+        const [a, b] = formatComparison(metric, value, threshold, locale)
+        return [t(metricKey(metric)), `${a} ${op} ${b}`]
       }
       case 'decision':
         return [

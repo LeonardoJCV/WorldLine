@@ -3,6 +3,7 @@ import { en } from './en.ts'
 import {
   formatChange,
   formatCompact,
+  formatComparison,
   formatCondition,
   formatDecimal,
   formatMetric,
@@ -116,5 +117,15 @@ describe('interaction formatting', () => {
     expect(formatCondition('technology', 40.3, 'en')).toBe('40.3')
     expect(formatCondition('energy', 1.2, 'pt-BR')).toBe('1,20')
     expect(formatCondition('birthRate', 0.0199, 'en')).toBe('1.99%')
+  })
+
+  it('formats condition comparisons with just enough precision to differ', () => {
+    expect(formatComparison('technology', 40.03, 40, 'en')).toEqual(['40.03', '40.00'])
+    expect(formatComparison('foodSecurity', 1.67, 1.1, 'pt-BR')).toEqual(['1,67', '1,10'])
+    expect(formatComparison('technology', 40, 40, 'en')).toEqual(['40.0000', '40.0000'])
+  })
+
+  it('formats compact conditions', () => {
+    expect(formatCondition('population', 4_200_000, 'en')).toBe('4.2M')
   })
 })

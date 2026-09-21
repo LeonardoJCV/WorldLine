@@ -78,6 +78,33 @@ export function formatCondition(metric: Metric, value: number, locale: Locale): 
   }
 }
 
+function conditionNumber(metric: Metric, value: number, locale: Locale, digits: number): string {
+  return metric === 'birthRate'
+    ? `${formatDecimal(value * 100, locale, digits)}%`
+    : formatDecimal(value, locale, digits)
+}
+
+export function formatComparison(
+  metric: Metric,
+  value: number,
+  threshold: number,
+  locale: Locale,
+): readonly [string, string] {
+  if (metric === 'population' || metric === 'food') {
+    return [formatCondition(metric, value, locale), formatCondition(metric, threshold, locale)]
+  }
+  const base = metric === 'technology' || metric === 'environment' || metric === 'stability' ? 1 : 2
+  let pair: readonly [string, string] = ['', '']
+  for (let digits = base; digits <= base + 3; digits++) {
+    pair = [
+      conditionNumber(metric, value, locale, digits),
+      conditionNumber(metric, threshold, locale, digits),
+    ]
+    if (pair[0] !== pair[1]) break
+  }
+  return pair
+}
+
 export function formatVariable(
   variable: Variable,
   values: Readonly<Record<Variable, number>>,
