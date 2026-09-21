@@ -125,10 +125,13 @@ export function createCurrentScene(
   controls.target.set(...target)
 
   let composer: EffectComposer | null = null
+  let renderPass: RenderPass | null = null
   let bloom: UnrealBloomPass | null = null
+  let outputPass: OutputPass | null = null
   if (spec.bloom > 0) {
     composer = new EffectComposer(renderer)
-    composer.addPass(new RenderPass(scene, camera))
+    renderPass = new RenderPass(scene, camera)
+    composer.addPass(renderPass)
     bloom = new UnrealBloomPass(
       new Vector2(1, 1),
       spec.bloom * BLOOM_SCALE,
@@ -136,7 +139,8 @@ export function createCurrentScene(
       BLOOM_THRESHOLD,
     )
     composer.addPass(bloom)
-    composer.addPass(new OutputPass())
+    outputPass = new OutputPass()
+    composer.addPass(outputPass)
   }
 
   const entries = new Map<string, Entry>()
@@ -144,6 +148,7 @@ export function createCurrentScene(
   let dpr = 1
   let width = 1
   let height = 1
+  let composerDpr = 0
 
   const guideMaterial = new LineBasicMaterial({ color: 0x3a2a6b, transparent: true, opacity: 0.8 })
 
@@ -255,9 +260,12 @@ export function createCurrentScene(
       dpr = Math.min(nextDpr, spec.dpr)
       renderer.setPixelRatio(dpr)
       renderer.setSize(width, height, false)
-      composer?.setPixelRatio(dpr)
+      if (composer && composerDpr !== dpr) {
+        composerDpr = dpr
+        composer.setPixelRatio(dpr)
+      }
       composer?.setSize(width, height)
-      if (bloom && spec.bloomHalf) bloom.resolution.set(width / 2, height / 2)
+      if (bloom && spec.bloomHalf) bloom.setSize((width * dpr) / 2, (height * dpr) / 2)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       for (const entry of entries.values()) entry.stream.setPixelRatio(dpr)
@@ -288,6 +296,9 @@ export function createCurrentScene(
       guideMaterial.dispose()
       stars.geometry.dispose()
       ;(stars.material as PointsMaterial).dispose()
+      renderPass?.dispose()
+      bloom?.dispose()
+      outputPass?.dispose()
       composer?.dispose()
       renderer.dispose()
     },
