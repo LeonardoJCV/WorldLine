@@ -30,7 +30,6 @@ function readStoredLocale(): string | null {
   try {
     return localStorage.getItem(STORAGE_KEY)
   } catch {
-    // armazenamento bloqueado: a escolha vale só nesta sessão
     return null
   }
 }
