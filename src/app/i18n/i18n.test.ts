@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { en } from './en.ts'
-import { formatCompact, formatDecimal, formatVariable, formatYear } from './format.ts'
+import {
+  formatChange,
+  formatCompact,
+  formatDecimal,
+  formatMetric,
+  formatPercent,
+  formatVariable,
+  formatYear,
+  metricKey,
+} from './format.ts'
 import { detectLocale, translate } from './index.ts'
 import { ptBR } from './pt-BR.ts'
 
@@ -68,5 +77,37 @@ describe('formatting', () => {
     expect(formatVariable('energy', values, 'en')).toBe('3.5')
     expect(formatVariable('technology', values, 'en')).toBe('57')
     expect(formatVariable('environment', values, 'pt-BR')).toBe('89')
+  })
+})
+
+describe('interaction formatting', () => {
+  it('formats yearly changes as percentages or points', () => {
+    expect(formatChange('population', 1100, 1000, 'en')).toEqual({
+      text: '+10.0%',
+      direction: 'up',
+    })
+    expect(formatChange('technology', 40, 42.3, 'pt-BR')).toEqual({
+      text: '-2,3',
+      direction: 'down',
+    })
+    expect(formatChange('stability', 60.01, 60, 'en')).toEqual({ text: '0.0', direction: 'flat' })
+    expect(formatChange('energy', 2, undefined, 'en')).toBeNull()
+    expect(formatChange('food', 10, 0, 'en')).toBeNull()
+  })
+
+  it('formats metrics by their nature', () => {
+    expect(formatMetric('foodSecurity', 0.8234, 'en')).toBe('0.82')
+    expect(formatMetric('birthRate', 0.0234, 'pt-BR')).toBe('2,3%')
+    expect(formatMetric('population', 4_200_000, 'en')).toBe('4.2M')
+  })
+
+  it('formats whole percentages', () => {
+    expect(formatPercent(40, 'en')).toBe('40%')
+    expect(formatPercent(5, 'pt-BR')).toMatch(/^5\s?%$/u)
+  })
+
+  it('maps metrics to their labels', () => {
+    expect(metricKey('crowding')).toBe('metric.crowding')
+    expect(metricKey('environment')).toBe('variable.environment')
   })
 })

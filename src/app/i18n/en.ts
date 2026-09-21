@@ -1,5 +1,6 @@
-import type { EventId } from '../../engine/events.ts'
-import type { Variable } from '../../engine/state.ts'
+import type { EventId, Metric } from '../../engine/events.ts'
+import type { Sector, Variable } from '../../engine/state.ts'
+import type { Mode } from '../sim/store.ts'
 
 export const en = {
   'app.name': 'WORLDLINE',
@@ -41,7 +42,49 @@ export const en = {
   'event.civil_unrest': 'Civil unrest',
   'event.golden_age': 'Golden age',
   'event.extinction': 'Extinction',
-} as const satisfies Record<`event.${EventId}` | `variable.${Variable}`, string> &
+  'mode.label': 'Mode',
+  'mode.observe': 'Observe',
+  'mode.intervene': 'Intervene',
+  'state.title': 'State in year {year}',
+  'state.change': 'Change since the previous year',
+  'events.title': 'Events',
+  'events.empty': 'No events yet. Let time run to see what emerges.',
+  'events.ongoing': 'ongoing',
+  'causal.title': 'Why it happened',
+  'causal.empty': 'Select an event to trace its causes.',
+  'causal.label': 'Causes of {event}',
+  'causal.decision': 'Decision in year {year}',
+  'causal.repeated': 'already shown',
+  'causal.unknown': 'Unknown event',
+  'allocation.title': 'Allocation of effort',
+  'allocation.apply': 'Apply decision',
+  'allocation.reset': 'Reset',
+  'allocation.effect': 'Takes effect from year {year}.',
+  'allocation.returnFirst': 'Decisions happen in the present.',
+  'allocation.ended': 'This worldline has ended; no more decisions.',
+  'sector.agriculture': 'Agriculture',
+  'sector.industry': 'Industry',
+  'sector.research': 'Research',
+  'sector.conservation': 'Conservation',
+  'metric.foodSecurity': 'Food security',
+  'metric.crowding': 'Crowding',
+  'metric.energyRatio': 'Energy supply',
+  'metric.economyTrend': 'Five-year economic trend',
+  'metric.birthRate': 'Birth rate',
+  'zoom.label': 'Zoom',
+  'zoom.in': 'Zoom in',
+  'zoom.out': 'Zoom out',
+  'zoom.fit': 'Show all',
+  'minimap.label': 'Whole history; move the window to travel through time',
+  'minimap.value': 'Showing years {from} to {to}',
+} as const satisfies Record<
+  | `event.${EventId}`
+  | `variable.${Variable}`
+  | `sector.${Sector}`
+  | `metric.${Exclude<Metric, Variable>}`
+  | `mode.${Mode}`,
+  string
+> &
   Record<string, string>
 
 export type MessageKey = keyof typeof en
