@@ -147,7 +147,9 @@ void main() {
   float pulse = uUnrest * (0.5 + 0.5 * sin(uTime * 3.0 + height * 40.0));
   color += vec3(1.0, 0.78, 0.45) * cities * (0.9 + pulse);
 
-  gl_FragColor = vec4(color, 1.0);
+  // FIX: sombreamento ajustado em sRGB; volta ao linear e codifica uma vez só
+  gl_FragColor = sRGBTransferEOTF(vec4(color, 1.0));
+  #include <colorspace_fragment>
 }
 `
 
@@ -171,7 +173,8 @@ void main() {
   float density = smoothstep(0.52, 0.82, fbm(p * 3.0 + uOffset + vec3(uTime * 0.01, 0.0, 0.0), 6)) * uClouds;
   float day = smoothstep(-0.2, 0.3, dot(normalize(vNormal), uLight));
   vec3 tint = mix(vec3(0.85), uSmog, uHaze * 0.7);
-  gl_FragColor = vec4(tint * (0.05 + 0.95 * day), density * 0.6);
+  gl_FragColor = sRGBTransferEOTF(vec4(tint * (0.05 + 0.95 * day), density * 0.6));
+  #include <colorspace_fragment>
 }
 `
 
@@ -205,7 +208,8 @@ void main() {
   color = mix(color, vec3(1.0, 0.55, 0.3), dusk * 0.7);
   intensity *= 0.25 + 0.75 * smoothstep(-0.3, 0.2, sun);
 #endif
-  gl_FragColor = vec4(color, clamp(intensity * (0.22 + 0.3 * uHaze), 0.0, 1.0));
+  gl_FragColor = sRGBTransferEOTF(vec4(color, clamp(intensity * (0.22 + 0.3 * uHaze), 0.0, 1.0)));
+  #include <colorspace_fragment>
 }
 `
 
@@ -241,7 +245,8 @@ void main() {
   float c = dot(toPoint, toPoint) - uScale * uScale;
   if (b < 0.0 && b * b - c > 0.0) shade = 0.25;
 #endif
-  gl_FragColor = vec4(vec3(0.79, 0.68, 1.0) * shade, uRing * 0.22 * bands * edge);
+  gl_FragColor = sRGBTransferEOTF(vec4(vec3(0.79, 0.68, 1.0) * shade, uRing * 0.22 * bands * edge));
+  #include <colorspace_fragment>
 }
 `
 
@@ -262,6 +267,7 @@ varying vec3 vNormal;
 
 void main() {
   float day = smoothstep(-0.15, 0.4, dot(normalize(vNormal), uLight));
-  gl_FragColor = vec4(uColor * (0.12 + 0.88 * day), 1.0);
+  gl_FragColor = sRGBTransferEOTF(vec4(uColor * (0.12 + 0.88 * day), 1.0));
+  #include <colorspace_fragment>
 }
 `

@@ -2,6 +2,7 @@ import {
   AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
+  Color,
   DataTexture,
   FloatType,
   NearestFilter,
@@ -10,7 +11,6 @@ import {
   ShaderMaterial,
 } from 'three'
 import { STRANDS } from '../current/normalize.ts'
-import { hexToRgb } from '../theme/color.ts'
 import { STRAND_COLORS } from '../theme/palette.ts'
 import { PATH_ROWS, type PathData } from './path.ts'
 import { SAMPLES } from './space.ts'
@@ -89,7 +89,9 @@ void main() {
   float d = length(gl_PointCoord - 0.5);
   float a = smoothstep(0.5, 0.0, d) * vAlpha;
   if (a < 0.01) discard;
-  gl_FragColor = vec4(vColor * a, a);
+  gl_FragColor = vec4(vColor, a);
+  #include <colorspace_fragment>
+  gl_FragColor.rgb *= a;
 }
 `
 
@@ -124,6 +126,7 @@ export function createStream(count: number, seed: number): Stream {
   const seeds = new Float32Array(count * 3)
   const colors = new Float32Array(count * 3)
   const jitters = new Float32Array(count * 3)
+  const linear = new Color()
   let state = seed >>> 0 || 1
   const next = () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0
@@ -131,7 +134,7 @@ export function createStream(count: number, seed: number): Stream {
   }
   for (let i = 0; i < count; i++) {
     const strand = i % STRANDS.length
-    const [r, g, b] = hexToRgb(STRAND_COLORS[STRANDS[strand] ?? 'population'])
+    const { r, g, b } = linear.set(STRAND_COLORS[STRANDS[strand] ?? 'population'])
     seeds.set([strand, next(), next() * 2 - 1], i * 3)
     colors.set([r, g, b], i * 3)
     jitters.set(

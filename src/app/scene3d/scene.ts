@@ -38,7 +38,7 @@ import { createStream, particleCounts, type Stream } from './streams.ts'
 
 const VOID = 0x0a0b1e
 const BLOOM_SCALE = 0.22
-const BLOOM_THRESHOLD = 0.2
+const BLOOM_THRESHOLD = 0.5
 const BLOOM_RADIUS = 0.18
 
 export interface SceneWorld {
@@ -263,6 +263,7 @@ export function createCurrentScene(
           float d = length(vUv - 0.5) * 2.0;
           float a = smoothstep(1.0, 0.0, d) * 0.05;
           gl_FragColor = vec4(uColor, a);
+          #include <colorspace_fragment>
         }
       `,
       transparent: true,
