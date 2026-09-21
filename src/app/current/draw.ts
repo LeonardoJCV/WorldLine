@@ -190,7 +190,7 @@ function drawCompanions(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   for (const track of input.companions) {
     const count = track.points.length / 2
     if (count < 2) continue
-    // FIX: linha tracejada marca a trilha extinta em vez de um "×" fora do i18n
+    // FIX: tracejado marca a trilha extinta
     ctx.setLineDash(track.extinct ? [4, 4] : [])
     ctx.beginPath()
     for (let i = 0; i < count; i++) {

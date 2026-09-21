@@ -136,8 +136,7 @@ export class SimulationHost {
     this.#entries.push(this.#make(this.#generation, id, parent, fork, worldline))
   }
 
-  // FIX: aceita a lista de destino para poder montar um multiverso à parte
-  // (open) antes de comprometer o estado do host
+  // FIX: aceita uma lista alternativa para montar o multiverso antes de comprometer o host
   #freeId(entries: readonly Entry[] = this.#entries): WorldlineId {
     const id = WORLDLINE_IDS.find((candidate) => !entries.some((e) => e.info.id === candidate))
     if (!id) throw new RangeError('worldline limit reached')
@@ -182,9 +181,7 @@ export class SimulationHost {
     return this.#now - before
   }
 
-  // FIX: monta o novo multiverso numa lista à parte; só substitui o estado
-  // do host depois que toda linha (raiz e ramos) foi construída com sucesso,
-  // para que uma abertura inválida deixe o multiverso anterior intacto
+  // FIX: só substitui o estado do host após montar todo o multiverso com sucesso
   #open(
     seed: number,
     tick: number,
