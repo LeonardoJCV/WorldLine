@@ -475,3 +475,9 @@ button.causal__node:hover {
   cursor: grab;
   touch-action: none;
 }
+
+@media (max-width: 720px) {
+  .minimap {
+    display: none;
+  }
+}

@@ -6,7 +6,7 @@ import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import type { View } from '../sim/store.ts'
 import { withAlpha } from '../theme/color.ts'
 import { STRAND_COLORS } from '../theme/palette.ts'
-import { sampleRow, xToYear, yearToX, type Frame } from './geometry.ts'
+import { movingAverage, sampleRow, xToYear, yearToX, type Frame } from './geometry.ts'
 import { STRANDS, normalize } from './normalize.ts'
 import { MIN_SPAN, centerView, panView, resolveView } from './view.ts'
 
@@ -65,12 +65,15 @@ export function Minimap({ frame }: MinimapProps) {
       ctx.clearRect(0, 0, width, HEIGHT)
       const count = data.series.population.length
       for (const strand of STRANDS) {
-        ctx.strokeStyle = withAlpha(STRAND_COLORS[strand], 0.7)
+        const values = new Float32Array(count)
+        for (let i = 0; i < count; i++) values[i] = normalize(strand, sampleRow(data.series, i))
+        const smoothed = movingAverage(values, 3)
+        ctx.strokeStyle = withAlpha(STRAND_COLORS[strand], 0.5)
         ctx.lineWidth = 1
         ctx.beginPath()
         for (let i = 0; i < count; i++) {
           const x = count <= 1 ? width : (width * i) / (count - 1)
-          const y = HEIGHT - 2 - normalize(strand, sampleRow(data.series, i)) * (HEIGHT - 4)
+          const y = HEIGHT - 2 - (smoothed[i] ?? 0) * (HEIGHT - 4)
           if (i === 0) ctx.moveTo(x, y)
           else ctx.lineTo(x, y)
         }

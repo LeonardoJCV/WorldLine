@@ -76,6 +76,18 @@ function jitter(strand: number, column: number): number {
   return (s - Math.floor(s)) * 2 - 1
 }
 
+export function movingAverage(values: Float32Array, radius: number): Float32Array {
+  const result = new Float32Array(values.length)
+  for (let i = 0; i < values.length; i++) {
+    const start = Math.max(0, i - radius)
+    const end = Math.min(values.length - 1, i + radius)
+    let sum = 0
+    for (let j = start; j <= end; j++) sum += values[j] ?? 0
+    result[i] = sum / (end - start + 1)
+  }
+  return result
+}
+
 export function sampleRow(series: Series, index: number): Row {
   const row = {} as Record<Variable, number>
   for (const variable of VARIABLES) row[variable] = series[variable][index] ?? 0

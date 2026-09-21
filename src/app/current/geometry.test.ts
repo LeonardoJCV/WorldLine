@@ -12,6 +12,7 @@ import {
   eraLabelY,
   layoutEvents,
   markerAt,
+  movingAverage,
   stageLayout,
   xToYear,
   yearToX,
@@ -116,6 +117,19 @@ describe('buildRibbons', () => {
       return max
     }
     expect(spread(10)).toBeGreaterThan(spread(90) * 1.5)
+  })
+})
+
+describe('movingAverage', () => {
+  it('smooths values with neighboring samples', () => {
+    expect(Array.from(movingAverage(Float32Array.from([0, 3, 0, 3, 0]), 1))).toEqual([
+      1.5, 1, 2, 1, 1.5,
+    ])
+  })
+
+  it('leaves values untouched at radius 0', () => {
+    const values = Float32Array.from([0, 3, 0, 3, 0])
+    expect(Array.from(movingAverage(values, 0))).toEqual(Array.from(values))
   })
 })
 
