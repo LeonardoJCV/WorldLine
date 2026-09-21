@@ -2,13 +2,21 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  DoubleSide,
   FogExp2,
+  Group,
   Line,
   LineBasicMaterial,
+  Mesh,
+  MeshBasicMaterial,
+  OctahedronGeometry,
   PerspectiveCamera,
+  PlaneGeometry,
   Points,
   PointsMaterial,
+  RingGeometry,
   Scene,
+  SphereGeometry,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -42,6 +50,12 @@ export interface SceneWorld {
   readonly planet: PlanetState
 }
 
+export interface SceneMarker {
+  readonly key: string
+  readonly kind: 'event' | 'decision' | 'fork'
+  readonly position: Vec3
+}
+
 export interface CurrentSceneOptions {
   readonly palette: PlanetPalette
   readonly tier: Tier
@@ -58,6 +72,8 @@ export interface Projected {
 
 export interface CurrentScene {
   setWorlds(worlds: readonly SceneWorld[]): void
+  setMarkers(markers: readonly SceneMarker[], selected: string | null): void
+  setCursor(point: Vec3 | null): void
   resize(width: number, height: number, dpr: number): void
   recenter(): void
   project(point: Vec3): Projected
@@ -216,6 +232,64 @@ export function createCurrentScene(
     entries.delete(key)
   }
 
+  const markerGroup = new Group()
+  scene.add(markerGroup)
+  const markerGeometry = {
+    event: new SphereGeometry(0.07, 12, 8),
+    decision: new OctahedronGeometry(0.1),
+    fork: new SphereGeometry(0.12, 16, 12),
+  }
+  const markerMaterial = {
+    event: new MeshBasicMaterial({ color: 0xe6e4f5 }),
+    selected: new MeshBasicMaterial({ color: 0xffffff }),
+    decision: new MeshBasicMaterial({ color: 0xc9aeff }),
+    fork: new MeshBasicMaterial({ color: 0xffffff }),
+  }
+
+  const cursorPlane = new Mesh(
+    new PlaneGeometry(7, 7),
+    new MeshBasicMaterial({
+      color: 0xe6e4f5,
+      transparent: true,
+      opacity: 0.05,
+      depthWrite: false,
+      side: DoubleSide,
+    }),
+  )
+  cursorPlane.rotation.y = Math.PI / 2
+  const cursorRing = new Mesh(
+    new RingGeometry(0.62, 0.68, 48),
+    new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, side: DoubleSide }),
+  )
+  cursorRing.rotation.y = Math.PI / 2
+  cursorPlane.visible = false
+  cursorRing.visible = false
+  scene.add(cursorPlane, cursorRing)
+
+  function setMarkers(markers: readonly SceneMarker[], selected: string | null): void {
+    markerGroup.clear()
+    for (const marker of markers) {
+      const material =
+        marker.kind === 'event'
+          ? marker.key === selected
+            ? markerMaterial.selected
+            : markerMaterial.event
+          : markerMaterial[marker.kind]
+      const mesh = new Mesh(markerGeometry[marker.kind], material)
+      mesh.position.set(...marker.position)
+      if (marker.kind === 'event' && marker.key === selected) mesh.scale.setScalar(1.8)
+      markerGroup.add(mesh)
+    }
+  }
+
+  function setCursor(point: Vec3 | null): void {
+    cursorPlane.visible = point !== null
+    cursorRing.visible = point !== null
+    if (!point) return
+    cursorPlane.position.set(...point)
+    cursorRing.position.set(...point)
+  }
+
   let last = performance.now()
   const started = last
   let measuring = options.onMeasured !== undefined
@@ -254,6 +328,8 @@ export function createCurrentScene(
   return {
     scene,
     setWorlds,
+    setMarkers,
+    setCursor,
     resize(nextWidth, nextHeight, nextDpr) {
       width = Math.max(1, nextWidth)
       height = Math.max(1, nextHeight)
@@ -296,6 +372,14 @@ export function createCurrentScene(
       guideMaterial.dispose()
       stars.geometry.dispose()
       ;(stars.material as PointsMaterial).dispose()
+      scene.remove(markerGroup, cursorPlane, cursorRing)
+      markerGroup.clear()
+      for (const geometry of Object.values(markerGeometry)) geometry.dispose()
+      for (const material of Object.values(markerMaterial)) material.dispose()
+      cursorPlane.geometry.dispose()
+      ;(cursorPlane.material as MeshBasicMaterial).dispose()
+      cursorRing.geometry.dispose()
+      ;(cursorRing.material as MeshBasicMaterial).dispose()
       renderPass?.dispose()
       bloom?.dispose()
       outputPass?.dispose()

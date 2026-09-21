@@ -4,7 +4,7 @@ import { useGraphics } from './stage.ts'
 test('shows the 3D current by default', async ({ page }) => {
   await page.goto('/?seed=482913')
   await expect(page.locator('main.stage')).toHaveAttribute('data-view', '3d')
-  await expect(page.getByLabel(/Worldlines in space/)).toBeVisible()
+  await expect(page.getByText(/Worldlines in space/)).toBeVisible()
 })
 
 test('switches to 2D from the graphics menu and remembers it', async ({ page }) => {
@@ -66,4 +66,35 @@ test('runs without console errors', async ({ page }) => {
   await page.waitForTimeout(2000)
   await page.getByRole('button', { name: 'Pause' }).click()
   expect(errors).toEqual([])
+})
+
+test('moves through time with the keyboard in 3D', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  for (let i = 0; i < 5; i++) await step.click()
+  const current = page.getByRole('slider', { name: /Worldline history/ })
+  await current.focus()
+  await current.press('Home')
+  await expect(page.getByTestId('year')).toHaveText('0000')
+  await current.press('ArrowRight')
+  await expect(page.getByTestId('year')).toHaveText('0001')
+})
+
+test('recenters the camera', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'Recenter' }).click()
+  await expect(page.locator('main.stage')).toHaveAttribute('data-view', '3d')
+})
+
+test('scrubs the past with the pointer in 3D', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(1500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const current = page.getByRole('slider', { name: /Worldline history/ })
+  const box = await current.boundingBox()
+  if (!box) throw new Error('scene is not visible')
+  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.5)
+  await expect(page.getByRole('button', { name: 'Return to the present' })).toBeVisible()
 })

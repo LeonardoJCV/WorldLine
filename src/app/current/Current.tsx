@@ -17,6 +17,7 @@ import {
   type CompanionTrack,
   type Frame,
 } from './geometry.ts'
+import { currentKey } from './keys.ts'
 import type { Strand } from './normalize.ts'
 import { resolveView, zoomView } from './view.ts'
 
@@ -190,29 +191,11 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
-    const zoomKeys: Record<string, number> = { '+': 0.8, '=': 0.8, '-': 1.25 }
-    if (Object.hasOwn(zoomKeys, event.key)) {
-      event.preventDefault()
-      setView(zoomView(view, present, cursor ?? present, zoomKeys[event.key] ?? 1))
-      return
-    }
-    if (event.key === '0') {
-      event.preventDefault()
-      setView(null)
-      return
-    }
-    const base = cursor ?? present
-    const stride = event.shiftKey ? 10 : 1
-    const moves: Record<string, number | null> = {
-      ArrowLeft: base - stride,
-      ArrowRight: base + stride,
-      Home: 0,
-      End: null,
-      Escape: null,
-    }
-    if (!Object.hasOwn(moves, event.key)) return
+    const effect = currentKey(event.key, event.shiftKey, { present, cursor, view })
+    if (!effect) return
     event.preventDefault()
-    setCursor(moves[event.key] ?? null)
+    if ('view' in effect) setView(effect.view)
+    else setCursor(effect.cursor)
   }
 
   return (

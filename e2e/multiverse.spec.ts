@@ -1,8 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { useGraphics } from './stage.ts'
 
 async function worldAtYear(page: Page, years: number) {
-  await useGraphics(page, '2d')
   await page.goto('/?seed=482913')
   const step = page.getByRole('button', { name: 'Advance one year' })
   for (let i = 0; i < years; i++) await step.click()

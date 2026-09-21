@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { EVENTS } from '../../engine/events.ts'
 import type { WorldlineId } from '../../worker/protocol.ts'
 import { useT } from '../i18n/index.ts'
 import { formatYear } from '../i18n/format.ts'
@@ -7,9 +8,11 @@ import { graphicsStore, useGraphics, useTier } from '../graphics/store.ts'
 import { planetPalette, planetState } from '../planet/uniforms.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
-import { resolveView } from '../current/view.ts'
-import { buildPath, headPoint, type PathData } from './path.ts'
-import type { CurrentScene, SceneWorld } from './scene.ts'
+import { currentKey } from '../current/keys.ts'
+import { resolveView, zoomView } from '../current/view.ts'
+import { type Vec3, pickTarget, yearAtPointer, type ScreenTarget } from './camera.ts'
+import { axisPoint, buildPath, headPoint, type PathData } from './path.ts'
+import type { CurrentScene, SceneMarker, SceneWorld } from './scene.ts'
 import { SAMPLES, axisOffsets, resample } from './space.ts'
 import './scene3d.css'
 
@@ -20,6 +23,15 @@ interface Fetched {
   readonly distances: ReadonlyMap<WorldlineId, { from: number; to: number; values: Float32Array }>
 }
 
+interface Label {
+  readonly key: string
+  readonly point: Vec3
+  readonly text: string
+  readonly className: string
+}
+
+const ERA_EVENTS = new Set(EVENTS.filter((def) => def.kind === 'era').map((def) => def.id))
+
 export function Current3D({ width, height }: { readonly width: number; readonly height: number }) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -28,7 +40,12 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   const latest = useRef<{
     size: { width: number; height: number }
     worlds: readonly SceneWorld[]
-  }>({ size: { width, height }, worlds: [] })
+    markers: readonly SceneMarker[]
+    selected: string | null
+    cursorPoint: Vec3 | null
+  }>({ size: { width, height }, worlds: [], markers: [], selected: null, cursorPoint: null })
+  const labelsRef = useRef<readonly Label[]>([])
+  const labelElsRef = useRef<Map<string, HTMLSpanElement>>(new Map())
   const tier = useTier()
   const setting = useGraphics((s) => s.setting)
   const measured = useGraphics((s) => s.measured)
@@ -38,6 +55,10 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   const observed = useSimulation((s) => s.inspected ?? s.present)
   const present = useSimulation((s) => s.present?.tick ?? 0)
   const view = useSimulation((s) => s.view)
+  const cursor = useSimulation((s) => s.cursor)
+  const events = useSimulation((s) => s.events)
+  const decisions = useSimulation((s) => s.decisions)
+  const selected = useSimulation((s) => s.selected)
   const seed = useSimulation((s) => s.seed ?? 0)
   const { from, to } = resolveView(view, present)
   const palette = useMemo(() => planetPalette(seed), [seed])
@@ -48,6 +69,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     const canvas = canvasRef.current
     if (!canvas) return
     let disposed = false
+    let unsubscribeFrame: (() => void) | null = null
     void import('./scene.ts')
       .then(({ createCurrentScene }) => {
         if (disposed) return
@@ -64,15 +86,33 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
             : {}),
         })
         sceneRef.current = scene
-        const { size, worlds: current } = latest.current
+        const {
+          size,
+          worlds: current,
+          markers,
+          selected: selectedKey,
+          cursorPoint,
+        } = latest.current
         scene.resize(size.width, size.height, window.devicePixelRatio || 1)
         scene.setWorlds(current)
+        scene.setMarkers(markers, selectedKey)
+        scene.setCursor(cursorPoint)
+        unsubscribeFrame = scene.onFrame(() => {
+          for (const label of labelsRef.current) {
+            const el = labelElsRef.current.get(label.key)
+            if (!el) continue
+            const projected = scene.project(label.point)
+            el.style.visibility = projected.visible ? 'visible' : 'hidden'
+            el.style.transform = `translate(${projected.x}px, ${projected.y}px)`
+          }
+        })
       })
       .catch(() => {
         if (!disposed) graphicsStore.getState().setWebglFailed()
       })
     return () => {
       disposed = true
+      unsubscribeFrame?.()
       sceneRef.current?.dispose()
       sceneRef.current = null
     }
@@ -157,9 +197,182 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   }, [fetched, worlds, focus, observed])
 
   useEffect(() => {
-    latest.current = { size: { width, height }, worlds: sceneWorlds }
+    latest.current = { ...latest.current, size: { width, height }, worlds: sceneWorlds }
     sceneRef.current?.setWorlds(sceneWorlds)
   }, [sceneWorlds, width, height])
+
+  const focusPath = sceneWorlds.find((world) => world.focused)?.path ?? null
+
+  const markers = useMemo<SceneMarker[]>(() => {
+    if (!fetched) return []
+    const span = Math.max(1, fetched.to - fetched.from)
+    const list: SceneMarker[] = []
+    if (focusPath && focusPath.visible) {
+      events.forEach((record, index) => {
+        if (record.start < fetched.from || record.start > fetched.to) return
+        const point = axisPoint(focusPath, (record.start - fetched.from) / span)
+        if (point) list.push({ key: String(index), kind: 'event', position: point })
+      })
+      for (const decision of decisions) {
+        if (decision.tick < fetched.from) continue
+        const point = axisPoint(focusPath, (decision.tick - fetched.from) / span)
+        if (point)
+          list.push({ key: `decision:${decision.tick}`, kind: 'decision', position: point })
+      }
+    }
+    const pathsById = new Map(
+      sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.path]),
+    )
+    for (const world of worlds) {
+      if (world.info.parent === null) continue
+      const parentPath = pathsById.get(world.info.parent)
+      if (!parentPath || !parentPath.visible) continue
+      const point = axisPoint(parentPath, (world.info.fork - fetched.from) / span)
+      if (point) list.push({ key: `fork:${world.info.id}`, kind: 'fork', position: point })
+    }
+    return list
+  }, [fetched, focusPath, events, decisions, sceneWorlds, worlds])
+
+  useEffect(() => {
+    const selectedKey = selected === null ? null : String(selected)
+    latest.current = { ...latest.current, markers, selected: selectedKey }
+    sceneRef.current?.setMarkers(markers, selectedKey)
+  }, [markers, selected])
+
+  const cursorPoint = useMemo<Vec3 | null>(() => {
+    if (cursor === null || !focusPath || !fetched) return null
+    return axisPoint(focusPath, (cursor - fetched.from) / Math.max(1, fetched.to - fetched.from))
+  }, [cursor, focusPath, fetched])
+
+  useEffect(() => {
+    latest.current = { ...latest.current, cursorPoint }
+    sceneRef.current?.setCursor(cursorPoint)
+  }, [cursorPoint])
+
+  const cursorLabel = useMemo<Label | null>(() => {
+    if (cursor === null || !cursorPoint) return null
+    return {
+      key: 'cursor',
+      point: cursorPoint,
+      text: formatYear(cursor),
+      className: 'scene3d__cursor',
+    }
+  }, [cursor, cursorPoint])
+
+  const letterLabels = useMemo<Label[]>(
+    () =>
+      sceneWorlds.flatMap((world) =>
+        world.head
+          ? [
+              {
+                key: `letter:${world.key}`,
+                point: world.head,
+                text: world.key.split(':')[0] ?? '',
+                className: 'scene3d__letter',
+              },
+            ]
+          : [],
+      ),
+    [sceneWorlds],
+  )
+
+  const eraLabels = useMemo<Label[]>(() => {
+    if (!fetched || !focusPath || !focusPath.visible) return []
+    const span = Math.max(1, fetched.to - fetched.from)
+    return events.flatMap((record, index) => {
+      if (!ERA_EVENTS.has(record.event)) return []
+      if (record.start < fetched.from || record.start > fetched.to) return []
+      const point = axisPoint(focusPath, (record.start - fetched.from) / span)
+      return point
+        ? [
+            {
+              key: `era:${index}`,
+              point,
+              text: t(`event.${record.event}`),
+              className: 'scene3d__era',
+            },
+          ]
+        : []
+    })
+  }, [fetched, focusPath, events, t])
+
+  const selectedLabel = useMemo<Label | null>(() => {
+    if (selected === null || !focusPath || !fetched) return null
+    const record = events[selected]
+    if (!record) return null
+    const span = Math.max(1, fetched.to - fetched.from)
+    const point = axisPoint(focusPath, (record.start - fetched.from) / span)
+    return point
+      ? { key: 'selected', point, text: t(`event.${record.event}`), className: 'scene3d__selected' }
+      : null
+  }, [selected, focusPath, fetched, events, t])
+
+  const labels = useMemo<readonly Label[]>(
+    () => [
+      ...(cursorLabel ? [cursorLabel] : []),
+      ...letterLabels,
+      ...eraLabels,
+      ...(selectedLabel ? [selectedLabel] : []),
+    ],
+    [cursorLabel, letterLabels, eraLabels, selectedLabel],
+  )
+
+  useEffect(() => {
+    labelsRef.current = labels
+  }, [labels])
+
+  const targets = (): ScreenTarget[] => {
+    const scene = sceneRef.current
+    if (!scene) return []
+    const list: ScreenTarget[] = []
+    for (const world of sceneWorlds) {
+      if (!world.path.visible) continue
+      const id = world.key.split(':')[0] ?? ''
+      if (world.head) {
+        const p = scene.project(world.head)
+        if (p.visible) {
+          list.push({ kind: 'world', key: id, x: p.x, y: p.y, radius: world.focused ? 60 : 32 })
+        }
+      }
+      if (!world.focused) {
+        for (let k = 0; k <= 16; k++) {
+          const u = world.path.alive[0] + ((world.path.alive[1] - world.path.alive[0]) * k) / 16
+          const point = axisPoint(world.path, u)
+          const p = point ? scene.project(point) : null
+          if (p?.visible) list.push({ kind: 'world', key: id, x: p.x, y: p.y, radius: 14 })
+        }
+      }
+    }
+    for (const marker of markers) {
+      if (marker.kind !== 'event') continue
+      const p = scene.project(marker.position)
+      if (p.visible) list.push({ kind: 'event', key: marker.key, x: p.x, y: p.y, radius: 10 })
+    }
+    return list
+  }
+
+  const yearAt = (x: number, y: number): number | null => {
+    const scene = sceneRef.current
+    if (!scene || !focusPath || !fetched) return null
+    const a = axisPoint(focusPath, 0)
+    const b = axisPoint(focusPath, 1)
+    if (!a || !b) return null
+    return yearAtPointer({ x, y }, scene.project(a), scene.project(b), fetched.from, fetched.to)
+  }
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+      event.preventDefault()
+      const rect = canvas.getBoundingClientRect()
+      const year = yearAt(event.clientX - rect.left, event.clientY - rect.top) ?? cursor ?? present
+      simulation.getState().setView(zoomView(view, present, year, event.deltaY > 0 ? 1.25 : 0.8))
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [view, present, cursor, focusPath, fetched])
 
   return (
     <div className="scene3d" style={{ width, height }}>
@@ -167,10 +380,71 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
         ref={canvasRef}
         className="scene3d__canvas"
         data-renderer="webgl"
-        aria-label={t('scene.label', { year: formatYear(present) })}
+        tabIndex={0}
+        role="slider"
+        aria-label={t('current.label', { year: formatYear(present) })}
+        aria-describedby="scene3d-hint"
+        aria-valuemin={0}
+        aria-valuemax={present}
+        aria-valuenow={cursor ?? present}
+        aria-valuetext={t('current.value', { year: formatYear(cursor ?? present) })}
         style={{ width, height }}
         onContextMenu={(event) => event.preventDefault()}
+        onPointerDown={(event: PointerEvent<HTMLCanvasElement>) => {
+          if (event.button !== 0) return
+          const rect = event.currentTarget.getBoundingClientRect()
+          const x = event.clientX - rect.left
+          const y = event.clientY - rect.top
+          const hit = pickTarget(targets(), x, y)
+          if (hit?.kind === 'world') {
+            simulation.getState().setFocus(hit.key as WorldlineId)
+            return
+          }
+          if (hit?.kind === 'event') {
+            simulation.getState().select(Number(hit.key))
+            return
+          }
+          event.currentTarget.setPointerCapture(event.pointerId)
+          const year = yearAt(x, y)
+          if (year !== null) simulation.getState().setCursor(year)
+        }}
+        onPointerMove={(event: PointerEvent<HTMLCanvasElement>) => {
+          const rect = event.currentTarget.getBoundingClientRect()
+          const x = event.clientX - rect.left
+          const y = event.clientY - rect.top
+          if (event.buttons & 1) {
+            const year = yearAt(x, y)
+            if (year !== null) simulation.getState().setCursor(year)
+            return
+          }
+          event.currentTarget.style.cursor = pickTarget(targets(), x, y) ? 'pointer' : ''
+        }}
+        onDoubleClick={() => simulation.getState().setCursor(null)}
+        onKeyDown={(event: KeyboardEvent<HTMLCanvasElement>) => {
+          const effect = currentKey(event.key, event.shiftKey, { present, cursor, view })
+          if (!effect) return
+          event.preventDefault()
+          if ('view' in effect) simulation.getState().setView(effect.view)
+          else simulation.getState().setCursor(effect.cursor)
+        }}
       />
+      <p id="scene3d-hint" className="scene3d__hint">
+        {t('scene.label', { year: formatYear(present) })}
+      </p>
+      <div className="scene3d__labels" aria-hidden="true">
+        {labels.map((label) => (
+          <span
+            key={label.key}
+            ref={(el) => {
+              if (el) labelElsRef.current.set(label.key, el)
+              else labelElsRef.current.delete(label.key)
+            }}
+            className={label.className}
+          >
+            {label.text}
+          </span>
+        ))}
+      </div>
       <button
         type="button"
         className="scene3d__recenter"
