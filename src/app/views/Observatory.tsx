@@ -15,6 +15,7 @@ import { EventsPanel } from './EventsPanel.tsx'
 import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
 import { useElementSize } from './useElementSize.ts'
+import { WorldActions } from './WorldActions.tsx'
 import './observatory.css'
 
 export function Observatory({ onLeave }: { readonly onLeave: () => void }) {
@@ -64,14 +65,17 @@ export function Observatory({ onLeave }: { readonly onLeave: () => void }) {
             </>
           )}
         </div>
-        <div className="notices" role="status">
-          {linkVersion !== null && linkVersion !== MODEL_VERSION && (
-            <p>{t('link.version', { version: linkVersion })}</p>
-          )}
-          {ended !== null && (
-            <p>{t(ended === 'extinction' ? 'ended.extinction' : 'ended.horizon')}</p>
-          )}
-          {error !== null && <p>{t('error.simulation', { message: error })}</p>}
+        <div className="band__footer">
+          <WorldActions />
+          <div className="notices" role="status">
+            {linkVersion !== null && linkVersion !== MODEL_VERSION && (
+              <p>{t('link.version', { version: linkVersion })}</p>
+            )}
+            {ended !== null && (
+              <p>{t(ended === 'extinction' ? 'ended.extinction' : 'ended.horizon')}</p>
+            )}
+            {error !== null && <p>{t('error.simulation', { message: error })}</p>}
+          </div>
         </div>
       </footer>
     </div>

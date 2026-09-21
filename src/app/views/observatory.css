@@ -177,8 +177,39 @@
   min-width: 0;
 }
 
-.band .notices {
+.band__footer {
   grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+
+.world-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.world-actions button {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.world-actions button:hover {
+  border-color: var(--dim);
+}
+
+.world-actions__status {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
 }
 
 .panel {

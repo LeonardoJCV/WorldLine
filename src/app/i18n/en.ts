@@ -89,6 +89,22 @@ export const en = {
   'nav.newWorld': 'New world',
   'link.version':
     'This link was made with model v{version}; the world may differ from what was shared.',
+  'world.name': 'World {seed}, year {year}',
+  'world.save': 'Save',
+  'world.saved': 'Saved to this browser.',
+  'world.copy': 'Copy link',
+  'world.copied': 'Link copied.',
+  'world.copyFailed': 'Could not copy; use the address bar instead.',
+  'world.export': 'Export file',
+  'world.exported': 'World exported.',
+  'library.title': 'Saved worlds',
+  'library.empty': 'No saved worlds yet. Worlds you save appear here.',
+  'library.open': 'Open',
+  'library.delete': 'Delete',
+  'library.import': 'Import file',
+  'library.invalid': 'This file is not a WORLDLINE world.',
+  'library.unavailable': 'Saving is unavailable in this browser.',
+  'library.meta': 'Year {year}, saved {date}',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

@@ -8,6 +8,7 @@ import { Planet } from '../planet/Planet.tsx'
 import { useElementSize } from '../views/useElementSize.ts'
 import type { WorldLink } from '../world/link.ts'
 import { randomSeed, seedFromText } from '../world/seed.ts'
+import { LibraryPanel } from './LibraryPanel.tsx'
 import './genesis.css'
 
 interface GenesisProps {
@@ -86,6 +87,7 @@ export function Genesis({ onStart }: GenesisProps) {
             </dl>
           </section>
         )}
+        <LibraryPanel onOpen={onStart} />
       </section>
       <div className="genesis__planet" ref={planetRef}>
         {seed !== null && snapshot && planetSize > 0 && (
