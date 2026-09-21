@@ -293,3 +293,70 @@ button.state__row:hover,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.causal__scroll {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.causal__canvas {
+  position: relative;
+}
+
+.causal__links {
+  position: absolute;
+  inset: 0;
+}
+
+.causal__links path {
+  fill: none;
+  stroke: var(--haze);
+  stroke-width: 1.5;
+}
+
+.causal__node {
+  position: absolute;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+  overflow: hidden;
+  background: var(--void);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.causal__node[data-kind='condition'] {
+  border-style: dashed;
+}
+
+.causal__node[data-kind='decision'] {
+  border-left: 3px solid var(--starlight);
+}
+
+button.causal__node {
+  cursor: pointer;
+}
+
+button.causal__node:hover {
+  border-color: var(--dim);
+}
+
+.causal__node[data-root='true'] {
+  background: var(--nebula);
+  border-color: var(--starlight);
+}
+
+.causal__title,
+.causal__detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.causal__detail {
+  color: var(--dim);
+  font-size: 0.75rem;
+}

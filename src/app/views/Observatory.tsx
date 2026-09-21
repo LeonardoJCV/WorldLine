@@ -5,6 +5,7 @@ import type { Strand } from '../current/normalize.ts'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { useSimulation } from '../sim/runtime.ts'
+import { CausalPanel } from './CausalPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
 import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
@@ -43,6 +44,7 @@ export function Observatory() {
         <StatePanel focus={focus} onFocus={setFocus} />
         <div className="band__main">
           <EventsPanel />
+          <CausalPanel />
         </div>
         <div className="notices" role="status">
           {ended !== null && (

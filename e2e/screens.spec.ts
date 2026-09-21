@@ -19,3 +19,15 @@ for (const viewport of VIEWPORTS) {
     await page.screenshot({ path: `screens/observatory-${viewport.name}.png` })
   })
 }
+
+test('observatory causal chain', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(4000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.locator('.events__item').first().click()
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'screens/observatory-causal.png' })
+})

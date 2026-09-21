@@ -145,3 +145,19 @@ test('lists events and jumps to the selected one', async ({ page }) => {
   await expect(page.getByTestId('year')).toHaveText(year)
   await expect(item).toHaveAttribute('aria-current', 'true')
 })
+
+test('asks for a selection before tracing causes', async ({ page }) => {
+  await expect(page.getByText('Select an event to trace its causes.')).toBeVisible()
+})
+
+test('traces the causes of a selected event', async ({ page }) => {
+  await page.getByRole('button', { name: '×64' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  const item = page.getByRole('button', { name: /Golden age/ }).last()
+  await expect(item).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await item.click()
+  const chain = page.getByRole('group', { name: 'Causes of Golden age' })
+  await expect(chain.getByText('Stability')).toBeVisible()
+  await expect(chain.getByText('Food security')).toBeVisible()
+})
