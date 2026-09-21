@@ -95,6 +95,23 @@ describe('world link', () => {
   it('builds the observatory hash', () => {
     expect(linkHash({ version: 1, seed: 482913, tick: 0, decisions: [] })).toBe('#/w/AQAHXmEAAAAA')
   })
+
+  it('rejects malformed payloads from untrusted storage without throwing', () => {
+    expect(
+      isValidLink({ version: 1, seed: 1, tick: 0, decisions: undefined } as unknown as WorldLink),
+    ).toBe(false)
+    expect(
+      isValidLink({ version: 1, seed: 1, tick: 0, decisions: [null] } as unknown as WorldLink),
+    ).toBe(false)
+    expect(
+      isValidLink({
+        version: 1,
+        seed: 1,
+        tick: 0,
+        decisions: [{ tick: 3 }],
+      } as unknown as WorldLink),
+    ).toBe(false)
+  })
 })
 
 describe('parseRoute', () => {

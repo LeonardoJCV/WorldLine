@@ -8,12 +8,19 @@
 }
 
 .topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+  row-gap: 12px;
+  padding: 16px var(--gutter);
+}
+
+.topbar__controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  padding: 16px var(--gutter);
+  justify-content: center;
+  gap: 8px 16px;
 }
 
 .topbar__brand {
@@ -138,6 +145,14 @@
 }
 
 @media (max-width: 720px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .topbar__controls {
+    justify-content: flex-start;
+  }
+
   .topbar__end {
     width: 100%;
     justify-content: space-between;

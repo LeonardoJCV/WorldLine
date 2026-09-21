@@ -15,8 +15,11 @@ export function isValidLink(link: WorldLink): boolean {
   if (!Number.isInteger(link.version) || link.version < 0 || link.version > 255) return false
   if (!Number.isInteger(link.seed) || link.seed < 0 || link.seed > MAX_SEED) return false
   if (!Number.isInteger(link.tick) || link.tick < 0 || link.tick > HORIZON) return false
+  if (!Array.isArray(link.decisions)) return false
   let previous = -1
   for (const decision of link.decisions) {
+    if (typeof decision !== 'object' || decision === null) return false
+    if (typeof decision.allocation !== 'object' || decision.allocation === null) return false
     if (!Number.isInteger(decision.tick) || decision.tick <= previous || decision.tick >= HORIZON) {
       return false
     }

@@ -33,47 +33,49 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
           {t('nav.newWorld')}
         </button>
       </div>
-      <div className="mode" role="group" aria-label={t('mode.label')}>
-        {MODES.map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={mode === option}
-            onClick={() => setMode(option)}
-          >
-            {t(`mode.${option}`)}
-          </button>
-        ))}
-      </div>
-
-      <div className="transport" role="group" aria-label={t('transport.label')}>
-        <button
-          type="button"
-          className="transport__play"
-          onClick={togglePlay}
-          disabled={ended !== null}
-        >
-          {playing ? t('transport.pause') : t('transport.play')}
-        </button>
-        <button type="button" onClick={() => step(1)} disabled={ended !== null || playing}>
-          {t('transport.step')}
-        </button>
-        <div className="transport__speeds">
-          {OPTIONS.map((option) => (
+      <div className="topbar__controls">
+        <div className="mode" role="group" aria-label={t('mode.label')}>
+          {MODES.map((option) => (
             <button
               key={option}
               type="button"
-              aria-pressed={speed === option}
-              title={
-                option === 'max'
-                  ? t('transport.fastest')
-                  : t('transport.yearsPerSecond', { speed: option })
-              }
-              onClick={() => setSpeed(option)}
+              aria-pressed={mode === option}
+              onClick={() => setMode(option)}
             >
-              {option === 'max' ? t('transport.speed.max') : `×${option}`}
+              {t(`mode.${option}`)}
             </button>
           ))}
+        </div>
+
+        <div className="transport" role="group" aria-label={t('transport.label')}>
+          <button
+            type="button"
+            className="transport__play"
+            onClick={togglePlay}
+            disabled={ended !== null}
+          >
+            {playing ? t('transport.pause') : t('transport.play')}
+          </button>
+          <button type="button" onClick={() => step(1)} disabled={ended !== null || playing}>
+            {t('transport.step')}
+          </button>
+          <div className="transport__speeds">
+            {OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={speed === option}
+                title={
+                  option === 'max'
+                    ? t('transport.fastest')
+                    : t('transport.yearsPerSecond', { speed: option })
+                }
+                onClick={() => setSpeed(option)}
+              >
+                {option === 'max' ? t('transport.speed.max') : `×${option}`}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
