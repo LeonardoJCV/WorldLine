@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.engine.json && tsc -p tsconfig.node.json",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "probe": "node scripts/probe.ts"
   },

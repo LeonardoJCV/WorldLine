@@ -1,6 +1,6 @@
-const LN2_HI = 6.93147180369123816490e-1
+const LN2_HI = 6.9314718036912381649e-1
 const LN2_LO = 1.90821492927058770002e-10
-const INV_LN2 = 1.44269504088896338700
+const INV_LN2 = 1.442695040888963387
 const TWO_POW_54 = 18014398509481984
 const MIN_NORMAL = 2.2250738585072014e-308
 
@@ -12,7 +12,7 @@ function pow2(k: number): number {
   return view.getFloat64(0)
 }
 
-// Só + − × ÷ e sqrt: resultado idêntico em qualquer engine JS
+// Só + − × ÷ e operações de bits: resultado idêntico em qualquer engine JS
 export function exp(x: number): number {
   if (Number.isNaN(x)) return NaN
   if (x > 709.782712893384) return Infinity

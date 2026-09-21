@@ -7,7 +7,8 @@ const relativeError = (actual: number, expected: number) =>
 describe('exp', () => {
   it('matches the native implementation across the finite range', () => {
     let worst = 0
-    for (let x = -700; x <= 709.7; x += 0.731) worst = Math.max(worst, relativeError(exp(x), Math.exp(x)))
+    for (let x = -700; x <= 709.7; x += 0.731)
+      worst = Math.max(worst, relativeError(exp(x), Math.exp(x)))
     expect(worst).toBeLessThan(1e-14)
   })
 
