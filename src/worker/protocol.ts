@@ -11,6 +11,10 @@ import {
 export const SPEEDS = [1, 4, 16, 64, 256] as const
 export type Speed = (typeof SPEEDS)[number] | 'max'
 
+export const WORLDLINE_IDS = ['A', 'B', 'C', 'D', 'E', 'F'] as const
+export type WorldlineId = (typeof WORLDLINE_IDS)[number]
+export const MAX_WORLDLINES = WORLDLINE_IDS.length
+
 export interface Snapshot {
   readonly tick: number
   readonly values: Readonly<Record<Variable, number>>
@@ -26,32 +30,81 @@ export interface EventUpdate {
   readonly record: EventRecord
 }
 
+export interface BranchSpec {
+  readonly parent: number
+  readonly fork: number
+  readonly decisions: readonly Decision[]
+}
+
+export interface WorldlineInfo {
+  readonly id: WorldlineId
+  readonly parent: WorldlineId | null
+  readonly fork: number
+  readonly generation: number
+}
+
+export interface WorldProgress {
+  readonly info: WorldlineInfo
+  readonly present: Snapshot
+  readonly events: readonly EventUpdate[]
+  readonly decisions: readonly Decision[]
+}
+
 export type Series = Readonly<Record<Variable, Float32Array>>
 
 export type EndReason = 'horizon' | 'extinction'
 
 export type ToWorker =
-  | { readonly type: 'create'; readonly seed: number; readonly decisions: readonly Decision[] }
+  | {
+      readonly type: 'open'
+      readonly seed: number
+      readonly tick: number
+      readonly root: readonly Decision[]
+      readonly branches: readonly BranchSpec[]
+    }
   | { readonly type: 'play'; readonly speed: Speed }
   | { readonly type: 'pause' }
   | { readonly type: 'step'; readonly years: number }
-  | { readonly type: 'decide'; readonly allocation: Allocation }
+  | { readonly type: 'decide'; readonly world: WorldlineId; readonly allocation: Allocation }
+  | {
+      readonly type: 'branch'
+      readonly requestId: number
+      readonly parent: WorldlineId
+      readonly tick: number
+      readonly allocation: Allocation
+    }
+  | { readonly type: 'remove'; readonly world: WorldlineId }
   | {
       readonly type: 'range'
       readonly requestId: number
+      readonly world: WorldlineId
       readonly from: number
       readonly to: number
       readonly buckets: number
     }
-  | { readonly type: 'inspect'; readonly requestId: number; readonly tick: number }
+  | {
+      readonly type: 'inspect'
+      readonly requestId: number
+      readonly world: WorldlineId
+      readonly tick: number
+    }
+  | {
+      readonly type: 'distance'
+      readonly requestId: number
+      readonly world: WorldlineId
+      readonly reference: WorldlineId
+      readonly from: number
+      readonly to: number
+      readonly buckets: number
+    }
 
 export type FromWorker =
   | {
       readonly type: 'progress'
-      readonly present: Snapshot
+      readonly now: number
       readonly playing: boolean
-      readonly events: readonly EventUpdate[]
-      readonly decisions: readonly Decision[]
+      readonly ended: EndReason | null
+      readonly worlds: readonly WorldProgress[]
     }
   | {
       readonly type: 'range'
@@ -61,7 +114,14 @@ export type FromWorker =
       readonly series: Series
     }
   | { readonly type: 'inspect'; readonly requestId: number; readonly snapshot: Snapshot }
-  | { readonly type: 'ended'; readonly reason: EndReason }
+  | { readonly type: 'branched'; readonly requestId: number; readonly world: WorldlineId }
+  | {
+      readonly type: 'distance'
+      readonly requestId: number
+      readonly from: number
+      readonly to: number
+      readonly values: Float32Array
+    }
   | { readonly type: 'error'; readonly message: string; readonly requestId?: number }
 
 export function toSnapshot(

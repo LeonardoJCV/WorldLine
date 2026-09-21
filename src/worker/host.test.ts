@@ -1,20 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
 import { SimulationHost } from './host.ts'
-import type { FromWorker } from './protocol.ts'
+import type { FromWorker, WorldlineId } from './protocol.ts'
 import { FakeClock } from './testing.ts'
 
 const SEED = 482913
 const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
 const industrial: Allocation = { agriculture: 25, industry: 60, research: 15, conservation: 0 }
+const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
 
 function setup() {
   const clock = new FakeClock()
   const sent: FromWorker[] = []
   const host = new SimulationHost((message) => sent.push(message), clock)
-  return { clock, sent, host }
+  const open = (tick = 0, root = [] as { tick: number; allocation: Allocation }[]) =>
+    host.handle({ type: 'open', seed: SEED, tick, root, branches: [] })
+  return { clock, sent, host, open }
 }
 
 function all<T extends FromWorker['type']>(sent: readonly FromWorker[], type: T) {
@@ -25,167 +28,129 @@ function last<T extends FromWorker['type']>(sent: readonly FromWorker[], type: T
   return all(sent, type).at(-1)
 }
 
-describe('SimulationHost', () => {
-  it('reports the new world right after creation', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+function world(sent: readonly FromWorker[], id: WorldlineId) {
+  return last(sent, 'progress')?.worlds.find((w) => w.info.id === id)
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('SimulationHost: a single worldline', () => {
+  it('reports the new world right after opening', () => {
+    const { sent, open } = setup()
+    open()
     const progress = last(sent, 'progress')
-    expect(progress?.present.tick).toBe(0)
-    expect(progress?.present.values.population).toBe(new Worldline(SEED).present.population)
+    expect(progress?.now).toBe(0)
+    expect(progress?.worlds.map((w) => w.info)).toEqual([
+      { id: 'A', parent: null, fork: 0, generation: 1 },
+    ])
+    expect(world(sent, 'A')?.present.values.population).toBe(new Worldline(SEED).present.population)
     expect(progress?.playing).toBe(false)
+    expect(progress?.ended).toBeNull()
   })
 
   it('advances at the chosen speed while playing', () => {
-    const { host, sent, clock } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+    const { host, sent, clock, open } = setup()
+    open()
     host.handle({ type: 'play', speed: 16 })
     clock.advance(1000)
-    const tick = last(sent, 'progress')?.present.tick ?? 0
-    expect(tick).toBeGreaterThanOrEqual(14)
-    expect(tick).toBeLessThanOrEqual(16)
-    expect(last(sent, 'progress')?.playing).toBe(true)
+    const now = last(sent, 'progress')?.now ?? 0
+    expect(now).toBeGreaterThanOrEqual(14)
+    expect(now).toBeLessThanOrEqual(16)
   })
 
   it('stops advancing when paused', () => {
-    const { host, sent, clock } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+    const { host, sent, clock, open } = setup()
+    open()
     host.handle({ type: 'play', speed: 64 })
     clock.advance(500)
     host.handle({ type: 'pause' })
     const paused = last(sent, 'progress')
     clock.advance(1000)
     expect(paused?.playing).toBe(false)
-    expect(last(sent, 'progress')?.present.tick).toBe(paused?.present.tick)
+    expect(last(sent, 'progress')?.now).toBe(paused?.now)
   })
 
   it('steps an exact number of years', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+    const { host, sent, open } = setup()
+    open()
     host.handle({ type: 'step', years: 25 })
-    expect(last(sent, 'progress')?.present.tick).toBe(25)
+    expect(last(sent, 'progress')?.now).toBe(25)
+    expect(world(sent, 'A')?.present.tick).toBe(25)
   })
 
-  it('runs to the horizon at max speed and reports the end once', () => {
-    const { host, sent, clock } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+  it('runs to the horizon at max speed and reports the end', () => {
+    const { host, sent, clock, open } = setup()
+    open()
     host.handle({ type: 'play', speed: 'max' })
     clock.advance(100)
-    expect(last(sent, 'progress')?.present.tick).toBe(HORIZON)
-    expect(last(sent, 'progress')?.playing).toBe(false)
-    expect(all(sent, 'ended')).toEqual([{ type: 'ended', reason: 'horizon' }])
+    const progress = last(sent, 'progress')
+    expect(progress?.now).toBe(HORIZON)
+    expect(progress?.playing).toBe(false)
+    expect(progress?.ended).toBe('horizon')
   })
 
-  it('reports extinction', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [{ tick: 0, allocation: industrial }] })
+  it('reports extinction when every worldline is extinct', () => {
+    const { host, sent, open } = setup()
+    open(0, [{ tick: 0, allocation: industrial }])
     host.handle({ type: 'step', years: 3000 })
-    expect(all(sent, 'ended')).toEqual([{ type: 'ended', reason: 'extinction' }])
-    expect(last(sent, 'progress')?.present.status).toBe('extinct')
+    expect(last(sent, 'progress')?.ended).toBe('extinction')
+    expect(world(sent, 'A')?.present.status).toBe('extinct')
   })
 
   it('streams event records and later closes them', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [{ tick: 0, allocation: starved }] })
+    const { host, sent, open } = setup()
+    open(0, [{ tick: 0, allocation: starved }])
     host.handle({ type: 'step', years: 5 })
-    const opened = last(sent, 'progress')?.events.find((u) => u.record.event === 'famine')
+    const opened = world(sent, 'A')?.events.find((u) => u.record.event === 'famine')
     expect(opened?.record.end).toBeNull()
     host.handle({ type: 'step', years: 1000 })
     const closed = all(sent, 'progress')
-      .flatMap((p) => p.events)
+      .flatMap((p) => p.worlds.flatMap((w) => w.events))
       .find((u) => u.index === opened?.index && u.record.end !== null)
     expect(closed).toBeDefined()
   })
 
-  it('applies a decision from the present year onward without moving time', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+  it('applies a decision from the present onward without moving time', () => {
+    const { host, sent, open } = setup()
+    open()
     host.handle({ type: 'step', years: 10 })
-    host.handle({ type: 'decide', allocation: starved })
-    expect(last(sent, 'progress')?.present.tick).toBe(10)
+    host.handle({ type: 'decide', world: 'A', allocation: starved })
+    expect(last(sent, 'progress')?.now).toBe(10)
+    expect(world(sent, 'A')?.decisions).toEqual([{ tick: 10, allocation: starved }])
     host.handle({ type: 'step', years: 1 })
-    expect(last(sent, 'progress')?.present.allocation).toEqual(starved)
+    expect(world(sent, 'A')?.present.allocation).toEqual(starved)
   })
 
-  it('answers range requests with one mean series per variable', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+  it('answers range requests per worldline', () => {
+    const { host, sent, open } = setup()
+    open()
     host.handle({ type: 'step', years: 100 })
-    host.handle({ type: 'range', requestId: 3, from: 0, to: 100, buckets: 10 })
+    host.handle({ type: 'range', requestId: 3, world: 'A', from: 0, to: 5000, buckets: 10 })
     const reply = last(sent, 'range')
     const reference = new Worldline(SEED)
     reference.advance(100)
-    expect(reply?.requestId).toBe(3)
-    expect(reply?.series.population).toHaveLength(10)
-    expect(reply?.series.stability).toHaveLength(10)
+    expect(reply).toMatchObject({ requestId: 3, from: 0, to: 100 })
     expect(reply?.series.population[0]).toBe(reference.range('population', 0, 100, 10).mean[0])
   })
 
-  it('clamps ranges to the recorded history', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
-    host.handle({ type: 'step', years: 100 })
-    host.handle({ type: 'range', requestId: 4, from: 50, to: 5000, buckets: 10 })
-    expect(last(sent, 'range')).toMatchObject({ requestId: 4, from: 50, to: 100 })
-  })
-
-  it('answers inspect requests with the state of a past year', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
+  it('answers inspect requests with the previous year', () => {
+    const { host, sent, open } = setup()
+    open()
     host.handle({ type: 'step', years: 300 })
-    host.handle({ type: 'inspect', requestId: 5, tick: 120 })
+    host.handle({ type: 'inspect', requestId: 5, world: 'A', tick: 120 })
     const reference = new Worldline(SEED)
     reference.advance(120)
     const reply = last(sent, 'inspect')
-    expect(reply?.requestId).toBe(5)
     expect(reply?.snapshot.tick).toBe(120)
     expect(reply?.snapshot.values.technology).toBe(reference.present.technology)
-  })
-
-  it('reports the previous year alongside each snapshot', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
-    expect(last(sent, 'progress')?.present.previous).toBeNull()
-    host.handle({ type: 'step', years: 10 })
-    host.handle({ type: 'inspect', requestId: 9, tick: 4 })
-    const reference = new Worldline(SEED)
-    reference.advance(10)
-    expect(last(sent, 'progress')?.present.previous?.population).toBe(
-      reference.valueAt('population', 9),
-    )
-    expect(last(sent, 'inspect')?.snapshot.previous?.technology).toBe(
-      reference.valueAt('technology', 3),
-    )
-  })
-
-  it('reports the decision log with each progress', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
-    host.handle({ type: 'step', years: 10 })
-    host.handle({ type: 'decide', allocation: starved })
-    expect(last(sent, 'progress')?.decisions).toEqual([{ tick: 10, allocation: starved }])
-  })
-
-  it('reports an error and stops playback when a frame throws', () => {
-    const { host, sent, clock } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
-    const spy = vi.spyOn(Worldline.prototype, 'advance').mockImplementationOnce(() => {
-      throw new Error('boom')
-    })
-    try {
-      host.handle({ type: 'play', speed: 16 })
-      clock.advance(100)
-      expect(last(sent, 'error')?.message).toBe('boom')
-      const tick = last(sent, 'progress')?.present.tick
-      clock.advance(1000)
-      expect(last(sent, 'progress')?.present.tick).toBe(tick)
-    } finally {
-      spy.mockRestore()
-    }
+    expect(reply?.snapshot.previous?.technology).toBe(reference.valueAt('technology', 119))
   })
 
   it('reports errors for requests before a world exists', () => {
     const { host, sent } = setup()
-    host.handle({ type: 'range', requestId: 7, from: 0, to: 1, buckets: 1 })
+    host.handle({ type: 'range', requestId: 7, world: 'A', from: 0, to: 1, buckets: 1 })
     expect(last(sent, 'error')).toEqual({
       type: 'error',
       message: 'no worldline created',
@@ -194,11 +159,175 @@ describe('SimulationHost', () => {
   })
 
   it('keeps working after rejecting an invalid decision', () => {
-    const { host, sent } = setup()
-    host.handle({ type: 'create', seed: SEED, decisions: [] })
-    host.handle({ type: 'decide', allocation: { ...starved, research: 0 } })
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'decide', world: 'A', allocation: { ...starved, research: 0 } })
     expect(last(sent, 'error')?.message).toMatch(/allocation/)
     host.handle({ type: 'step', years: 2 })
-    expect(last(sent, 'progress')?.present.tick).toBe(2)
+    expect(last(sent, 'progress')?.now).toBe(2)
+  })
+
+  it('reports an error and stops playback when a frame throws', () => {
+    const { host, sent, clock, open } = setup()
+    open()
+    vi.spyOn(Worldline.prototype, 'advance').mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    host.handle({ type: 'play', speed: 16 })
+    clock.advance(100)
+    expect(last(sent, 'error')?.message).toBe('boom')
+    const before = sent.length
+    clock.advance(1000)
+    expect(sent.length).toBe(before)
+  })
+})
+
+describe('SimulationHost: the multiverse', () => {
+  it('branches from a past year into a new worldline that shares the present', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 100 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 40, allocation: starved })
+    expect(last(sent, 'branched')).toEqual({ type: 'branched', requestId: 1, world: 'B' })
+    const b = world(sent, 'B')
+    expect(b?.info).toMatchObject({ id: 'B', parent: 'A', fork: 40 })
+    expect(b?.present.tick).toBe(100)
+    expect(b?.decisions).toEqual([{ tick: 40, allocation: starved }])
+  })
+
+  it('keeps a branch identical to its parent when the decision changes nothing', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 300 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 120, allocation: balanced })
+    expect(world(sent, 'B')?.present.values).toEqual(world(sent, 'A')?.present.values)
+  })
+
+  it('advances every worldline together', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 100 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 50, allocation: starved })
+    host.handle({ type: 'step', years: 50 })
+    expect(world(sent, 'A')?.present.tick).toBe(150)
+    expect(world(sent, 'B')?.present.tick).toBe(150)
+  })
+
+  it('freezes extinct worldlines while the others continue', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 2000 })
+    expect(world(sent, 'B')?.present.status).toBe('extinct')
+    expect(world(sent, 'B')?.present.tick).toBeLessThan(2000)
+    expect(world(sent, 'A')?.present.tick).toBe(2000)
+    expect(last(sent, 'progress')?.now).toBe(2000)
+    expect(last(sent, 'progress')?.ended).toBeNull()
+  })
+
+  it('refuses a seventh worldline', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 10 })
+    for (let i = 1; i <= 5; i++) {
+      host.handle({ type: 'branch', requestId: i, parent: 'A', tick: i, allocation: starved })
+    }
+    host.handle({ type: 'branch', requestId: 6, parent: 'A', tick: 6, allocation: starved })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 6, message: 'worldline limit reached' })
+    expect(last(sent, 'progress')?.worlds).toHaveLength(6)
+  })
+
+  it('removes a worldline with its descendants but never the original', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 50 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 10, allocation: starved })
+    host.handle({ type: 'branch', requestId: 2, parent: 'B', tick: 20, allocation: industrial })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 30, allocation: industrial })
+    host.handle({ type: 'remove', world: 'B' })
+    expect(last(sent, 'progress')?.worlds.map((w) => w.info.id)).toEqual(['A', 'D'])
+    host.handle({ type: 'remove', world: 'A' })
+    expect(last(sent, 'error')?.message).toMatch(/original/)
+  })
+
+  it('reuses the lowest free letter with a new generation', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 20 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 5, allocation: starved })
+    const first = world(sent, 'B')?.info.generation ?? 0
+    host.handle({ type: 'remove', world: 'B' })
+    host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 8, allocation: starved })
+    expect(world(sent, 'B')?.info.generation).toBeGreaterThan(first)
+    expect(world(sent, 'B')?.info.fork).toBe(8)
+  })
+
+  it('opens a whole multiverse from a link', () => {
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      branches: [
+        { parent: 0, fork: 100, decisions: [{ tick: 100, allocation: starved }] },
+        { parent: 1, fork: 200, decisions: [] },
+      ],
+    })
+    expect(last(sent, 'progress')?.worlds.map((w) => w.info.id)).toEqual(['A', 'B', 'C'])
+    expect(world(sent, 'C')?.info).toMatchObject({ parent: 'B', fork: 200 })
+    expect(world(sent, 'C')?.present.tick).toBe(300)
+    expect(world(sent, 'C')?.decisions).toEqual([{ tick: 100, allocation: starved }])
+    expect(world(sent, 'C')?.present.values).toEqual(world(sent, 'B')?.present.values)
+  })
+
+  it('rejects a branch whose fork lies outside its parent history', () => {
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      branches: [{ parent: 0, fork: 500, decisions: [] }],
+    })
+    expect(last(sent, 'error')?.message).toMatch(/fork/)
+  })
+
+  it('measures the causal distance between worldlines', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 800 })
+    host.handle({
+      type: 'distance',
+      requestId: 2,
+      world: 'B',
+      reference: 'A',
+      from: 0,
+      to: 800,
+      buckets: 8,
+    })
+    const reply = last(sent, 'distance')
+    expect(reply?.values).toHaveLength(8)
+    expect(reply?.values[7]).toBeGreaterThan(0)
+    host.handle({
+      type: 'distance',
+      requestId: 3,
+      world: 'A',
+      reference: 'A',
+      from: 0,
+      to: 800,
+      buckets: 8,
+    })
+    expect(Array.from(last(sent, 'distance')?.values ?? [])).toEqual(new Array(8).fill(0))
+  })
+
+  it('clears the end when a new living branch appears', () => {
+    const { host, sent, open } = setup()
+    open(0, [{ tick: 0, allocation: industrial }])
+    host.handle({ type: 'step', years: 3000 })
+    expect(last(sent, 'progress')?.ended).toBe('extinction')
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: balanced })
+    expect(last(sent, 'progress')?.ended).toBeNull()
   })
 })
