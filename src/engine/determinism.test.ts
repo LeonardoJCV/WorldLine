@@ -52,12 +52,12 @@ describe('golden hashes', () => {
     }
     expect(golden).toMatchInlineSnapshot(`
       {
-        "1/shifting": "b676c843 0116ca43@5000",
-        "1/steady": "8ff65f19 8e541983@5000",
-        "4294967295/shifting": "a5d66e11 cf14e0fd@5000",
-        "4294967295/steady": "f67ed8f9 94669f33@5000",
-        "482913/shifting": "fbfe0784 68afacc7@5000",
-        "482913/steady": "16d2c866 42bda2e1@5000",
+        "1/shifting": "aeb1cbca ddcfedc9@5000",
+        "1/steady": "177ac51d 537a5d92@5000",
+        "4294967295/shifting": "ae5e39c0 795871e1@5000",
+        "4294967295/steady": "648dbea4 68b49e5f@5000",
+        "482913/shifting": "4f80c4a1 1c51ab0d@5000",
+        "482913/steady": "470d2965 a42a4111@5000",
       }
     `)
   })

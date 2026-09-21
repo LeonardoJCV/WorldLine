@@ -80,7 +80,10 @@ export function derive(
   const pollution =
     K.pN * K.pollutionScale * s.energy * (1 - clean) * pow(s.population / K.P0, K.pollutionPopExp)
   const transition = s.economy / K.yDT
-  const birthRate = K.bMin + (K.bMax - K.bMin) / (1 + transition * transition)
+  const fed = smoothstep(K.fertilityFrom, K.fertilityTo, foodSecurity)
+  const birthRate =
+    (K.bMin + (K.bMax - K.bMin) / (1 + transition * transition)) *
+    (K.fertilityFloor + (1 - K.fertilityFloor) * fed)
   const hunger = Math.max(0, 1 - foodSecurity)
   const degradation = 1 - s.environment / 100
   const deathRate =
