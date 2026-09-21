@@ -25,7 +25,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (route.screen === 'observatory') simulation.getState().open(route.link)
+    if (route.screen === 'genesis') simulation.getState().pause()
   }, [route])
 
   const start = (link: WorldLink) => {
@@ -39,5 +39,9 @@ export function App() {
     setRoute({ screen: 'genesis' })
   }
 
-  return route.screen === 'genesis' ? <Genesis onStart={start} /> : <Observatory onLeave={leave} />
+  return route.screen === 'genesis' ? (
+    <Genesis onStart={start} />
+  ) : (
+    <Observatory link={route.link} onLeave={leave} />
+  )
 }

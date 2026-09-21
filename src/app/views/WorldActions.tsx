@@ -6,7 +6,7 @@ import type { MessageKey } from '../i18n/en.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import { serializeWorld } from '../world/file.ts'
 import { saveWorld } from '../world/library.ts'
-import type { WorldLink } from '../world/link.ts'
+import { linkHash, type WorldLink } from '../world/link.ts'
 
 export function WorldActions() {
   const t = useT()
@@ -27,7 +27,8 @@ export function WorldActions() {
   }
 
   const copy = () => {
-    navigator.clipboard.writeText(window.location.href).then(
+    const url = `${window.location.origin}${window.location.pathname}${linkHash(link)}`
+    navigator.clipboard.writeText(url).then(
       () => setStatus('world.copied'),
       () => setStatus('world.copyFailed'),
     )

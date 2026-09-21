@@ -45,6 +45,29 @@ test('refuses files that are not worlds', async ({ page }) => {
   await expect(page.getByText('This file is not a WORLDLINE world.')).toBeVisible()
 })
 
+test('clears the import error once a valid file is imported', async ({ page }) => {
+  await worldAtYearThree(page)
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export file' }).click()
+  const file = await download
+  const path = await file.path()
+  await page.getByRole('button', { name: 'New world' }).click()
+  await page.getByLabel('Import file').setInputFiles({
+    name: 'notes.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"hello":"world"}'),
+  })
+  await expect(page.getByText('This file is not a WORLDLINE world.')).toBeVisible()
+  await page.getByLabel('Import file').setInputFiles({
+    name: 'world.json',
+    mimeType: 'application/json',
+    buffer: await readFile(path),
+  })
+  await expect(page.getByText('This file is not a WORLDLINE world.')).toBeHidden()
+  await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(page.getByTestId('year')).toHaveText('0003')
+})
+
 test('copies the world link', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await worldAtYearThree(page)

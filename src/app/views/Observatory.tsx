@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
@@ -7,7 +7,8 @@ import type { Strand } from '../current/normalize.ts'
 import { ZoomControls } from '../current/ZoomControls.tsx'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
-import { useSimulation } from '../sim/runtime.ts'
+import { simulation, useSimulation } from '../sim/runtime.ts'
+import type { WorldLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
@@ -18,7 +19,16 @@ import { useElementSize } from './useElementSize.ts'
 import { WorldActions } from './WorldActions.tsx'
 import './observatory.css'
 
-export function Observatory({ onLeave }: { readonly onLeave: () => void }) {
+export function Observatory({
+  link,
+  onLeave,
+}: {
+  readonly link: WorldLink
+  readonly onLeave: () => void
+}) {
+  useEffect(() => {
+    simulation.getState().open(link)
+  }, [link])
   useLinkSync()
   const t = useT()
   const stageRef = useRef<HTMLElement>(null)

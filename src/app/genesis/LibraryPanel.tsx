@@ -73,15 +73,21 @@ export function LibraryPanel({ onOpen }: LibraryPanelProps) {
           type="file"
           accept="application/json,.json"
           onChange={(event) => {
-            const file = event.target.files?.[0]
+            setProblem(null)
+            const input = event.target
+            const file = input.files?.[0]
             if (!file) return
             file.text().then(
               (text) => {
                 const parsed = parseWorldFile(text)
                 if (parsed) onOpen(parsed.link)
                 else setProblem('library.invalid')
+                input.value = ''
               },
-              () => setProblem('library.invalid'),
+              () => {
+                setProblem('library.invalid')
+                input.value = ''
+              },
             )
           }}
         />

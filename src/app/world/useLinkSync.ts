@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { MODEL_VERSION } from '../../engine/params.ts'
-import { useSimulation } from '../sim/runtime.ts'
+import { simulation, useSimulation } from '../sim/runtime.ts'
 import { linkHash } from './link.ts'
 
 export function useLinkSync(): void {
@@ -10,8 +10,14 @@ export function useLinkSync(): void {
   const decisions = useSimulation((s) => s.decisions)
 
   useEffect(() => {
-    if (seed === null || tick === null || playing) return
-    const hash = linkHash({ version: MODEL_VERSION, seed, tick, decisions })
+    const state = simulation.getState()
+    if (state.seed === null || state.present === null || state.playing) return
+    const hash = linkHash({
+      version: MODEL_VERSION,
+      seed: state.seed,
+      tick: state.present.tick,
+      decisions: state.decisions,
+    })
     if (window.location.hash !== hash || window.location.search !== '') {
       history.replaceState(null, '', `${window.location.pathname}${hash}`)
     }
