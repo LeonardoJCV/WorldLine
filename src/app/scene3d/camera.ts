@@ -9,6 +9,9 @@ export const RAIL_BACK = 10.5
 export const RAIL_OFFSET: Vec3 = [-3, 4, 15.5]
 export const FOCUS_RADIUS = 0.9
 export const OTHER_RADIUS = 0.45
+export const RAIL_FOV = 38
+// FIX: do alvo do trilho até o início da janela de tempo [-12, 12], com folga
+export const FRAME_HALF_WIDTH = 24 - RAIL_BACK + 1
 
 export function railPose(head: Vec3): Pose {
   const target: Vec3 = [head[0] - RAIL_BACK, head[1], head[2]]
@@ -16,6 +19,13 @@ export function railPose(head: Vec3): Pose {
     target,
     position: [target[0] + RAIL_OFFSET[0], target[1] + RAIL_OFFSET[1], target[2] + RAIL_OFFSET[2]],
   }
+}
+
+export function railDistance(aspect: number, fov = RAIL_FOV): number {
+  const distance = Math.hypot(...RAIL_OFFSET)
+  const visible = distance * Math.tan((fov * Math.PI) / 360) * aspect
+  if (!(visible > 0)) return 1
+  return Math.max(1, FRAME_HALF_WIDTH / visible)
 }
 
 export function approach(current: Vec3, goal: Vec3, dt: number, rate = 4): Vec3 {

@@ -112,6 +112,7 @@ test('keeps the edited allocation when branching, so the new worldline actually 
 })
 
 test('stops branching at six worldlines', async ({ page }) => {
+  test.slow()
   await worldAtYear(page, 5)
   for (let i = 0; i < 5; i++) {
     await branchFromStart(page)

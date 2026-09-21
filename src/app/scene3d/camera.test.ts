@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   ERA_GAP,
+  FRAME_HALF_WIDTH,
   RAIL_BACK,
+  RAIL_FOV,
   RAIL_OFFSET,
   approach,
   eraOffsets,
   ERA_ROW,
   pickTarget,
   pinchFactor,
+  railDistance,
   railPose,
   yearAtPointer,
 } from './camera.ts'
@@ -105,5 +108,29 @@ describe('pinchFactor', () => {
     expect(pinchFactor(100, 200)).toBe(0.5)
     expect(pinchFactor(200, 100)).toBe(2)
     expect(pinchFactor(0, 100)).toBe(1)
+  })
+})
+
+describe('railDistance', () => {
+  const visibleHalfWidth = (aspect: number) =>
+    Math.hypot(...RAIL_OFFSET) *
+    railDistance(aspect) *
+    Math.tan((RAIL_FOV * Math.PI) / 360) *
+    aspect
+
+  it('keeps the desktop framing', () => {
+    expect(railDistance(1440 / 420)).toBe(1)
+    expect(railDistance(1440 / 500)).toBe(1)
+  })
+
+  it('backs away on a narrow screen until the time window fits', () => {
+    expect(railDistance(390 / 330)).toBeGreaterThan(1.5)
+    expect(visibleHalfWidth(390 / 330)).toBeCloseTo(FRAME_HALF_WIDTH, 5)
+    expect(visibleHalfWidth(0.6)).toBeCloseTo(FRAME_HALF_WIDTH, 5)
+  })
+
+  it('ignores a degenerate aspect', () => {
+    expect(railDistance(0)).toBe(1)
+    expect(railDistance(Number.NaN)).toBe(1)
   })
 })

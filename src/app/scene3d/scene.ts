@@ -38,7 +38,16 @@ import {
 } from '../graphics/settings.ts'
 import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
 import { PLANET_LIGHT, type PlanetPalette, type PlanetState } from '../planet/uniforms.ts'
-import { approach, FOCUS_RADIUS, OTHER_RADIUS, railPose, RAIL_OFFSET, type Vec3 } from './camera.ts'
+import {
+  approach,
+  FOCUS_RADIUS,
+  OTHER_RADIUS,
+  railDistance,
+  railPose,
+  RAIL_FOV,
+  RAIL_OFFSET,
+  type Vec3,
+} from './camera.ts'
 import { axisPoint, type PathData } from './path.ts'
 import { createStream, particleCounts, type Stream } from './streams.ts'
 
@@ -128,7 +137,7 @@ export function createCurrentScene(
   const scene = new Scene()
   scene.background = new Color(VOID)
   scene.fog = new FogExp2(VOID, 0.022)
-  const camera = new PerspectiveCamera(38, 1, 0.1, 200)
+  const camera = new PerspectiveCamera(RAIL_FOV, 1, 0.1, 200)
   const stars = starField(options.seed)
   scene.add(stars)
 
@@ -143,6 +152,7 @@ export function createCurrentScene(
   const initial = railPose([12, 0, 0])
   let target: Vec3 = initial.target
   let goal: Vec3 = initial.target
+  let reach = 1
   camera.position.set(...initial.position)
   controls.target.set(...target)
 
@@ -371,13 +381,23 @@ export function createCurrentScene(
       if (bloom && spec.bloomHalf) bloom.setSize((width * dpr) / 2, (height * dpr) / 2)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
+      const nextReach = railDistance(camera.aspect)
+      if (nextReach !== reach) {
+        const k = nextReach / reach
+        camera.position.set(
+          target[0] + (camera.position.x - target[0]) * k,
+          target[1] + (camera.position.y - target[1]) * k,
+          target[2] + (camera.position.z - target[2]) * k,
+        )
+        reach = nextReach
+      }
       for (const entry of entries.values()) entry.stream.setPixelRatio(dpr)
     },
     recenter() {
       camera.position.set(
-        target[0] + RAIL_OFFSET[0],
-        target[1] + RAIL_OFFSET[1],
-        target[2] + RAIL_OFFSET[2],
+        target[0] + RAIL_OFFSET[0] * reach,
+        target[1] + RAIL_OFFSET[1] * reach,
+        target[2] + RAIL_OFFSET[2] * reach,
       )
     },
     project(point) {
