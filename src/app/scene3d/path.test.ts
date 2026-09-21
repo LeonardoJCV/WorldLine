@@ -34,4 +34,21 @@ describe('buildPath', () => {
     expect(headPoint(path)?.[0]).toBeCloseTo(HALF_LENGTH, 5)
     expect(axisPoint(path, 1.5)).toBeNull()
   })
+
+  it('hides a world that forks after the window end', () => {
+    const path = buildPath(series(0, 100, 11), new Float32Array(16 * 2), 0, 100, 150, 16)
+    expect(path.visible).toBe(false)
+    expect(headPoint(path)).toBeNull()
+  })
+
+  it('hides an extinct world whose series ends before the window start', () => {
+    const path = buildPath(series(30, 30, 1), new Float32Array(16 * 2), 50, 100, 0, 16)
+    expect(path.visible).toBe(false)
+    expect(headPoint(path)).toBeNull()
+  })
+
+  it('handles a zero-length window without producing NaN', () => {
+    const path = buildPath(series(0, 100, 11), new Float32Array(16 * 2), 50, 50, 0, 16)
+    expect(path.data.every((v) => !Number.isNaN(v))).toBe(true)
+  })
 })

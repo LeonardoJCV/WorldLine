@@ -9,6 +9,7 @@ export interface PathData {
   readonly data: Float32Array
   readonly alive: readonly [number, number]
   readonly samples: number
+  readonly visible: boolean
 }
 
 export function buildPath(
@@ -25,6 +26,7 @@ export function buildPath(
   const last = range.to
   const span = Math.max(1, to - from)
   const bucketSpan = Math.max(1, range.to - range.from)
+  let visible = false
   for (let i = 0; i < samples; i++) {
     const year = sampleYear(i, from, to, samples)
     const k = Math.min(
@@ -46,9 +48,10 @@ export function buildPath(
     data[row2] = values[4] ?? 0
     data[row2 + 1] = values[5] ?? 0
     data[row2 + 2] = count > 0 && year >= first - 1e-6 && year <= last + 1e-6 ? 1 : 0
+    if (data[row2 + 2] === 1) visible = true
   }
   const unit = (year: number) => Math.min(1, Math.max(0, (year - from) / span))
-  return { data, alive: [unit(first), unit(Math.max(first, last))], samples }
+  return { data, alive: [unit(first), unit(Math.max(first, last))], samples, visible }
 }
 
 export function axisPoint(path: PathData, u: number): [number, number, number] | null {
@@ -62,5 +65,5 @@ export function axisPoint(path: PathData, u: number): [number, number, number] |
 }
 
 export function headPoint(path: PathData): [number, number, number] | null {
-  return axisPoint(path, path.alive[1])
+  return path.visible ? axisPoint(path, path.alive[1]) : null
 }

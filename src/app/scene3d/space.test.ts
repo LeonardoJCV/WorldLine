@@ -58,4 +58,13 @@ describe('axisOffsets', () => {
     ])
     expect(Array.from(offsets.get('C') ?? [])).toEqual(Array.from(offsets.get('B') ?? []))
   })
+
+  it('expects parents before children and returns zero offset for orphans', () => {
+    const distance = new Float32Array(SAMPLES).fill(0.5)
+    const offsets = axisOffsets([
+      { id: 'B', parent: 'A', distance },
+      { id: 'A', parent: null, distance: null },
+    ])
+    expect(Array.from(offsets.get('B') ?? []).every((v) => v === 0)).toBe(true)
+  })
 })
