@@ -8,7 +8,10 @@ import {
   MAX_WIDTH,
   MIN_WIDTH,
   buildRibbons,
+  episodeY,
+  eraLabelY,
   layoutEvents,
+  markerAt,
   stageLayout,
   xToYear,
   yearToX,
@@ -206,5 +209,43 @@ describe('layoutEvents', () => {
     )
     expect(markers).toHaveLength(1)
     expect(markers[0]?.x2).toBe(yearToX(80, 20, 100, frame))
+  })
+})
+
+describe('markerAt', () => {
+  const markers = layoutEvents(
+    [
+      record('agricultural_revolution', 10, null),
+      record('famine', 40, 60),
+      record('epidemic', 80, 83),
+    ],
+    0,
+    100,
+    100,
+    frame,
+    120,
+  )
+
+  it('finds an era by its stem or its label', () => {
+    expect(markerAt(markers, 100, frame.centerY - 20, frame, 120)?.event).toBe(
+      'agricultural_revolution',
+    )
+    expect(markerAt(markers, 160, eraLabelY(frame, 0), frame, 120)?.event).toBe(
+      'agricultural_revolution',
+    )
+  })
+
+  it('finds an episode by its band and a pulse by its tick', () => {
+    expect(markerAt(markers, 400, episodeY(frame, 0) + 2, frame, 120)?.event).toBe('famine')
+    expect(markerAt(markers, 660, frame.centerY + 10, frame, 120)?.event).toBe('epidemic')
+  })
+
+  it('misses empty space', () => {
+    expect(markerAt(markers, 500, frame.centerY - 150, frame, 120)).toBeNull()
+  })
+
+  it('clamps events that start before the window', () => {
+    const [early] = layoutEvents([record('famine', 5, 50)], 20, 100, 100, frame, 120)
+    expect(early?.x).toBe(frame.left)
   })
 })

@@ -48,6 +48,7 @@ const SMOG = hexToRgb('#b0703a')
 const SNOW = hexToRgb('#e6e4f5')
 
 function unit(value: number): number {
+  if (!Number.isFinite(value)) return 0
   return Math.min(Math.max(value, 0), 1)
 }
 

@@ -76,13 +76,14 @@ function jitter(strand: number, column: number): number {
   return (s - Math.floor(s)) * 2 - 1
 }
 
+export function sampleRow(series: Series, index: number): Row {
+  const row = {} as Record<Variable, number>
+  for (const variable of VARIABLES) row[variable] = series[variable][index] ?? 0
+  return row
+}
+
 function rows(series: Series): Row[] {
-  const count = series.population.length
-  return Array.from({ length: count }, (_, i) => {
-    const row = {} as Record<Variable, number>
-    for (const variable of VARIABLES) row[variable] = series[variable][i] ?? 0
-    return row
-  })
+  return Array.from({ length: series.population.length }, (_, i) => sampleRow(series, i))
 }
 
 export function buildRibbons(series: Series, frame: Frame, phase: number): Ribbon[] {
@@ -152,7 +153,7 @@ export function layoutEvents(
     const end = record.end ?? present
     if (end < from || record.start > to) return
     const kind = KIND_OF.get(record.event) ?? 'pulse'
-    const x = yearToX(record.start, from, to, frame)
+    const x = yearToX(Math.max(record.start, from), from, to, frame)
     const x2 = yearToX(Math.min(end, to), from, to, frame)
     let row = 0
     let align: 'start' | 'end' = 'start'
@@ -172,4 +173,43 @@ export function layoutEvents(
   })
 
   return markers
+}
+
+export const ERA_ROW_HEIGHT = 20
+export const EPISODE_ROW_HEIGHT = 8
+
+export function eraLabelY(frame: Frame, row: number): number {
+  return frame.centerY - frame.height * 0.26 - Math.max(row, 0) * ERA_ROW_HEIGHT
+}
+
+export function episodeY(frame: Frame, row: number): number {
+  return frame.centerY + frame.height * 0.2 + row * EPISODE_ROW_HEIGHT
+}
+
+export function markerAt(
+  markers: readonly Marker[],
+  x: number,
+  y: number,
+  frame: Frame,
+  labelWidth: number,
+): Marker | null {
+  for (let i = markers.length - 1; i >= 0; i--) {
+    const marker = markers[i]
+    if (!marker) continue
+    if (marker.kind === 'era') {
+      const labelY = eraLabelY(frame, marker.row)
+      const onStem = Math.abs(x - marker.x) <= 6 && y >= labelY - 8 && y <= frame.centerY + 6
+      const left = marker.align === 'end' ? marker.x - labelWidth : marker.x
+      const onLabel =
+        marker.row >= 0 && x >= left && x <= left + labelWidth && Math.abs(y - labelY) <= 9
+      if (onStem || onLabel) return marker
+    } else if (marker.kind === 'episode') {
+      const bandY = episodeY(frame, marker.row) + 1.5
+      const right = Math.max(marker.x2, marker.x + 2)
+      if (x >= marker.x - 3 && x <= right + 3 && Math.abs(y - bandY) <= 6) return marker
+    } else if (Math.abs(x - marker.x) <= 5 && y >= frame.centerY && y <= frame.centerY + 18) {
+      return marker
+    }
+  }
+  return null
 }

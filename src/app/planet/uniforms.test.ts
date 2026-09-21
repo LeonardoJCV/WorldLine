@@ -102,4 +102,8 @@ describe('planetState', () => {
     expect(state.lights).toBe(0)
     expect(state.vegetation).toBe(0)
   })
+
+  it('treats non-finite values as absent', () => {
+    expect(planetState(snapshot({ population: Number.NaN })).lights).toBe(0)
+  })
 })
