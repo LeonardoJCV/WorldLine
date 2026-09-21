@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.vercel/
+playwright-report/
+test-results/
+*.log
+.env*
+.DS_Store
+
+*.md
+!README.md
+
+.notes/
+.superpowers/
+docs/superpowers/
+conceito/
