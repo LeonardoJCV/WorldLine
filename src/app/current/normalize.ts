@@ -1,3 +1,4 @@
+import { profile } from '../../engine/distance.ts'
 import type { Variable } from '../../engine/state.ts'
 
 export const STRANDS = [
@@ -12,24 +13,15 @@ export type Strand = (typeof STRANDS)[number]
 
 export type Row = Readonly<Record<Variable, number>>
 
-function unit(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return value < 0 ? 0 : value > 1 ? 1 : value
+const INDEX: Readonly<Record<Strand, number>> = {
+  population: 0,
+  food: 1,
+  energy: 2,
+  technology: 3,
+  economy: 4,
+  environment: 5,
 }
 
 export function normalize(strand: Strand, row: Row): number {
-  switch (strand) {
-    case 'population':
-      return unit((Math.log10(Math.max(row.population, 1)) - 4) / 4)
-    case 'food':
-      return unit(row.food / Math.max(row.population, 1) / 0.6)
-    case 'energy':
-      return unit(row.energy / 15)
-    case 'technology':
-      return unit(row.technology / 100)
-    case 'economy':
-      return unit(row.economy / 15)
-    case 'environment':
-      return unit(row.environment / 100)
-  }
+  return profile(row)[INDEX[strand]] ?? 0
 }
