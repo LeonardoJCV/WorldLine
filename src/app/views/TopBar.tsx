@@ -99,11 +99,14 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
               {formatYear(cursor ?? now)}
             </span>
           </p>
-          {cursor !== null && (
-            <button type="button" className="year__return" onClick={() => setCursor(null)}>
-              {t('current.returnToPresent')}
-            </button>
-          )}
+          <button
+            type="button"
+            className="year__return"
+            data-idle={cursor === null || undefined}
+            onClick={() => setCursor(null)}
+          >
+            {t('current.returnToPresent')}
+          </button>
         </div>
       </div>
     </header>

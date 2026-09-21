@@ -111,6 +111,11 @@
   gap: 4px;
 }
 
+/* FIX: reserva o espaço do botão para a barra não mudar de altura */
+.year__return[data-idle] {
+  visibility: hidden;
+}
+
 .graphics {
   position: relative;
 }
