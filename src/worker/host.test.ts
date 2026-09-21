@@ -293,6 +293,52 @@ describe('SimulationHost: the multiverse', () => {
     expect(last(sent, 'error')?.message).toMatch(/fork/)
   })
 
+  it('leaves the previous multiverse intact when a later open is invalid', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 50 })
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      branches: [{ parent: 0, fork: 500, decisions: [] }],
+    })
+    expect(last(sent, 'error')?.message).toMatch(/fork/)
+    host.handle({ type: 'step', years: 10 })
+    expect(last(sent, 'progress')?.now).toBe(60)
+    expect(world(sent, 'A')?.present.tick).toBe(60)
+  })
+
+  it('rejects opening more than six worldlines', () => {
+    const { host, sent } = setup()
+    const branches = Array.from({ length: 6 }, () => ({
+      parent: 0,
+      fork: 0,
+      decisions: [] as { tick: number; allocation: Allocation }[],
+    }))
+    host.handle({ type: 'open', seed: SEED, tick: 10, root: [], branches })
+    expect(last(sent, 'error')?.message).toBe('worldline limit reached')
+    host.handle({ type: 'range', requestId: 1, world: 'A', from: 0, to: 1, buckets: 1 })
+    expect(last(sent, 'error')?.message).toBe('no worldline created')
+  })
+
+  it('rejects an open whose branch has an invalid allocation', () => {
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 50,
+      root: [],
+      branches: [
+        { parent: 0, fork: 10, decisions: [{ tick: 10, allocation: { ...starved, research: 0 } }] },
+      ],
+    })
+    expect(last(sent, 'error')?.message).toMatch(/allocation/)
+    host.handle({ type: 'range', requestId: 2, world: 'A', from: 0, to: 1, buckets: 1 })
+    expect(last(sent, 'error')?.message).toBe('no worldline created')
+  })
+
   it('measures the causal distance between worldlines', () => {
     const { host, sent, open } = setup()
     open()

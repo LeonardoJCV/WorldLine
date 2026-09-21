@@ -121,30 +121,41 @@ export class SimulationHost {
     return entry
   }
 
-  #add(id: WorldlineId, parent: WorldlineId | null, fork: number, worldline: Worldline): void {
-    this.#generation += 1
-    this.#entries.push({
-      info: { id, parent, fork, generation: this.#generation },
-      worldline,
-      reported: 0,
-      open: [],
-    })
+  #make(
+    generation: number,
+    id: WorldlineId,
+    parent: WorldlineId | null,
+    fork: number,
+    worldline: Worldline,
+  ): Entry {
+    return { info: { id, parent, fork, generation }, worldline, reported: 0, open: [] }
   }
 
-  #freeId(): WorldlineId {
-    const id = WORLDLINE_IDS.find(
-      (candidate) => !this.#entries.some((e) => e.info.id === candidate),
-    )
+  #add(id: WorldlineId, parent: WorldlineId | null, fork: number, worldline: Worldline): void {
+    this.#generation += 1
+    this.#entries.push(this.#make(this.#generation, id, parent, fork, worldline))
+  }
+
+  // FIX: aceita a lista de destino para poder montar um multiverso à parte
+  // (open) antes de comprometer o estado do host
+  #freeId(entries: readonly Entry[] = this.#entries): WorldlineId {
+    const id = WORLDLINE_IDS.find((candidate) => !entries.some((e) => e.info.id === candidate))
     if (!id) throw new RangeError('worldline limit reached')
     return id
   }
 
-  #grow(parent: Entry, fork: number, own: readonly Decision[], target: number): Worldline {
+  #grow(
+    seed: number,
+    parent: Entry,
+    fork: number,
+    own: readonly Decision[],
+    target: number,
+  ): Worldline {
     if (!Number.isInteger(fork) || fork < 0 || fork > parent.worldline.present.tick) {
       throw new RangeError('fork outside the parent history')
     }
     const inherited = parent.worldline.decisions.filter((decision) => decision.tick < fork)
-    const line = new Worldline(this.#seed, [...inherited, ...own], {
+    const line = new Worldline(seed, [...inherited, ...own], {
       parent: parent.worldline,
       tick: fork,
     })
@@ -171,6 +182,9 @@ export class SimulationHost {
     return this.#now - before
   }
 
+  // FIX: monta o novo multiverso numa lista à parte; só substitui o estado
+  // do host depois que toda linha (raiz e ramos) foi construída com sucesso,
+  // para que uma abertura inválida deixe o multiverso anterior intacto
   #open(
     seed: number,
     tick: number,
@@ -179,17 +193,20 @@ export class SimulationHost {
   ): void {
     this.#stop()
     if (branches.length >= MAX_WORLDLINES) throw new RangeError('worldline limit reached')
-    this.#seed = seed
-    this.#entries = []
     const origin = new Worldline(seed, root)
     origin.advance(tick)
-    this.#add('A', null, 0, origin)
+    let generation = this.#generation
+    const entries: Entry[] = [this.#make(++generation, 'A', null, 0, origin)]
     for (const spec of branches) {
-      const parent = this.#entries[spec.parent]
+      const parent = entries[spec.parent]
       if (!parent) throw new RangeError('unknown parent worldline')
-      const line = this.#grow(parent, spec.fork, spec.decisions, tick)
-      this.#add(this.#freeId(), parent.info.id, spec.fork, line)
+      const line = this.#grow(seed, parent, spec.fork, spec.decisions, tick)
+      const id = this.#freeId(entries)
+      entries.push(this.#make(++generation, id, parent.info.id, spec.fork, line))
     }
+    this.#seed = seed
+    this.#entries = entries
+    this.#generation = generation
     this.#now = this.#latest()
     this.#report()
   }
@@ -230,7 +247,8 @@ export class SimulationHost {
       throw new RangeError('allocation must be whole percentages summing to 100')
     }
     const id = this.#freeId()
-    this.#add(id, parentId, tick, this.#grow(parent, tick, [{ tick, allocation }], this.#now))
+    const line = this.#grow(this.#seed, parent, tick, [{ tick, allocation }], this.#now)
+    this.#add(id, parentId, tick, line)
     this.#report()
     this.#send({ type: 'branched', requestId, world: id })
   }
