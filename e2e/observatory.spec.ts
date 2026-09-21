@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { useGraphics } from './stage.ts'
 
 test.beforeEach(async ({ page }) => {
+  await useGraphics(page, '2d')
   await page.goto('/?seed=482913')
 })
 

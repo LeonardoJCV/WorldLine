@@ -6,9 +6,10 @@ import { Minimap } from '../current/Minimap.tsx'
 import type { Strand } from '../current/normalize.ts'
 import { ZoomControls } from '../current/ZoomControls.tsx'
 import { TIERS } from '../graphics/settings.ts'
-import { useTier } from '../graphics/store.ts'
+import { useStage, useTier } from '../graphics/store.ts'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
+import { Current3D } from '../scene3d/Current3D.tsx'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import type { MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
@@ -35,6 +36,7 @@ export function Observatory({
   useLinkSync()
   const t = useT()
   const tier = useTier()
+  const stage = useStage()
   const stageRef = useRef<HTMLElement>(null)
   const size = useElementSize(stageRef)
   const [focus, setFocus] = useState<Strand | null>(null)
@@ -48,12 +50,29 @@ export function Observatory({
   const observed = useSimulation((s) => s.inspected ?? s.present)
   const linkVersion = useSimulation((s) => s.linkVersion)
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
+  const fullFrame = useMemo(() => {
+    if (!size) return null
+    const gutter = Math.max(16, Math.round(size.width * 0.03))
+    return {
+      left: gutter,
+      right: size.width - gutter,
+      centerY: size.height / 2,
+      height: size.height,
+    }
+  }, [size])
 
   return (
     <div className="observatory">
       <TopBar onLeave={onLeave} />
-      <main className="stage" ref={stageRef}>
-        {size && layout && (
+      <main className="stage" ref={stageRef} data-view={stage}>
+        {size && stage === '3d' && fullFrame && (
+          <>
+            <Current3D width={size.width} height={size.height} />
+            <ZoomControls />
+            <Minimap frame={fullFrame} />
+          </>
+        )}
+        {size && layout && stage === '2d' && (
           <>
             <div
               className="planet-slot"

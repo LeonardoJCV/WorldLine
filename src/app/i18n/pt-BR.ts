@@ -143,4 +143,6 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'graphics.high': 'Alto',
   'graphics.ultra': 'Ultra',
   'graphics.2d': '2D',
+  'scene.label': 'Realidades no espaço até o ano {year}',
+  'scene.recenter': 'Recentralizar',
 }

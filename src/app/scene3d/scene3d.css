@@ -1,0 +1,22 @@
+.scene3d {
+  position: absolute;
+  inset: 0;
+}
+
+.scene3d__canvas {
+  display: block;
+  touch-action: none;
+  cursor: ew-resize;
+}
+
+.scene3d__recenter {
+  position: absolute;
+  right: var(--gutter);
+  bottom: 12px;
+  padding: 4px 10px;
+  background: rgba(10, 11, 30, 0.7);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

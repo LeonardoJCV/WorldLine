@@ -145,6 +145,8 @@ export const en = {
   'graphics.high': 'High',
   'graphics.ultra': 'Ultra',
   'graphics.2d': '2D',
+  'scene.label': 'Worldlines in space up to year {year}',
+  'scene.recenter': 'Recenter',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

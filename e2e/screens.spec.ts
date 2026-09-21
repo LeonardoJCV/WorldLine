@@ -10,6 +10,7 @@ const VIEWPORTS = [
 
 for (const viewport of VIEWPORTS) {
   test(`observatory ${viewport.name}`, async ({ page }) => {
+    await useGraphics(page, '2d')
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.goto('/?seed=482913')
     await page.getByRole('button', { name: '×256' }).click()
@@ -32,6 +33,7 @@ for (const viewport of VIEWPORTS) {
 }
 
 test('observatory causal chain', async ({ page }) => {
+  await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?seed=482913')
   await page.getByRole('button', { name: '×256' }).click()
@@ -44,6 +46,7 @@ test('observatory causal chain', async ({ page }) => {
 })
 
 test('observatory intervene', async ({ page }) => {
+  await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?seed=482913')
   await page.getByRole('button', { name: '×256' }).click()
@@ -66,6 +69,7 @@ for (const level of ['low', 'high', 'ultra'] as const) {
 }
 
 test('observatory multiverse', async ({ page }) => {
+  await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?seed=482913')
   await page.getByRole('button', { name: '×256' }).click()
@@ -89,3 +93,17 @@ test('observatory multiverse', async ({ page }) => {
   await page.waitForTimeout(400)
   await page.screenshot({ path: 'screens/observatory-multiverse.png' })
 })
+
+for (const level of ['low', 'high', 'ultra'] as const) {
+  test(`observatory 3d ${level}`, async ({ page }) => {
+    await useGraphics(page, level)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/?seed=482913')
+    await page.getByRole('button', { name: '×256' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await page.waitForTimeout(3000)
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: `screens/observatory-3d-${level}.png` })
+  })
+}
