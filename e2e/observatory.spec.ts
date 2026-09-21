@@ -78,7 +78,15 @@ test('scrubs the past with the pointer', async ({ page }) => {
 
 test('lists every variable in the legend', async ({ page }) => {
   const legend = page.getByRole('list', { name: 'Variables' })
-  for (const name of ['Population', 'Food', 'Energy', 'Technology', 'Economy', 'Environment']) {
+  for (const name of [
+    'Population',
+    'Food',
+    'Energy',
+    'Technology',
+    'Economy',
+    'Environment',
+    'Stability',
+  ]) {
     await expect(legend.getByText(name)).toBeVisible()
   }
 })
@@ -116,4 +124,24 @@ test('shows the world at the observed year', async ({ page }) => {
   await page.getByRole('slider').focus()
   await page.getByRole('slider').press('Home')
   await expect(page.getByRole('img', { name: 'The world in year 0000' })).toBeVisible()
+})
+
+test('shows the state at the observed year with yearly changes', async ({ page }) => {
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  await step.click()
+  await step.click()
+  await expect(page.getByRole('heading', { name: 'State in year 0002' })).toBeVisible()
+  await expect(page.locator('.state__change').first()).not.toBeEmpty()
+})
+
+test('lists events and jumps to the selected one', async ({ page }) => {
+  await page.getByRole('button', { name: '×64' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  const item = page.getByRole('button', { name: /Golden age/ }).last()
+  await expect(item).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const year = (await item.locator('.events__year').textContent()) ?? ''
+  await item.click()
+  await expect(page.getByTestId('year')).toHaveText(year)
+  await expect(item).toHaveAttribute('aria-current', 'true')
 })

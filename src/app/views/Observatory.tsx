@@ -5,7 +5,8 @@ import type { Strand } from '../current/normalize.ts'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { useSimulation } from '../sim/runtime.ts'
-import { Legend } from './Legend.tsx'
+import { EventsPanel } from './EventsPanel.tsx'
+import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
 import { useElementSize } from './useElementSize.ts'
 import './observatory.css'
@@ -38,8 +39,11 @@ export function Observatory() {
           </>
         )}
       </main>
-      <footer className="observatory__footer">
-        <Legend focus={focus} onFocus={setFocus} />
+      <footer className="band">
+        <StatePanel focus={focus} onFocus={setFocus} />
+        <div className="band__main">
+          <EventsPanel />
+        </div>
         <div className="notices" role="status">
           {ended !== null && (
             <p>{t(ended === 'extinction' ? 'ended.extinction' : 'ended.horizon')}</p>

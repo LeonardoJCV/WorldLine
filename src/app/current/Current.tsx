@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
-import { drawCurrent } from './draw.ts'
-import { seedPhase, xToYear, type Frame } from './geometry.ts'
+import { LABEL_WIDTH, drawCurrent } from './draw.ts'
+import { layoutEvents, markerAt, seedPhase, xToYear, type Frame } from './geometry.ts'
 import type { Strand } from './normalize.ts'
+import { resolveView } from './view.ts'
 
 interface CurrentProps {
   readonly width: number
@@ -23,13 +24,19 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   const cursor = useSimulation((s) => s.cursor)
   const events = useSimulation((s) => s.events)
   const seed = useSimulation((s) => s.seed ?? 0)
+  const view = useSimulation((s) => s.view)
+  const selected = useSimulation((s) => s.selected)
+  const decisions = useSimulation((s) => s.decisions)
+  const { from, to } = resolveView(view, present)
   const columns = Math.max(2, Math.floor(frame.right - frame.left))
+  const shownFrom = data?.from ?? from
+  const shownTo = data?.to ?? to
 
   useEffect(() => {
     if (!hasWorld) return
     let cancelled = false
     const frameId = requestAnimationFrame(() => {
-      client.range(0, present, columns).then(
+      client.range(from, to, columns).then(
         (result) => {
           if (!cancelled) setData(result)
         },
@@ -44,7 +51,12 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       cancelled = true
       cancelAnimationFrame(frameId)
     }
-  }, [hasWorld, present, columns])
+  }, [hasWorld, from, to, columns])
+
+  const markers = useMemo(
+    () => (data ? layoutEvents(events, data.from, data.to, present, frame, LABEL_WIDTH) : []),
+    [data, events, present, frame],
+  )
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -60,7 +72,11 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         height,
         frame,
         data,
-        events,
+        markers,
+        selected,
+        decisions,
+        from: shownFrom,
+        to: shownTo,
         present,
         cursor,
         focus,
@@ -70,13 +86,28 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       })
     })
     return () => cancelAnimationFrame(frameId)
-  }, [width, height, frame, data, events, present, cursor, focus, seed, t])
+  }, [
+    width,
+    height,
+    frame,
+    data,
+    markers,
+    selected,
+    decisions,
+    shownFrom,
+    shownTo,
+    present,
+    cursor,
+    focus,
+    seed,
+    t,
+  ])
 
-  const setCursor = simulation.getState().setCursor
+  const { setCursor, select } = simulation.getState()
 
-  const yearAt = (event: PointerEvent<HTMLCanvasElement>) => {
+  const pointAt = (event: PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
-    return xToYear(event.clientX - rect.left, 0, present, frame)
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
@@ -107,11 +138,24 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       aria-valuetext={t('current.value', { year: formatYear(cursor ?? present) })}
       style={{ width, height }}
       onPointerDown={(event) => {
+        const { x, y } = pointAt(event)
+        const hit = markerAt(markers, x, y, frame, LABEL_WIDTH)
+        if (hit) {
+          select(hit.index)
+          return
+        }
         event.currentTarget.setPointerCapture(event.pointerId)
-        setCursor(yearAt(event))
+        setCursor(xToYear(x, shownFrom, shownTo, frame))
       }}
       onPointerMove={(event) => {
-        if (event.buttons & 1) setCursor(yearAt(event))
+        const { x, y } = pointAt(event)
+        if (event.buttons & 1) {
+          setCursor(xToYear(x, shownFrom, shownTo, frame))
+          return
+        }
+        event.currentTarget.style.cursor = markerAt(markers, x, y, frame, LABEL_WIDTH)
+          ? 'pointer'
+          : ''
       }}
       onDoubleClick={() => setCursor(null)}
       onKeyDown={onKeyDown}
