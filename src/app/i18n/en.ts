@@ -138,6 +138,13 @@ export const en = {
   'worlds.confirm': 'Remove {id} and every worldline that branched from it?',
   'worlds.confirmYes': 'Remove',
   'worlds.cancel': 'Cancel',
+  'graphics.label': 'Graphics',
+  'graphics.auto': 'Automatic',
+  'graphics.autoWith': 'Automatic ({tier})',
+  'graphics.low': 'Low',
+  'graphics.high': 'High',
+  'graphics.ultra': 'Ultra',
+  'graphics.2d': '2D',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

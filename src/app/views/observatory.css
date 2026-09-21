@@ -104,6 +104,51 @@
   gap: 16px;
 }
 
+.graphics {
+  position: relative;
+}
+
+.graphics__toggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.graphics__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--nebula);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+}
+
+.graphics__menu legend {
+  padding: 0;
+  color: var(--dim);
+  font-size: 0.75rem;
+}
+
+.graphics__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
 .year {
   display: grid;
   justify-items: end;

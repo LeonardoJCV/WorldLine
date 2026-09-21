@@ -136,4 +136,11 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'worlds.confirm': 'Remover {id} e todas as realidades que nasceram dela?',
   'worlds.confirmYes': 'Remover',
   'worlds.cancel': 'Cancelar',
+  'graphics.label': 'Gráficos',
+  'graphics.auto': 'Automático',
+  'graphics.autoWith': 'Automático ({tier})',
+  'graphics.low': 'Leve',
+  'graphics.high': 'Alto',
+  'graphics.ultra': 'Ultra',
+  'graphics.2d': '2D',
 }

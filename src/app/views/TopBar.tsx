@@ -1,4 +1,5 @@
 import { SPEEDS, type Speed } from '../../worker/protocol.ts'
+import { GraphicsMenu } from '../graphics/GraphicsMenu.tsx'
 import { formatYear } from '../i18n/format.ts'
 import { localeStore, useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
@@ -80,6 +81,7 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
       </div>
 
       <div className="topbar__end">
+        <GraphicsMenu />
         <button
           type="button"
           className="locale"
