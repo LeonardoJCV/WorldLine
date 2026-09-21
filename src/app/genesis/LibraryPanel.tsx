@@ -3,10 +3,10 @@ import { formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { parseWorldFile } from '../world/file.ts'
 import { listWorlds, removeWorld, type SavedWorld } from '../world/library.ts'
-import type { WorldLink } from '../world/link.ts'
+import type { MultiverseLink } from '../world/link.ts'
 
 interface LibraryPanelProps {
-  readonly onOpen: (link: WorldLink) => void
+  readonly onOpen: (link: MultiverseLink) => void
 }
 
 export function LibraryPanel({ onOpen }: LibraryPanelProps) {

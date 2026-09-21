@@ -20,6 +20,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [data, setData] = useState<RangeResult | null>(null)
   const hasWorld = useSimulation((s) => s.present !== null)
+  const worldFocus = useSimulation((s) => s.focus)
   const present = useSimulation((s) => s.present?.tick ?? 0)
   const cursor = useSimulation((s) => s.cursor)
   const events = useSimulation((s) => s.events)
@@ -36,7 +37,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     if (!hasWorld) return
     let cancelled = false
     const frameId = requestAnimationFrame(() => {
-      client.range(from, to, columns).then(
+      client.range(worldFocus, from, to, columns).then(
         (result) => {
           if (!cancelled) setData(result)
         },
@@ -51,7 +52,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       cancelled = true
       cancelAnimationFrame(frameId)
     }
-  }, [hasWorld, from, to, columns])
+  }, [hasWorld, worldFocus, from, to, columns])
 
   const markers = useMemo(
     () => (data ? layoutEvents(events, data.from, data.to, present, frame, LABEL_WIDTH) : []),

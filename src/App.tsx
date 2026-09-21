@@ -3,7 +3,7 @@ import { Genesis } from './app/genesis/Genesis.tsx'
 import { useLocale } from './app/i18n/index.ts'
 import { simulation } from './app/sim/runtime.ts'
 import { Observatory } from './app/views/Observatory.tsx'
-import { linkHash, type WorldLink } from './app/world/link.ts'
+import { linkHash, type MultiverseLink } from './app/world/link.ts'
 import { parseRoute, type Route } from './app/world/route.ts'
 
 function currentRoute(): Route {
@@ -28,7 +28,7 @@ export function App() {
     if (route.screen === 'genesis') simulation.getState().pause()
   }, [route])
 
-  const start = (link: WorldLink) => {
+  const start = (link: MultiverseLink) => {
     history.pushState(null, '', `${window.location.pathname}${linkHash(link)}`)
     setRoute({ screen: 'observatory', link })
   }

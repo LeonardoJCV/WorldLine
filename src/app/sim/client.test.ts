@@ -9,7 +9,7 @@ describe('SimulationClient', () => {
     const client = new SimulationClient(port)
     const received: FromWorker[] = []
     client.subscribe((message) => received.push(message))
-    client.create(482913)
+    client.open(482913, 0, [], [])
     await flush()
     expect(received.map((m) => m.type)).toEqual(['progress'])
   })
@@ -19,9 +19,12 @@ describe('SimulationClient', () => {
     const client = new SimulationClient(port)
     const received: FromWorker[] = []
     client.subscribe((message) => received.push(message))
-    client.create(482913)
+    client.open(482913, 0, [], [])
     client.step(40)
-    const [range, snapshot] = await Promise.all([client.range(0, 40, 8), client.inspect(12)])
+    const [range, snapshot] = await Promise.all([
+      client.range('A', 0, 40, 8),
+      client.inspect('A', 12),
+    ])
     expect(range.series.economy).toHaveLength(8)
     expect(snapshot.tick).toBe(12)
     expect(received.every((m) => m.type === 'progress')).toBe(true)
@@ -30,7 +33,7 @@ describe('SimulationClient', () => {
   it('rejects a request the worker could not answer', async () => {
     const { port } = connectInProcess()
     const client = new SimulationClient(port)
-    await expect(client.inspect(3)).rejects.toThrow('no worldline created')
+    await expect(client.inspect('A', 3)).rejects.toThrow('no worldline created')
   })
 
   it('stops notifying after unsubscribe', async () => {
@@ -39,7 +42,7 @@ describe('SimulationClient', () => {
     const received: FromWorker[] = []
     const unsubscribe = client.subscribe((message) => received.push(message))
     unsubscribe()
-    client.create(1)
+    client.open(1, 0, [], [])
     await flush()
     expect(received).toEqual([])
   })
@@ -49,9 +52,25 @@ describe('SimulationClient', () => {
     const client = new SimulationClient(port)
     const received: FromWorker[] = []
     client.subscribe((message) => received.push(message))
-    const inspecting = client.inspect(3)
+    const inspecting = client.inspect('A', 3)
     fail('crashed')
     await expect(inspecting).rejects.toThrow('crashed')
     expect(received).toContainEqual({ type: 'error', message: 'crashed' })
+  })
+
+  it('resolves branch and distance requests', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    client.open(482913, 0, [], [])
+    client.step(60)
+    const id = await client.branch('A', 20, {
+      agriculture: 5,
+      industry: 50,
+      research: 40,
+      conservation: 5,
+    })
+    expect(id).toBe('B')
+    const distance = await client.distance('B', 'A', 0, 60, 6)
+    expect(distance.values).toHaveLength(6)
   })
 })

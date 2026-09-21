@@ -1,23 +1,23 @@
 import { useState } from 'react'
-import { MODEL_VERSION } from '../../engine/params.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import type { MessageKey } from '../i18n/en.ts'
 import { useSimulation } from '../sim/runtime.ts'
+import { currentLink } from '../world/current.ts'
 import { serializeWorld } from '../world/file.ts'
 import { saveWorld } from '../world/library.ts'
-import { linkHash, type WorldLink } from '../world/link.ts'
+import { linkHash } from '../world/link.ts'
 
 export function WorldActions() {
   const t = useT()
   const [status, setStatus] = useState<MessageKey | null>(null)
   const seed = useSimulation((s) => s.seed)
-  const tick = useSimulation((s) => s.present?.tick ?? 0)
-  const decisions = useSimulation((s) => s.decisions)
-  if (seed === null) return null
+  const now = useSimulation((s) => s.now)
+  const worlds = useSimulation((s) => s.worlds)
+  const link = currentLink({ seed, now, worlds })
+  if (link === null) return null
 
-  const link: WorldLink = { version: MODEL_VERSION, seed, tick, decisions }
-  const name = t('world.name', { seed, year: formatYear(tick) })
+  const name = t('world.name', { seed: link.seed, year: formatYear(link.tick) })
 
   const save = () => {
     saveWorld({ id: crypto.randomUUID(), name, link, savedAt: Date.now() }).then(
@@ -39,7 +39,7 @@ export function WorldActions() {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `worldline-${seed}-${formatYear(tick)}.json`
+    anchor.download = `worldline-${link.seed}-${formatYear(link.tick)}.json`
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 0)
     setStatus('world.exported')

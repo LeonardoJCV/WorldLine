@@ -11,7 +11,7 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const t = useT()
   const locale = useLocale()
   const seed = useSimulation((s) => s.seed)
-  const present = useSimulation((s) => s.present?.tick ?? 0)
+  const now = useSimulation((s) => s.now)
   const cursor = useSimulation((s) => s.cursor)
   const playing = useSimulation((s) => s.playing)
   const speed = useSimulation((s) => s.speed)
@@ -93,7 +93,7 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
             {cursor === null ? t('year.present') : t('year.label')}
           </span>
           <span className="year__value" data-testid="year">
-            {formatYear(cursor ?? present)}
+            {formatYear(cursor ?? now)}
           </span>
         </p>
         {cursor !== null && (

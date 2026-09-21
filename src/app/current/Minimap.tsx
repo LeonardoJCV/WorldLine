@@ -21,6 +21,7 @@ export function Minimap({ frame }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drag = useRef<{ x: number; view: View | null } | null>(null)
   const [data, setData] = useState<RangeResult | null>(null)
+  const focus = useSimulation((s) => s.focus)
   const present = useSimulation((s) => s.present?.tick ?? 0)
   const view = useSimulation((s) => s.view)
   const setView = simulation.getState().setView
@@ -36,7 +37,7 @@ export function Minimap({ frame }: MinimapProps) {
     if (!visible) return
     let cancelled = false
     const frameId = requestAnimationFrame(() => {
-      client.range(0, present, width).then(
+      client.range(focus, 0, present, width).then(
         (result) => {
           if (!cancelled) setData(result)
         },
@@ -51,7 +52,7 @@ export function Minimap({ frame }: MinimapProps) {
       cancelled = true
       cancelAnimationFrame(frameId)
     }
-  }, [visible, present, width])
+  }, [visible, focus, present, width])
 
   useEffect(() => {
     const canvas = canvasRef.current

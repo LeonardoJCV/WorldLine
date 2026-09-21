@@ -1,5 +1,13 @@
 import type { Allocation, Decision } from '../../engine/state.ts'
-import type { FromWorker, Series, Snapshot, Speed, ToWorker } from '../../worker/protocol.ts'
+import type {
+  BranchSpec,
+  FromWorker,
+  Series,
+  Snapshot,
+  Speed,
+  ToWorker,
+  WorldlineId,
+} from '../../worker/protocol.ts'
 
 export interface Port {
   send(message: ToWorker): void
@@ -23,6 +31,12 @@ export interface RangeResult {
   readonly series: Series
 }
 
+export interface DistanceResult {
+  readonly from: number
+  readonly to: number
+  readonly values: Float32Array
+}
+
 type Listener = (message: FromWorker) => void
 
 interface Pending {
@@ -44,8 +58,13 @@ export class SimulationClient {
     )
   }
 
-  create(seed: number, decisions: readonly Decision[] = []): void {
-    this.#port.send({ type: 'create', seed, decisions })
+  open(
+    seed: number,
+    tick: number,
+    root: readonly Decision[],
+    branches: readonly BranchSpec[],
+  ): void {
+    this.#port.send({ type: 'open', seed, tick, root, branches })
   }
 
   play(speed: Speed): void {
@@ -60,22 +79,67 @@ export class SimulationClient {
     this.#port.send({ type: 'step', years })
   }
 
-  decide(allocation: Allocation): void {
-    this.#port.send({ type: 'decide', allocation })
+  decide(world: WorldlineId, allocation: Allocation): void {
+    this.#port.send({ type: 'decide', world, allocation })
   }
 
-  async range(from: number, to: number, buckets: number): Promise<RangeResult> {
+  async branch(parent: WorldlineId, tick: number, allocation: Allocation): Promise<WorldlineId> {
     const requestId = this.#nextId++
-    const reply = await this.#request(requestId, { type: 'range', requestId, from, to, buckets })
+    const reply = await this.#request(requestId, {
+      type: 'branch',
+      requestId,
+      parent,
+      tick,
+      allocation,
+    })
+    if (reply.type !== 'branched') throw new Error(`unexpected ${reply.type} reply`)
+    return reply.world
+  }
+
+  remove(world: WorldlineId): void {
+    this.#port.send({ type: 'remove', world })
+  }
+
+  async range(world: WorldlineId, from: number, to: number, buckets: number): Promise<RangeResult> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, {
+      type: 'range',
+      requestId,
+      world,
+      from,
+      to,
+      buckets,
+    })
     if (reply.type !== 'range') throw new Error(`unexpected ${reply.type} reply`)
     return { from: reply.from, to: reply.to, series: reply.series }
   }
 
-  async inspect(tick: number): Promise<Snapshot> {
+  async inspect(world: WorldlineId, tick: number): Promise<Snapshot> {
     const requestId = this.#nextId++
-    const reply = await this.#request(requestId, { type: 'inspect', requestId, tick })
+    const reply = await this.#request(requestId, { type: 'inspect', requestId, world, tick })
     if (reply.type !== 'inspect') throw new Error(`unexpected ${reply.type} reply`)
     return reply.snapshot
+  }
+
+  async distance(
+    world: WorldlineId,
+    reference: WorldlineId,
+    from: number,
+    to: number,
+    buckets: number,
+  ): Promise<DistanceResult> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, {
+      type: 'distance',
+      requestId,
+      world,
+      reference,
+      from,
+      to,
+      buckets,
+    })
+    if (reply.type !== 'distance') throw new Error(`unexpected ${reply.type} reply`)
+    return { from: reply.from, to: reply.to, values: reply.values }
   }
 
   subscribe(listener: Listener): () => void {
@@ -100,7 +164,11 @@ export class SimulationClient {
 
   #receive(message: FromWorker): void {
     if (
-      (message.type === 'range' || message.type === 'inspect' || message.type === 'error') &&
+      (message.type === 'range' ||
+        message.type === 'inspect' ||
+        message.type === 'branched' ||
+        message.type === 'distance' ||
+        message.type === 'error') &&
       message.requestId !== undefined
     ) {
       const pending = this.#pending.get(message.requestId)

@@ -8,7 +8,7 @@ import { ZoomControls } from '../current/ZoomControls.tsx'
 import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { simulation, useSimulation } from '../sim/runtime.ts'
-import type { WorldLink } from '../world/link.ts'
+import type { MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
@@ -23,7 +23,7 @@ export function Observatory({
   link,
   onLeave,
 }: {
-  readonly link: WorldLink
+  readonly link: MultiverseLink
   readonly onLeave: () => void
 }) {
   useEffect(() => {

@@ -6,13 +6,13 @@ import { formatCompact, formatDecimal } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { useElementSize } from '../views/useElementSize.ts'
-import type { WorldLink } from '../world/link.ts'
+import type { MultiverseLink } from '../world/link.ts'
 import { randomSeed, seedFromText } from '../world/seed.ts'
 import { LibraryPanel } from './LibraryPanel.tsx'
 import './genesis.css'
 
 interface GenesisProps {
-  readonly onStart: (link: WorldLink) => void
+  readonly onStart: (link: MultiverseLink) => void
 }
 
 export function Genesis({ onStart }: GenesisProps) {
@@ -36,7 +36,9 @@ export function Genesis({ onStart }: GenesisProps) {
           className="genesis__form"
           onSubmit={(event) => {
             event.preventDefault()
-            if (seed !== null) onStart({ version: MODEL_VERSION, seed, tick: 0, decisions: [] })
+            if (seed !== null) {
+              onStart({ version: MODEL_VERSION, seed, tick: 0, decisions: [], branches: [] })
+            }
           }}
         >
           <label className="genesis__field">

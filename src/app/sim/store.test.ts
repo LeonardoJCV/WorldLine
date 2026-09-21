@@ -146,6 +146,7 @@ describe('simulation store', () => {
       seed: 482913,
       tick: 120,
       decisions: [{ tick: 50, allocation }],
+      branches: [],
     })
     await flush()
     const state = store.getState()
@@ -154,5 +155,57 @@ describe('simulation store', () => {
     expect(state.present?.allocation).toEqual(allocation)
     expect(state.decisions).toEqual([{ tick: 50, allocation }])
     expect(state.linkVersion).toBe(7)
+  })
+
+  it('branches from the observed year and focuses the new worldline', async () => {
+    const { store } = setup()
+    const starved = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
+    store.getState().create(482913)
+    store.getState().step(100)
+    await flush()
+    store.getState().setCursor(40)
+    await flush()
+    store.getState().branch(starved)
+    await flush()
+    await flush()
+    const state = store.getState()
+    expect(state.worlds.map((w) => w.info.id)).toEqual(['A', 'B'])
+    expect(state.focus).toBe('B')
+    expect(state.cursor).toBeNull()
+    expect(state.decisions).toEqual([{ tick: 40, allocation: starved }])
+  })
+
+  it('shows the focused worldline and compares it with its origin', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(100)
+    await flush()
+    store.getState().setCursor(30)
+    await flush()
+    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    await flush()
+    await flush()
+    store.getState().setCursor(60)
+    await flush()
+    expect(store.getState().inspected?.tick).toBe(60)
+    expect(store.getState().inspectedOrigin?.tick).toBe(60)
+    store.getState().setFocus('A')
+    expect(store.getState().present).toBe(store.getState().worlds[0]?.present)
+  })
+
+  it('returns to the original when the focused worldline is removed', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(50)
+    await flush()
+    store.getState().setCursor(10)
+    await flush()
+    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    await flush()
+    await flush()
+    store.getState().remove('B')
+    await flush()
+    expect(store.getState().focus).toBe('A')
+    expect(store.getState().worlds).toHaveLength(1)
   })
 })
