@@ -8,6 +8,7 @@ export function GraphicsMenu() {
   const id = useId()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  const toggle = useRef<HTMLButtonElement>(null)
   const setting = useGraphics((s) => s.setting)
   const measured = useGraphics((s) => s.measured)
   const autoTier = tierOf('auto', measured)
@@ -18,7 +19,9 @@ export function GraphicsMenu() {
       if (!root.current?.contains(event.target as Node)) setOpen(false)
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key !== 'Escape') return
+      setOpen(false)
+      if (root.current?.contains(document.activeElement)) toggle.current?.focus()
     }
     document.addEventListener('pointerdown', onPointer)
     document.addEventListener('keydown', onKey)
@@ -31,6 +34,7 @@ export function GraphicsMenu() {
   return (
     <div className="graphics" ref={root}>
       <button
+        ref={toggle}
         type="button"
         className="graphics__toggle"
         aria-expanded={open}

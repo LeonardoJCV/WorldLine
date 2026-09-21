@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { AUTO_START, TIERS, chooseTier, resolveStage, tierOf } from './settings.ts'
+import { AUTO_START, TIERS, chooseTier, frameTime, resolveStage, tierOf } from './settings.ts'
+
+describe('frameTime', () => {
+  it('ignores frames longer than 100 ms, such as a hidden tab', () => {
+    expect(frameTime([8, 8, 8, 2000])).toBe(8)
+    expect(chooseTier(frameTime([...Array<number>(59).fill(8), 900]), false)).toBe('ultra')
+  })
+
+  it('falls back to every frame when all of them are long', () => {
+    expect(frameTime([150, 250])).toBe(200)
+    expect(frameTime([])).toBeNaN()
+  })
+})
 
 describe('chooseTier', () => {
   it('drops to low above 20 ms per frame', () => {

@@ -29,7 +29,13 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
-import { MEASURE_DELAY_MS, MEASURE_FRAMES, TIERS, type Tier } from '../graphics/settings.ts'
+import {
+  frameTime,
+  MEASURE_DELAY_MS,
+  MEASURE_FRAMES,
+  TIERS,
+  type Tier,
+} from '../graphics/settings.ts'
 import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
 import { PLANET_LIGHT, type PlanetPalette, type PlanetState } from '../planet/uniforms.ts'
 import { approach, FOCUS_RADIUS, OTHER_RADIUS, railPose, RAIL_OFFSET, type Vec3 } from './camera.ts'
@@ -73,12 +79,13 @@ export interface CurrentScene {
   setWorlds(worlds: readonly SceneWorld[]): void
   setMarkers(markers: readonly SceneMarker[], selected: string | null): void
   setCursor(point: Vec3 | null): void
+  measure(): void
   resize(width: number, height: number, dpr: number): void
   recenter(): void
   project(point: Vec3): Projected
   onFrame(callback: () => void): () => void
   readonly scene: Scene
-  dispose(): void
+  dispose(release?: boolean): void
 }
 
 interface Entry {
@@ -306,9 +313,9 @@ export function createCurrentScene(
   }
 
   let last = performance.now()
-  const started = last
+  let started = last
   let measuring = options.onMeasured !== undefined
-  const samples: number[] = []
+  let samples: number[] = []
   let time = 0
 
   renderer.setAnimationLoop((now: number) => {
@@ -317,8 +324,7 @@ export function createCurrentScene(
       samples.push(now - last)
       if (samples.length >= MEASURE_FRAMES) {
         measuring = false
-        const mean = samples.reduce((a, b) => a + b, 0) / samples.length
-        options.onMeasured?.(mean, softwareRenderer(renderer))
+        options.onMeasured?.(frameTime(samples), softwareRenderer(renderer))
       }
     }
     last = now
@@ -345,6 +351,12 @@ export function createCurrentScene(
     setWorlds,
     setMarkers,
     setCursor,
+    measure() {
+      if (!options.onMeasured || measuring) return
+      measuring = true
+      started = performance.now()
+      samples = []
+    },
     resize(nextWidth, nextHeight, nextDpr) {
       width = Math.max(1, nextWidth)
       height = Math.max(1, nextHeight)
@@ -380,7 +392,7 @@ export function createCurrentScene(
       listeners.add(callback)
       return () => listeners.delete(callback)
     },
-    dispose() {
+    dispose(release = false) {
       renderer.setAnimationLoop(null)
       controls.dispose()
       for (const key of [...entries.keys()]) remove(key)
@@ -399,6 +411,8 @@ export function createCurrentScene(
       bloom?.dispose()
       outputPass?.dispose()
       composer?.dispose()
+      // FIX: libera o contexto só quando o canvas sai de cena; trocar de nível reaproveita o canvas
+      if (release) renderer.forceContextLoss()
       renderer.dispose()
     },
   }

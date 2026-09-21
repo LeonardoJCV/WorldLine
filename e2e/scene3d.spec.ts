@@ -98,3 +98,61 @@ test('scrubs the past with the pointer in 3D', async ({ page }) => {
   await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.5)
   await expect(page.getByRole('button', { name: 'Return to the present' })).toBeVisible()
 })
+
+test('releases the WebGL context when leaving 3D', async ({ page }) => {
+  await page.addInitScript(() => {
+    const contexts: WebGLRenderingContext[] = []
+    Object.assign(window, { __contexts: contexts })
+    const original = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      options?: unknown,
+    ) {
+      const context = original.call(this, type as '2d', options as CanvasRenderingContext2DSettings)
+      if (type.startsWith('webgl') && context && this.classList.contains('scene3d__canvas')) {
+        contexts.push(context as unknown as WebGLRenderingContext)
+      }
+      return context
+    } as typeof original
+  })
+  await useGraphics(page, 'low')
+  await page.goto('/?seed=482913')
+  await expect(page.locator('.scene3d__canvas')).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __contexts: unknown[] }).__contexts.length),
+    )
+    .toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'Graphics' }).click()
+  await page.getByRole('radio', { name: '2D' }).check()
+  await expect(page.locator('main.stage')).toHaveAttribute('data-view', '2d')
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { __contexts: WebGLRenderingContext[] }).__contexts.every((c) =>
+          c.isContextLost(),
+        ),
+      ),
+    )
+    .toBe(true)
+})
+
+test('keeps the 3D scene alive when the level changes', async ({ page }) => {
+  await useGraphics(page, 'low')
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'Graphics' }).click()
+  await page.getByRole('radio', { name: 'High', exact: true }).check()
+  await page.getByRole('radio', { name: 'Ultra', exact: true }).check()
+  await page.getByRole('radio', { name: 'Low' }).check()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('main.stage')).toHaveAttribute('data-view', '3d')
+  await page.waitForTimeout(500)
+  const lost = await page
+    .locator('.scene3d__canvas')
+    .evaluate((canvas: HTMLCanvasElement) => canvas.getContext('webgl2')?.isContextLost() ?? true)
+  expect(lost).toBe(false)
+  expect(errors).toEqual([])
+})

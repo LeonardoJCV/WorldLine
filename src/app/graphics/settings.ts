@@ -29,6 +29,7 @@ export const TIERS: Readonly<Record<Tier, TierSpec>> = {
 export const AUTO_START: Tier = 'high'
 export const MEASURE_DELAY_MS = 2000
 export const MEASURE_FRAMES = 60
+export const MAX_FRAME_MS = 100
 
 const SETTING_KEY = 'worldline.graphics'
 const MEASURED_KEY = 'worldline.tier'
@@ -37,6 +38,13 @@ export function chooseTier(frameMs: number, software: boolean): Tier {
   if (!(frameMs <= 20)) return 'low'
   if (frameMs < 9 && !software) return 'ultra'
   return 'high'
+}
+
+export function frameTime(samples: readonly number[]): number {
+  const kept = samples.filter((ms) => ms <= MAX_FRAME_MS)
+  const used = kept.length > 0 ? kept : samples
+  if (used.length === 0) return Number.NaN
+  return used.reduce((a, b) => a + b, 0) / used.length
 }
 
 export function resolveStage(

@@ -16,3 +16,12 @@ test('closes the graphics menu with Escape', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(page.getByRole('radio', { name: '2D' })).toHaveCount(0)
 })
+
+test('returns focus to the graphics button after Escape', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'Graphics' }).click()
+  await page.getByRole('radio', { name: 'Low' }).focus()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('radio', { name: 'Low' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Graphics' })).toBeFocused()
+})

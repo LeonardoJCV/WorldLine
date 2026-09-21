@@ -149,3 +149,21 @@ test('observatory 3d cursor', async ({ page }) => {
   await page.waitForTimeout(400)
   await page.screenshot({ path: 'screens/observatory-3d-cursor.png' })
 })
+
+test('observatory 3d mobile', async ({ page }) => {
+  await useGraphics(page, 'low')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(3000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.waitForTimeout(800)
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBe(0)
+  await expect(page.getByRole('button', { name: 'Recenter' })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Zoom in' })).toBeInViewport()
+  await page.screenshot({ path: 'screens/observatory-3d-mobile.png' })
+})

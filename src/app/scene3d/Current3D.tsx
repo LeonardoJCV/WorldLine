@@ -19,6 +19,7 @@ import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import {
+  eraOffsets,
   FOCUS_RADIUS,
   OTHER_RADIUS,
   pickTarget,
@@ -29,6 +30,7 @@ import {
 import { axisPoint, buildPath, headPoint, type PathData } from './path.ts'
 import type { CurrentScene, SceneMarker, SceneWorld } from './scene.ts'
 import { SAMPLES, axisOffsets, resample } from './space.ts'
+import { screenTargets } from './targets.ts'
 import './scene3d.css'
 
 interface Fetched {
@@ -81,6 +83,12 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   const palette = useMemo(() => planetPalette(seed), [seed])
 
   const measure = setting === 'auto' && measured === null
+  const measureRef = useRef(measure)
+
+  useEffect(() => {
+    measureRef.current = measure
+    if (measure) sceneRef.current?.measure()
+  }, [measure])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -95,12 +103,9 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           tier,
           still: reducedMotion,
           seed,
-          ...(measure
-            ? {
-                onMeasured: (ms: number, software: boolean) =>
-                  graphicsStore.getState().setMeasured(chooseTier(ms, software)),
-              }
-            : {}),
+          onMeasured: (ms: number, software: boolean) => {
+            if (measureRef.current) graphicsStore.getState().setMeasured(chooseTier(ms, software))
+          },
         })
         sceneRef.current = scene
         const {
@@ -115,6 +120,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
         scene.setMarkers(markers, selectedKey)
         scene.setCursor(cursorPoint)
         unsubscribeFrame = scene.onFrame(() => {
+          const eras: { el: HTMLSpanElement; x: number; y: number }[] = []
           for (const label of labelsRef.current) {
             const el = labelElsRef.current.get(label.key)
             if (!el) continue
@@ -132,8 +138,14 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
               x += offset * 0.7
               y -= offset * 0.7
             }
-            el.style.transform = `translate(${x}px, ${y}px)`
+            if (label.className === 'scene3d__era' && projected.visible) eras.push({ el, x, y })
+            else el.style.transform = `translate(${x}px, ${y}px)`
           }
+          const offsets = eraOffsets(eras)
+          eras.forEach((era, index) => {
+            const y = era.y + (offsets[index] ?? 0)
+            era.el.style.transform = `translate(${era.x}px, ${y}px)`
+          })
         })
       })
       .catch(() => {
@@ -142,10 +154,10 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     return () => {
       disposed = true
       unsubscribeFrame?.()
-      sceneRef.current?.dispose()
+      sceneRef.current?.dispose(!canvas.isConnected)
       sceneRef.current = null
     }
-  }, [tier, palette, reducedMotion, seed, measure])
+  }, [tier, palette, reducedMotion, seed])
 
   useEffect(() => {
     sceneRef.current?.resize(width, height, window.devicePixelRatio || 1)
@@ -355,32 +367,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
 
   const targets = (): ScreenTarget[] => {
     const scene = sceneRef.current
-    if (!scene) return []
-    const list: ScreenTarget[] = []
-    for (const world of sceneWorlds) {
-      if (!world.path.visible) continue
-      const id = world.key.split(':')[0] ?? ''
-      if (world.head) {
-        const p = scene.project(world.head)
-        if (p.visible) {
-          list.push({ kind: 'world', key: id, x: p.x, y: p.y, radius: world.focused ? 60 : 32 })
-        }
-      }
-      if (!world.focused) {
-        for (let k = 0; k <= 16; k++) {
-          const u = world.path.alive[0] + ((world.path.alive[1] - world.path.alive[0]) * k) / 16
-          const point = axisPoint(world.path, u)
-          const p = point ? scene.project(point) : null
-          if (p?.visible) list.push({ kind: 'world', key: id, x: p.x, y: p.y, radius: 14 })
-        }
-      }
-    }
-    for (const marker of markers) {
-      if (marker.kind !== 'event') continue
-      const p = scene.project(marker.position)
-      if (p.visible) list.push({ kind: 'event', key: marker.key, x: p.x, y: p.y, radius: 10 })
-    }
-    return list
+    return scene ? screenTargets(sceneWorlds, markers, (point) => scene.project(point)) : []
   }
 
   const yearAt = useCallback(

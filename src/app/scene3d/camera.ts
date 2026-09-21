@@ -64,3 +64,21 @@ export function pickTarget(
   }
   return best
 }
+
+export const ERA_GAP = 140
+export const ERA_ROW = 20
+
+export function eraOffsets(points: readonly { x: number; y: number }[]): number[] {
+  const order = points.map((point, index) => ({ ...point, index })).sort((a, b) => a.x - b.x)
+  const offsets = new Array<number>(points.length).fill(0)
+  const placed: { x: number; y: number }[] = []
+  for (const { x, y, index } of order) {
+    let offset = 0
+    const clash = () =>
+      placed.some((p) => x - p.x < ERA_GAP && Math.abs(y + offset - p.y) < ERA_ROW)
+    for (let tries = 0; tries < 4 && clash(); tries++) offset += ERA_ROW
+    offsets[index] = offset
+    placed.push({ x, y: y + offset })
+  }
+  return offsets
+}
