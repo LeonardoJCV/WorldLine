@@ -137,4 +137,22 @@ describe('simulation store', () => {
       [],
     ])
   })
+
+  it('opens a shared world at its year with its decisions', async () => {
+    const { store } = setup()
+    const allocation = { agriculture: 60, industry: 20, research: 10, conservation: 10 }
+    store.getState().open({
+      version: 7,
+      seed: 482913,
+      tick: 120,
+      decisions: [{ tick: 50, allocation }],
+    })
+    await flush()
+    const state = store.getState()
+    expect(state.seed).toBe(482913)
+    expect(state.present?.tick).toBe(120)
+    expect(state.present?.allocation).toEqual(allocation)
+    expect(state.decisions).toEqual([{ tick: 50, allocation }])
+    expect(state.linkVersion).toBe(7)
+  })
 })

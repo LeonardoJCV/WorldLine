@@ -23,7 +23,8 @@ export function Observatory() {
   const ended = useSimulation((s) => s.ended)
   const error = useSimulation((s) => s.error)
   const mode = useSimulation((s) => s.mode)
-  const seed = useSimulation((s) => s.seed)
+  const seed = useSimulation((s) => s.seed ?? 0)
+  const observed = useSimulation((s) => s.inspected ?? s.present)
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
 
   return (
@@ -39,7 +40,7 @@ export function Observatory() {
                 top: layout.planet.cy - layout.planet.size / 2,
               }}
             >
-              <Planet size={layout.planet.size} />
+              <Planet size={layout.planet.size} seed={seed} snapshot={observed} />
             </div>
             <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
             <ZoomControls />

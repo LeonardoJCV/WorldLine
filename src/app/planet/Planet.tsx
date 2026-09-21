@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
-import { useSimulation } from '../sim/runtime.ts'
 import { drawFallbackPlanet } from './fallback.ts'
 import type { PlanetScene } from './scene.ts'
 import { planetPalette, planetState, type PlanetState } from './uniforms.ts'
+import type { Snapshot } from '../../worker/protocol.ts'
 
 function supportsWebGL(): boolean {
   try {
@@ -17,16 +17,16 @@ function supportsWebGL(): boolean {
 
 interface PlanetProps {
   readonly size: number
+  readonly seed: number
+  readonly snapshot: Snapshot | null
 }
 
-export function Planet({ size }: PlanetProps) {
+export function Planet({ size, seed, snapshot }: PlanetProps) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<PlanetScene | null>(null)
   const latest = useRef<{ size: number; state: PlanetState | null }>({ size, state: null })
   const [renderer, setRenderer] = useState(() => (supportsWebGL() ? 'webgl' : 'fallback'))
-  const seed = useSimulation((s) => s.seed ?? 0)
-  const snapshot = useSimulation((s) => s.inspected ?? s.present)
   const palette = useMemo(() => planetPalette(seed), [seed])
   const state = useMemo(() => (snapshot ? planetState(snapshot) : null), [snapshot])
 
