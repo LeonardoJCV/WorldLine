@@ -178,6 +178,19 @@ describe('layoutEvents', () => {
     expect(markers.at(-1)?.row).toBe(-1)
   })
 
+  it('aligns era labels away from the frame edge', () => {
+    const [left, right] = layoutEvents(
+      [record('agricultural_revolution', 0, null), record('industrial_revolution', 95, null)],
+      0,
+      100,
+      100,
+      frame,
+      120,
+    )
+    expect(left?.align).toBe('start')
+    expect(right?.align).toBe('end')
+  })
+
   it('extends open episodes to the present and skips events outside the window', () => {
     const markers = layoutEvents(
       [record('famine', 50, null), record('recession', 5, 8)],

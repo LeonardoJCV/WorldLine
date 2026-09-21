@@ -33,8 +33,11 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         (result) => {
           if (!cancelled) setData(result)
         },
-        (error: unknown) =>
-          simulation.setState({ error: error instanceof Error ? error.message : String(error) }),
+        (error: unknown) => {
+          if (!cancelled) {
+            simulation.setState({ error: error instanceof Error ? error.message : String(error) })
+          }
+        },
       )
     })
     return () => {
@@ -86,7 +89,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       End: null,
       Escape: null,
     }
-    if (!(event.key in moves)) return
+    if (!Object.hasOwn(moves, event.key)) return
     event.preventDefault()
     setCursor(moves[event.key] ?? null)
   }

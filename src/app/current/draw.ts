@@ -79,7 +79,14 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput, data: Range
       ctx.beginPath()
       ctx.arc(marker.x, frame.centerY, 2.5, 0, Math.PI * 2)
       ctx.fill()
-      if (marker.row >= 0) ctx.fillText(input.label(marker.event), marker.x + 6, y)
+      if (marker.row >= 0) {
+        ctx.textAlign = marker.align === 'end' ? 'right' : 'left'
+        ctx.fillText(
+          input.label(marker.event),
+          marker.align === 'end' ? marker.x - 6 : marker.x + 6,
+          y,
+        )
+      }
     } else if (marker.kind === 'episode') {
       const y = bandBase + marker.row * 8
       ctx.fillStyle = MUTED

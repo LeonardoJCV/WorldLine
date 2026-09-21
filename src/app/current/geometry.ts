@@ -97,12 +97,13 @@ export function buildRibbons(series: Series, frame: Frame, phase: number): Ribbo
     const top = new Float32Array(count)
     const bottom = new Float32Array(count)
     const offset = (s * Math.PI * 2) / STRANDS.length
+    const wavelength = WAVELENGTH * (1 + 0.14 * s)
     for (let i = 0; i < count; i++) {
       const row = samples[i]
       const x = xs[i] ?? 0
       if (!row) continue
       const loose = 1 - Math.min(Math.max(row.stability / 100, 0), 1)
-      const wave = Math.sin(((frame.right - x) / WAVELENGTH) * Math.PI * 2 + phase + offset)
+      const wave = Math.sin(((frame.right - x) / wavelength) * Math.PI * 2 + phase + offset)
       const center =
         frame.centerY +
         amplitude * (1 + 1.2 * loose) * wave +
@@ -124,6 +125,7 @@ export interface Marker {
   readonly x: number
   readonly x2: number
   readonly row: number
+  readonly align: 'start' | 'end'
 }
 
 const KIND_OF = new Map<EventId, MarkerKind>(
@@ -152,17 +154,20 @@ export function layoutEvents(
     const x = yearToX(record.start, from, to, frame)
     const x2 = yearToX(Math.min(end, to), from, to, frame)
     let row = 0
+    let align: 'start' | 'end' = 'start'
     if (kind === 'era') {
-      row = eraRows.findIndex((right) => x >= right + LABEL_GAP)
+      align = x + labelWidth > frame.right ? 'end' : 'start'
+      const labelLeft = align === 'end' ? x - labelWidth : x
+      row = eraRows.findIndex((rowRight) => labelLeft >= rowRight + LABEL_GAP)
       if (row === -1 && eraRows.length < ERA_ROWS) row = eraRows.length
-      if (row !== -1) eraRows[row] = x + labelWidth
+      if (row !== -1) eraRows[row] = labelLeft + labelWidth
     } else if (kind === 'episode') {
       row = episodeRows.findIndex((right) => x >= right + BAND_GAP)
       if (row === -1)
         row = episodeRows.length < EPISODE_ROWS ? episodeRows.length : EPISODE_ROWS - 1
       episodeRows[row] = Math.max(x2, episodeRows[row] ?? 0)
     }
-    markers.push({ kind, event: record.event, index, x, x2, row })
+    markers.push({ kind, event: record.event, index, x, x2, row, align })
   })
 
   return markers
