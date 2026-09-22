@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Genesis } from './app/genesis/Genesis.tsx'
 import { useLocale } from './app/i18n/index.ts'
 import { simulation } from './app/sim/runtime.ts'
+import { lensStore } from './app/surface/lens.ts'
 import { Observatory } from './app/views/Observatory.tsx'
 import { linkHash, type MultiverseLink } from './app/world/link.ts'
 import { parseRoute, type Route } from './app/world/route.ts'
@@ -35,6 +36,7 @@ export function App() {
 
   const leave = () => {
     simulation.getState().pause()
+    lensStore.getState().setLens('current')
     history.pushState(null, '', window.location.pathname)
     setRoute({ screen: 'genesis' })
   }

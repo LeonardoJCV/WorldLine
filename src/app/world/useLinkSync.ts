@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useStage } from '../graphics/store.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import { useLens } from '../surface/lens.ts'
 import { currentLink } from './current.ts'
@@ -10,14 +11,15 @@ export function useLinkSync(): void {
   const playing = useSimulation((s) => s.playing)
   const worlds = useSimulation((s) => s.worlds)
   const lens = useLens()
+  const stage = useStage()
 
   useEffect(() => {
     const state = simulation.getState()
     const link = currentLink(state)
     if (link === null || state.playing) return
-    const hash = `${linkHash(link)}${lens === 'planet' ? '/planet' : ''}`
+    const hash = `${linkHash(link)}${lens === 'planet' && stage === '3d' ? '/planet' : ''}`
     if (window.location.hash !== hash || window.location.search !== '') {
       history.replaceState(null, '', `${window.location.pathname}${hash}`)
     }
-  }, [seed, now, playing, worlds, lens])
+  }, [seed, now, playing, worlds, lens, stage])
 }

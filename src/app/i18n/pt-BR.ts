@@ -154,4 +154,5 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'surface.level.region': 'Região',
   'surface.hour': 'Hora do dia',
   'surface.autoHour': 'Acompanhar o sol',
+  'surface.hint': 'Setas movem, + e - aproximam ou afastam, Esc volta às correntes',
 }

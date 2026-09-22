@@ -216,9 +216,14 @@ export function Current3D({
     sceneRef.current?.resize(width, height, window.devicePixelRatio || 1)
   }, [width, height])
 
+  const enterRef = useRef<HTMLButtonElement>(null)
+  const wasPaused = useRef(paused)
+
   useEffect(() => {
     latest.current = { ...latest.current, paused }
     sceneRef.current?.pause(paused)
+    if (wasPaused.current && !paused) enterRef.current?.focus()
+    wasPaused.current = paused
   }, [paused])
 
   useEffect(() => {
@@ -635,7 +640,7 @@ export function Current3D({
         ))}
       </div>
       <div className="scene3d__actions">
-        <button type="button" className="scene3d__enter" onClick={enter}>
+        <button ref={enterRef} type="button" className="scene3d__enter" onClick={enter}>
           {t('surface.enter')}
         </button>
         <button

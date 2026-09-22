@@ -11,6 +11,7 @@ import './surface.css'
 
 const LEAVE_MS = 300
 const WHEEL_STEP = 1.15
+const HOUR_POLL_MS = 250
 
 export function PlanetView({
   width,
@@ -31,6 +32,7 @@ export function PlanetView({
   const pinch = useRef<number | null>(null)
   const [level, setLevel] = useState<Level>('orbit')
   const [hour, setHour] = useState<number | null>(null)
+  const [liveHour, setLiveHour] = useState(0.5)
   const [leaving, setLeaving] = useState(false)
   const tier = useTier()
   const still = useGraphics((s) => s.reducedMotion)
@@ -78,6 +80,12 @@ export function PlanetView({
 
   useEffect(() => {
     sceneRef.current?.setHour(hour)
+    if (hour !== null) return
+    const id = window.setInterval(() => {
+      const scene = sceneRef.current
+      if (scene) setLiveHour(scene.hour)
+    }, HOUR_POLL_MS)
+    return () => window.clearInterval(id)
   }, [hour])
 
   useEffect(() => {
@@ -98,7 +106,7 @@ export function PlanetView({
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [])
 
-  const leave = () => setLeaving(true)
+  const leave = () => (still ? exitRef.current() : setLeaving(true))
 
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
     const scene = sceneRef.current
@@ -110,7 +118,6 @@ export function PlanetView({
       ArrowRight: () => scene?.pan(-40, 0),
       ArrowUp: () => scene?.pan(0, 40),
       ArrowDown: () => scene?.pan(0, -40),
-      Escape: leave,
     }
     const move = moves[event.key]
     if (!move) return
@@ -133,6 +140,11 @@ export function PlanetView({
       className={`surface${leaving ? ' surface--leaving' : ''}`}
       style={{ width, height }}
       data-level={level}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        leave()
+      }}
     >
       <canvas
         ref={canvasRef}
@@ -140,6 +152,7 @@ export function PlanetView({
         tabIndex={0}
         role="img"
         aria-label={t('surface.label', { year: formatYear(year) })}
+        aria-describedby="surface-hint"
         style={{ width, height }}
         onContextMenu={(event) => event.preventDefault()}
         onKeyDown={onKeyDown}
@@ -179,6 +192,9 @@ export function PlanetView({
           drag.current = null
         }}
       />
+      <p id="surface-hint" className="surface__hint">
+        {t('surface.hint')}
+      </p>
       <div className="surface__levels" role="group" aria-label={t('surface.levels')}>
         {LEVELS.map((option) => (
           <button
@@ -198,7 +214,7 @@ export function PlanetView({
             type="range"
             min={0}
             max={100}
-            value={Math.round((hour ?? 0.5) * 100)}
+            value={Math.round((hour ?? liveHour) * 100)}
             onChange={(event) => setHour(Number(event.target.value) / 100)}
           />
         </label>

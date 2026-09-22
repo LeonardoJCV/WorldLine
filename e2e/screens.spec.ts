@@ -280,3 +280,27 @@ test('surface mobile', async ({ page }) => {
   await page.waitForTimeout(2500)
   await page.screenshot({ path: 'screens/surface-mobile.png' })
 })
+
+for (const level of ['Continent', 'Region'] as const) {
+  test(`surface ${level.toLowerCase()} ultra`, async ({ page }) => {
+    await useGraphics(page, 'ultra')
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/?seed=482913')
+    await page.getByRole('button', { name: '×256' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await page.waitForTimeout(1500)
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await page.getByRole('button', { name: 'View planet' }).click()
+    await page.getByRole('button', { name: level }).click()
+    await expect(page.locator('.surface')).toHaveAttribute('data-level', level.toLowerCase(), {
+      timeout: 10_000,
+    })
+    await page.getByLabel('Follow the sun').uncheck()
+    const hour = page.getByLabel('Time of day')
+    await hour.focus()
+    await hour.press('Home')
+    for (let i = 0; i < 8; i++) await hour.press('ArrowRight')
+    await page.waitForTimeout(5000)
+    await page.screenshot({ path: `screens/surface-${level.toLowerCase()}-ultra.png` })
+  })
+}

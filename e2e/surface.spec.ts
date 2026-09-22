@@ -19,8 +19,12 @@ test('survives a rapid double-click into the planet', async ({ page }) => {
   })
   await page.goto('/?seed=482913')
   const enter = page.getByRole('button', { name: 'View planet' })
-  // FIX: dois cliques quase simultâneos reaproveitam a mesma promise do mergulho, sem travar a entrada
-  await Promise.all([enter.click(), enter.click()])
+  await expect(enter).toBeVisible()
+  // FIX: dois cliques no mesmo quadro reaproveitam a promise do mergulho sem travar a entrada
+  await enter.evaluate((button: HTMLButtonElement) => {
+    button.click()
+    button.click()
+  })
   await expect(stage(page)).toHaveAttribute('data-lens', 'planet', { timeout: 5_000 })
   expect(errors).toEqual([])
 })
@@ -82,11 +86,28 @@ async function planetPoint(page: import('@playwright/test').Page) {
   const canvas = page.locator('.scene3d__canvas')
   const label = page.locator('.scene3d__letter').first()
   await expect(label).toBeVisible()
-  await page.waitForTimeout(500)
+  // FIX: espera a câmera assentar no trilho (rótulo parado) antes de procurar o planeta
+  let before = await label.boundingBox()
+  await expect
+    .poll(
+      async () => {
+        await page.waitForTimeout(300)
+        const now = await label.boundingBox()
+        const still =
+          before !== null &&
+          now !== null &&
+          Math.abs(now.x - before.x) < 0.5 &&
+          Math.abs(now.y - before.y) < 0.5
+        before = now
+        return still
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true)
   const box = await label.boundingBox()
   if (!box) throw new Error('planet label is not visible')
   const hits: { x: number; y: number }[] = []
-  for (let t = 0; t <= 240; t += 8) {
+  for (let t = 0; t <= 240; t += 4) {
     const x = box.x - t * 0.7
     const y = box.y + box.height + t * 0.7
     await page.mouse.move(x, y)
@@ -172,4 +193,44 @@ test('returns to live currents from a planet link', async ({ page }) => {
   await page.getByRole('button', { name: 'Play' }).click()
   await expect(page.getByTestId('year')).not.toHaveText('0000', { timeout: 10_000 })
   await page.getByRole('button', { name: 'Pause' }).click()
+})
+
+test('leaves the planet with Escape from any control and refocuses the entry', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet')
+  await page.getByRole('button', { name: 'Region' }).focus()
+  await page.keyboard.press('Escape')
+  await expect(stage(page)).toHaveAttribute('data-lens', 'current')
+  await expect(page.getByRole('button', { name: 'View planet' })).toBeFocused()
+})
+
+test('describes the planet keys and follows the live hour', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await expect(page.getByRole('img', { name: /Planet surface/ })).toHaveAccessibleDescription(/Esc/)
+  const slider = page.getByLabel('Time of day')
+  await expect(slider).not.toHaveValue('50', { timeout: 5_000 })
+  const first = Number(await slider.inputValue())
+  await expect
+    .poll(async () => Number(await slider.inputValue()), { timeout: 10_000 })
+    .not.toBe(first)
+})
+
+test('drops the planet from the link when the stage is 2D', async ({ page }) => {
+  await useGraphics(page, '2d')
+  await page.goto('/#/w/AQAHXmEAAAAA/planet')
+  await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(page).not.toHaveURL(/\/planet$/)
+})
+
+test('starts a new world on the currents after leaving from the planet', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet')
+  await page.getByRole('button', { name: 'New world' }).click()
+  await page.getByLabel('Seed (a number or a word)').fill('atlantis')
+  await page.getByRole('button', { name: 'Start worldline' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'current')
+  await expect(page).not.toHaveURL(/\/planet$/)
 })

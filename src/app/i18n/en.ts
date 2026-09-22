@@ -156,6 +156,7 @@ export const en = {
   'surface.level.region': 'Region',
   'surface.hour': 'Time of day',
   'surface.autoHour': 'Follow the sun',
+  'surface.hint': 'Arrow keys move, + and - zoom, Esc goes back to the currents',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`
