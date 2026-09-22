@@ -23,7 +23,8 @@ export const lensStore = createStore<LensState>()((set) => ({
   lens: 'current',
   target: null,
   setLens(lens) {
-    set({ lens })
+    // FIX: voltar à Corrente descarta um alvo que o planeta não chegou a abrir
+    set(lens === 'planet' ? { lens } : { lens, target: null })
   },
   openAt(target) {
     set({ lens: 'planet', target })

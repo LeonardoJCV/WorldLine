@@ -160,7 +160,7 @@ test('current micro', async ({ page }) => {
   await page.getByRole('button', { name: 'Pause' }).click()
   const current = page.getByRole('slider', { name: /Worldline history/ })
   await current.focus()
-  for (let i = 0; i < 12; i++) await current.press('+')
+  for (let i = 0; i < 20; i++) await current.press('+')
   await expect(page.locator('.scene3d')).not.toHaveAttribute('data-micro', '0', { timeout: 10_000 })
   await page.waitForTimeout(800)
   await page.screenshot({ path: 'screens/current-micro.png' })
@@ -332,11 +332,13 @@ interface LifeRun {
   readonly back?: number
   readonly zoom?: number
   readonly until?: string
+  readonly width?: number
+  readonly height?: number
 }
 
 async function enterLife(page: Page, run: LifeRun) {
   await useGraphics(page, 'high')
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.setViewportSize({ width: run.width ?? 1440, height: run.height ?? 900 })
   await page.goto(`/?seed=${run.seed ?? 482913}`)
   if (run.industry !== undefined) {
     await page.getByRole('button', { name: 'Intervene' }).click()
@@ -489,4 +491,20 @@ test('surface card', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.waitForTimeout(500)
   await page.screenshot({ path: 'screens/surface-card.png' })
+})
+
+test('surface card mobile', async ({ page }) => {
+  await enterLife(page, { level: 'Continent', width: 390, height: 844 })
+  const city = page.locator('.surface__city').first()
+  await expect(city).toBeVisible({ timeout: 15_000 })
+  await city.click()
+  const card = page.getByRole('dialog')
+  await expect(card).toBeVisible()
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBe(0)
+  await expect(card).toBeInViewport()
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: 'screens/surface-card-mobile.png' })
 })

@@ -18,4 +18,17 @@ describe('lensStore', () => {
     expect(lensStore.getState().lens).toBe('planet')
     expect(lensStore.getState().target).toBeNull()
   })
+
+  it('drops the target when the lens returns to the current', () => {
+    lensStore.getState().openAt(target)
+    lensStore.getState().setLens('current')
+    expect(lensStore.getState().lens).toBe('current')
+    expect(lensStore.getState().target).toBeNull()
+  })
+
+  it('keeps the target while the planet stays open', () => {
+    lensStore.getState().openAt(target)
+    lensStore.getState().setLens('planet')
+    expect(lensStore.getState().target).toEqual(target)
+  })
 })

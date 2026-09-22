@@ -18,7 +18,7 @@ import { CityCard, type Card } from './CityCard.tsx'
 import { surfaceModel, type SurfaceModel } from './civilization.ts'
 import type { Vec3 } from './cube.ts'
 import { lensStore } from './lens.ts'
-import { anchorOf, cityEvents, foundedYear, recentEvents } from './labels.ts'
+import { anchorOf, cityEvents, foundedYear, RECENT_YEARS, recentEvents } from './labels.ts'
 import { TILE_BUDGET } from './lifeTiles.ts'
 import { microevents, type MicroEvent, type YearSeries } from './micro.ts'
 import { cityNames } from './names.ts'
@@ -34,6 +34,15 @@ const HOUR_POLL_MS = 250
 const HISTORY_BUCKETS = 256
 const YEARLY_SPAN = 100
 const MARKER_GAP = 14
+const FADE_NEAR = 0.85
+const FADE_FAR = 0.4
+
+// FEAT: o ano observado fica pleno; os anteriores esmaecem com a idade
+function fade(age: number): number {
+  if (age <= 0) return 1
+  const k = Math.min(1, (age - 1) / Math.max(1, RECENT_YEARS - 1))
+  return FADE_NEAR + (FADE_FAR - FADE_NEAR) * k
+}
 
 type Chosen =
   | { readonly kind: 'city'; readonly site: number }
@@ -108,14 +117,33 @@ export function PlanetView({
   const model = fresh ?? (kept?.seed === seed ? kept.model : null)
   const modelRef = useRef<SurfaceModel | null>(model)
   const names = useMemo(() => cityNames(seed, MAX_SITES), [seed])
-  const [yearly, setYearly] = useState<(YearSeries & { focus: string; tick: number }) | null>(null)
-  const events = useMemo(
+  const [yearly, setYearly] = useState<
+    (YearSeries & { seed: number; focus: string; tick: number }) | null
+  >(null)
+  const freshEvents = useMemo(
     () =>
-      yearly && sites?.seed === seed && yearly.focus === focus && yearly.tick === tick
+      yearly &&
+      sites?.seed === seed &&
+      yearly.seed === seed &&
+      yearly.focus === focus &&
+      yearly.tick === tick
         ? microevents({ seed, sites: sites.sites, series: yearly })
-        : [],
+        : null,
     [yearly, sites, seed, focus, tick],
   )
+  // FIX: mantém os microeventos do último ano até a série do novo ano chegar
+  const [keptEvents, setKeptEvents] = useState<{
+    seed: number
+    focus: string
+    events: readonly MicroEvent[]
+  } | null>(null)
+  if (freshEvents && freshEvents !== keptEvents?.events)
+    setKeptEvents({ seed, focus, events: freshEvents })
+  const events = useMemo<readonly MicroEvent[]>(() => {
+    if (freshEvents) return freshEvents
+    if (tick === null || keptEvents?.seed !== seed || keptEvents.focus !== focus) return []
+    return keptEvents.events.filter((e) => e.year <= tick)
+  }, [freshEvents, keptEvents, seed, focus, tick])
   const recent = useMemo(() => (tick === null ? [] : recentEvents(events, tick)), [events, tick])
   const cities = useMemo(
     () =>
@@ -146,6 +174,9 @@ export function PlanetView({
     }
     return map
   }, [cities, recent, sites])
+  // FIX: a cidade que sumiu do modelo fecha a ficha de vez
+  if (chosen?.kind === 'city' && model && !model.cities.some((c) => c.site === chosen.site))
+    setChosen(null)
   const card = useMemo<Card | null>(() => {
     if (!chosen) return null
     if (chosen.kind === 'micro') {
@@ -214,7 +245,14 @@ export function PlanetView({
       client.range(focus, from, tick, tick - from + 1).then(
         (result) => {
           if (cancelled || result.to !== tick) return
-          setYearly({ focus, tick, from: result.from, to: result.to, values: result.series })
+          setYearly({
+            seed,
+            focus,
+            tick,
+            from: result.from,
+            to: result.to,
+            values: result.series,
+          })
         },
         () => {
           if (!cancelled) setYearly(null)
@@ -225,7 +263,7 @@ export function PlanetView({
       cancelled = true
       cancelAnimationFrame(frameId)
     }
-  }, [focus, tick])
+  }, [seed, focus, tick])
 
   useEffect(() => {
     anchorsRef.current = anchors
@@ -291,7 +329,9 @@ export function PlanetView({
         setReady(true)
       })
       .catch(() => {
-        if (!disposed) exitRef.current()
+        if (disposed) return
+        lensStore.getState().clearTarget()
+        exitRef.current()
       })
     return () => {
       disposed = true
@@ -458,6 +498,7 @@ export function PlanetView({
               type="button"
               className={`surface__micro${e.year === tick ? ' surface__micro--now' : ''}`}
               data-kind={e.kind}
+              style={{ '--fade': fade(tick === null ? 0 : tick - e.year) } as CSSProperties}
               aria-label={text}
               title={text}
               onClick={() => setChosen({ kind: 'micro', event: e })}

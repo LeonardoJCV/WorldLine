@@ -14,8 +14,8 @@ export const MICRO_KINDS = [
 ] as const
 export type MicroKind = (typeof MICRO_KINDS)[number]
 export const MAX_PER_YEAR = 2
-const HAPPEN = 4096 + 128
-const WHERE = 4096 + 160
+const HAPPEN = 8192 + 128
+const WHERE = 8192 + 160
 
 export interface MicroEvent {
   readonly year: number

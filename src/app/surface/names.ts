@@ -1,6 +1,6 @@
 import { uniform } from '../../engine/rng.ts'
 
-const CHANNEL = 4096 + 96
+const CHANNEL = 8192 + 96
 const ONSETS = [
   'b',
   'br',

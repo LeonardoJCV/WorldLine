@@ -152,6 +152,12 @@
   border-radius: 50%;
   background: #b8b2cc;
   box-shadow: 0 0 4px var(--void);
+  opacity: var(--fade, 1);
+}
+
+.surface__micro:hover,
+.surface__micro:focus-visible {
+  opacity: 1;
 }
 
 .surface__micro[data-kind='founding'] {
@@ -216,6 +222,7 @@
 
 .surface__card {
   position: absolute;
+  z-index: 1;
   top: 56px;
   right: var(--gutter);
   width: min(320px, 90%);
