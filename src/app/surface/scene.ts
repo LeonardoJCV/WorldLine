@@ -15,8 +15,10 @@ import {
   PerspectiveCamera,
   PointsMaterial,
   Scene,
+  ShaderMaterial,
   Sphere,
   SphereGeometry,
+  Vector3,
   WebGLRenderer,
 } from 'three'
 import { TIERS, type Tier } from '../graphics/settings.ts'
@@ -33,6 +35,7 @@ import {
 } from './camera.ts'
 import { displaySet, keyOf, rootKeys, selectChunks, type Vec3 } from './cube.ts'
 import { focalPixels, lodOf } from './lod.ts'
+import { shadeByDaySide, skyFragment, skyVertex } from './shading.ts'
 import { createTerrain, surfaceRadius } from './terrain.ts'
 import type { TerrainClient } from './terrainClient.ts'
 
@@ -89,6 +92,8 @@ export function createSurfaceScene(
     flatShading: false,
     roughness: 0.95,
   })
+  const sunDir = { value: new Vector3(1, 0, 0) }
+  shadeByDaySide(terrainMaterial, sunDir)
   const terrainGroup = new Group()
   scene.add(terrainGroup)
 
@@ -106,11 +111,17 @@ export function createSurfaceScene(
   ocean.renderOrder = 1
   scene.add(ocean)
 
+  // FIX: núcleo opaco abaixo dos skirts impede que frestas entre blocos mostrem o céu do outro lado
+  const coreGeometry = new SphereGeometry(0.96, 64, 48)
+  const coreMaterial = new MeshBasicMaterial({ color: VOID })
+  scene.add(new Mesh(coreGeometry, coreMaterial))
+
   const atmosphereGeometry = new SphereGeometry(1.06, 64, 48)
-  const atmosphereMaterial = new MeshBasicMaterial({
-    color: new Color(...options.palette.atmosphere),
+  const atmosphereMaterial = new ShaderMaterial({
+    vertexShader: skyVertex,
+    fragmentShader: skyFragment,
+    uniforms: { uColor: { value: new Vector3(...options.palette.atmosphere) }, uSun: sunDir },
     transparent: true,
-    opacity: 0.08,
     side: BackSide,
     depthWrite: false,
   })
@@ -254,6 +265,7 @@ export function createSurfaceScene(
     if (hour === null && !options.still) clock = (clock + dt * DAY_SPEED) % 1
     const angle = (hour ?? clock) * Math.PI * 2
     sun.position.set(Math.cos(angle) * 5, 1.75, Math.sin(angle) * 5)
+    sunDir.value.copy(sun.position).normalize()
   }
 
   let last = performance.now()
@@ -299,6 +311,8 @@ export function createSurfaceScene(
       terrainMaterial.dispose()
       oceanGeometry.dispose()
       oceanMaterial.dispose()
+      coreGeometry.dispose()
+      coreMaterial.dispose()
       atmosphereGeometry.dispose()
       atmosphereMaterial.dispose()
       stars.geometry.dispose()
