@@ -1,8 +1,15 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { CROSSING_KINDS, DOSES, type Crossing, type CrossingKind } from '../../engine/crossing.ts'
+import {
+  CROSSING_KINDS,
+  crossingAmounts,
+  DOSES,
+  type Crossing,
+  type CrossingKind,
+} from '../../engine/crossing.ts'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
+import { Worldline } from '../../engine/worldline.ts'
 import { WORLDLINE_IDS } from '../../worker/protocol.ts'
 import { parseWorldFile, serializeWorld } from './file.ts'
 import {
@@ -10,6 +17,7 @@ import {
   decodeMultiverse,
   encodeLink,
   encodeMultiverse,
+  isCompatibleVersion,
   isValidLink,
   isValidMultiverse,
   linkHash,
@@ -75,7 +83,7 @@ const crossing = fc
     kind: fc.constantFrom(...CROSSING_KINDS),
     dose: fc.constantFrom(...DOSES),
     cost: fc.integer({ min: 0, max: 255 }),
-    parcels: fc.array(fc.float({ min: 0, max: 1e6, noNaN: true }), {
+    parcels: fc.array(fc.double({ min: 0, max: 1e9, noNaN: true }), {
       minLength: 2,
       maxLength: 2,
     }),
@@ -149,6 +157,14 @@ describe('world link', () => {
       }),
     ).toBe(false)
     expect(isValidLink({ ...sample, tick: HORIZON + 1 })).toBe(false)
+  })
+
+  it('trusts every version that opens the same world', () => {
+    expect(isCompatibleVersion(1)).toBe(true)
+    expect(isCompatibleVersion(MODEL_VERSION)).toBe(true)
+    expect(isCompatibleVersion(0)).toBe(false)
+    expect(isCompatibleVersion(MODEL_VERSION + 1)).toBe(false)
+    expect(isCompatibleVersion(7)).toBe(false)
   })
 
   it('builds the observatory hash', () => {
@@ -314,6 +330,32 @@ describe('multiverse link', () => {
     const alone: MultiverseLink = { ...sample, branches: [], crossings: [arrival, departure] }
     expect(decodeMultiverse(encodeMultiverse(alone))).toEqual(alone)
     expect(linkHash(alone)).toMatch(/^#\/m\//)
+  })
+
+  it('keeps an amount exact, so a shared world reproduces the same history', () => {
+    const source = new Worldline(482913)
+    source.advance(400)
+    const amounts = crossingAmounts('knowledge', 3, source.present)
+    const first = amounts[0] ?? 0
+    // FEAT: um valor que a precisão simples perderia, para o teste valer alguma coisa
+    expect(Math.fround(first)).not.toBe(first)
+    const gift: Crossing = {
+      tick: 400,
+      kind: 'knowledge',
+      dose: 3,
+      amounts,
+      origin: { world: 'B', tick: 400 },
+      cost: 14,
+      direction: 'in',
+    }
+    const value: MultiverseLink = { ...sample, tick: 600, branches: [], crossings: [gift] }
+    const back = decodeMultiverse(encodeMultiverse(value))
+    expect(back?.crossings?.[0]?.amounts[0]).toBe(first)
+    const sent = new Worldline(sample.seed, sample.decisions, null, [gift])
+    const opened = new Worldline(sample.seed, sample.decisions, null, back?.crossings ?? [])
+    sent.advance(600)
+    opened.advance(600)
+    expect(opened.hashAt(600)).toBe(sent.hashAt(600))
   })
 
   it('round-trips any crossing log', () => {

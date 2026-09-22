@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MODEL_VERSION } from '../../engine/params.ts'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
 import { Minimap } from '../current/Minimap.tsx'
@@ -13,7 +12,7 @@ import { Current3D } from '../scene3d/Current3D.tsx'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import { lensStore, useLens, type Lens } from '../surface/lens.ts'
 import { PlanetView } from '../surface/PlanetView.tsx'
-import type { MultiverseLink } from '../world/link.ts'
+import { isCompatibleVersion, type MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
@@ -131,7 +130,7 @@ export function Observatory({
         <div className="band__footer">
           <WorldActions />
           <div className="notices" role="status">
-            {linkVersion !== null && linkVersion !== MODEL_VERSION && (
+            {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
               <p>{t('link.version', { version: linkVersion })}</p>
             )}
             {ended !== null && (

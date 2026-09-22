@@ -24,6 +24,8 @@ export interface MultiverseLink extends WorldLink {
 const HEADER = 9
 const DECISION = 6
 const CROSSING = 10
+// FEAT: a parcela vai em dupla precisão, para o mundo reaberto repetir a história byte a byte
+const AMOUNT = 8
 const MAX_COST = 255
 const MAX_CROSSINGS = 255
 const CROSSED_VERSION = 2
@@ -71,6 +73,13 @@ function validCrossings(crossings: unknown, from: number): boolean {
     return false
   }
   return true
+}
+
+// FEAT: um mundo sem travessia sai igual na v1 e na v2, então um link antigo não merece aviso
+const COMPATIBLE_VERSIONS: readonly number[] = [1, CROSSED_VERSION]
+
+export function isCompatibleVersion(version: number): boolean {
+  return COMPATIBLE_VERSIONS.includes(version)
 }
 
 export function isValidLink(link: WorldLink): boolean {
@@ -184,7 +193,7 @@ function readDecisions(view: DataView, at: number): { decisions: Decision[]; nex
 
 function crossingSize(crossings: readonly Crossing[] = []): number {
   return crossings.reduce(
-    (sum, c) => sum + CROSSING + c.amounts.length * 4 + (c.kind === 'doctrine' ? 4 : 0),
+    (sum, c) => sum + CROSSING + c.amounts.length * AMOUNT + (c.kind === 'doctrine' ? 4 : 0),
     1,
   )
 }
@@ -209,8 +218,8 @@ function writeCrossings(view: DataView, at: number, crossings: readonly Crossing
     view.setUint8(cursor + 9, crossing.amounts.length)
     cursor += CROSSING
     for (const amount of crossing.amounts) {
-      view.setFloat32(cursor, amount)
-      cursor += 4
+      view.setFloat64(cursor, amount)
+      cursor += AMOUNT
     }
     if (crossing.kind === 'doctrine') {
       const allocation = crossing.allocation
@@ -233,10 +242,10 @@ function readCrossings(view: DataView, at: number): { crossings: Crossing[]; nex
     const parcels = view.getUint8(cursor + 9)
     const shares = kind === 'doctrine' ? 4 : 0
     const body = cursor + CROSSING
-    if (body + parcels * 4 + shares > view.byteLength) return null
+    if (body + parcels * AMOUNT + shares > view.byteLength) return null
     const amounts: number[] = []
-    for (let k = 0; k < parcels; k++) amounts.push(view.getFloat32(body + k * 4))
-    const at2 = body + parcels * 4
+    for (let k = 0; k < parcels; k++) amounts.push(view.getFloat64(body + k * AMOUNT))
+    const at2 = body + parcels * AMOUNT
     const allocation = {} as Record<(typeof SECTORS)[number], number>
     SECTORS.forEach((sector, k) => {
       allocation[sector] = shares === 0 ? 0 : view.getUint8(at2 + k)

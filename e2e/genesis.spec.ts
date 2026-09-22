@@ -24,6 +24,13 @@ test('refuses seeds outside the range', async ({ page }) => {
 test('opens a shared world link', async ({ page }) => {
   await page.goto('/#/w/AQAHXmEAAAAA')
   await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(page.getByText('This link was made with model')).toHaveCount(0)
+})
+
+test('warns only about a link from a model it does not know', async ({ page }) => {
+  await page.goto('/#/w/BwAHXmEAAAAA')
+  await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(page.getByText('This link was made with model v7')).toBeVisible()
 })
 
 test('keeps the world and its year across a reload', async ({ page }) => {
