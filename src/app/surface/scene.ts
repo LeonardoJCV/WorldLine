@@ -1,5 +1,4 @@
 import {
-  ACESFilmicToneMapping,
   BackSide,
   BufferAttribute,
   BufferGeometry,
@@ -35,6 +34,8 @@ import type { TerrainClient } from './terrainClient.ts'
 
 export const MAX_DEPTH: Readonly<Record<Tier, number>> = { low: 5, high: 7, ultra: 9 }
 export const RESOLUTION: Readonly<Record<Tier, number>> = { low: 16, high: 24, ultra: 32 }
+// FIX: refina mais perto da câmera para não deixar blocos grosseiros no litoral
+export const SPLIT: Readonly<Record<Tier, number>> = { low: 6, high: 8, ultra: 8 }
 const MAX_IN_FLIGHT = 4
 const MAX_CACHED = 420
 const SELECT_MS = 120
@@ -72,8 +73,6 @@ export function createSurfaceScene(
   const spec = TIERS[options.tier]
   const renderer = new WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true })
   renderer.setClearColor(VOID, 1)
-  // FIX: tonemapping evita que o brilho especular do oceano estoure em um disco branco chapado
-  renderer.toneMapping = ACESFilmicToneMapping
   const scene = new Scene()
   scene.background = new Color(VOID)
   const camera = new PerspectiveCamera(45, 1, 0.0005, 60)
@@ -95,8 +94,9 @@ export function createSurfaceScene(
   const oceanGeometry = new SphereGeometry(1, 192, 128)
   const oceanMaterial = new MeshPhongMaterial({
     color: 0x1d5f8f,
-    specular: 0x28313a,
-    shininess: 90,
+    // FIX: especular escuro e bem concentrado evita o disco branco estourado no oceano
+    specular: 0x10161c,
+    shininess: 420,
     transparent: true,
     opacity: 0.72,
     depthWrite: false,
@@ -118,6 +118,7 @@ export function createSurfaceScene(
   const sampler = createTerrain(options.seed, options.palette)
   const maxDepth = MAX_DEPTH[options.tier]
   const resolution = RESOLUTION[options.tier]
+  const split = SPLIT[options.tier]
   const roots = rootKeys().map(keyOf)
   const meshes = new Map<string, Cached>()
   const pending = new Set<string>()
@@ -198,7 +199,7 @@ export function createSurfaceScene(
     if (now - lastSelect < SELECT_MS) return
     lastSelect = now
     const p = camera.position
-    wanted = selectChunks({ camera: [p.x, p.y, p.z], maxLevel: maxDepth, split: 2 }).map(keyOf)
+    wanted = selectChunks({ camera: [p.x, p.y, p.z], maxLevel: maxDepth, split }).map(keyOf)
     refresh()
     request()
   }

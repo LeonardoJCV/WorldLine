@@ -64,7 +64,8 @@ export function createTerrain(seed: number, palette: PlanetPalette): Terrain {
   return {
     seed,
     sample(x, y, z) {
-      const height = fbm(noiseSeed, x * 1.9 + ox, y * 1.9 + oy, z * 1.9 + oz, 6)
+      // FIX: persistência maior dá peso perceptível às oitavas finas (relevo no nível região)
+      const height = fbm(noiseSeed, x * 1.9 + ox, y * 1.9 + oy, z * 1.9 + oz, 9, 0.62)
       const moisture = fbm(moistSeed, x * 3.1 + oy, y * 3.1 + oz, z * 3.1 + ox, 4)
       const temperature = 1 - Math.abs(y) * 1.15 - Math.max(height - SEA, 0) * 2.2
       return { height, moisture, temperature, biome: biomeOf(height, moisture, temperature) }

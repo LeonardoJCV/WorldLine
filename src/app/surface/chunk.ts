@@ -38,7 +38,44 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
   const positions = new Float32Array(triangles * 9)
   const normals = new Float32Array(triangles * 9)
   const colors = new Float32Array(triangles * 9)
+  const groundNormal = new Float32Array(side * side * 3)
   let cursor = 0
+
+  // FIX: normal de face voltada para fora, sem alterar a ordem dos vértices (para acumular por vértice)
+  const outward = (
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
+  ): readonly [number, number, number] => {
+    const abx = bx - ax
+    const aby = by - ay
+    const abz = bz - az
+    const acx = cx - ax
+    const acy = cy - ay
+    const acz = cz - az
+    let nx = aby * acz - abz * acy
+    let ny = abz * acx - abx * acz
+    let nz = abx * acy - aby * acx
+    if (nx * ax + ny * ay + nz * az < 0) {
+      nx = -nx
+      ny = -ny
+      nz = -nz
+    }
+    return [nx, ny, nz]
+  }
+
+  const accumulate = (index: number, n: readonly [number, number, number]): void => {
+    const at = index * 3
+    groundNormal[at] = (groundNormal[at] ?? 0) + n[0]
+    groundNormal[at + 1] = (groundNormal[at + 1] ?? 0) + n[1]
+    groundNormal[at + 2] = (groundNormal[at + 2] ?? 0) + n[2]
+  }
 
   // FIX: vira b/c se a normal apontar para dentro da referência (origem ou centro do bloco).
   const push = (
@@ -201,6 +238,14 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
         (ag + cg + dg) / 3,
         (ab + cb + db) / 3,
       )
+      const n1 = outward(ax, ay, az, bx, by, bz, cx, cy, cz)
+      accumulate(a, n1)
+      accumulate(b, n1)
+      accumulate(c, n1)
+      const n2 = outward(ax, ay, az, cx, cy, cz, dx, dy, dz)
+      accumulate(a, n2)
+      accumulate(c, n2)
+      accumulate(d, n2)
     }
   }
 
@@ -247,9 +292,14 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
       const rg = (tint[i0 * 3 + 1] ?? 0) * 0.8
       const rb = (tint[i0 * 3 + 2] ?? 0) * 0.8
       const r0 = Math.hypot(e0x, e0y, e0z) || 1
-      const upx = e0x / r0
-      const upy = e0y / r0
-      const upz = e0z / r0
+      // FIX: usa a normal do terreno vizinho (não a radial) para o skirt casar com a iluminação do chão
+      const gnx = (groundNormal[i0 * 3] ?? 0) + (groundNormal[i1 * 3] ?? 0)
+      const gny = (groundNormal[i0 * 3 + 1] ?? 0) + (groundNormal[i1 * 3 + 1] ?? 0)
+      const gnz = (groundNormal[i0 * 3 + 2] ?? 0) + (groundNormal[i1 * 3 + 2] ?? 0)
+      const gLength = Math.hypot(gnx, gny, gnz) || 1
+      const upx = gnx / gLength
+      const upy = gny / gLength
+      const upz = gnz / gLength
       const k0 = (r0 - drop) / r0
       const l0x = e0x * k0
       const l0y = e0y * k0

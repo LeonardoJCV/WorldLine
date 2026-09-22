@@ -32,8 +32,15 @@ export function valueNoise(seed: number, x: number, y: number, z: number): numbe
   )
 }
 
-export function fbm(seed: number, x: number, y: number, z: number, octaves: number): number {
-  let amplitude = 0.5
+export function fbm(
+  seed: number,
+  x: number,
+  y: number,
+  z: number,
+  octaves: number,
+  persistence = 0.5,
+): number {
+  let amplitude = 1 - persistence
   let sum = 0
   let px = x
   let py = y
@@ -43,7 +50,7 @@ export function fbm(seed: number, x: number, y: number, z: number, octaves: numb
     px *= 2.03
     py *= 2.03
     pz *= 2.03
-    amplitude *= 0.5
+    amplitude *= persistence
   }
   return sum
 }

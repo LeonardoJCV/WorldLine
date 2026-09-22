@@ -28,7 +28,8 @@ export function tiltFor(altitude: number): number {
   const t = clamp01(
     (Math.log(ORBIT_FROM) - Math.log(altitude)) / (Math.log(ORBIT_FROM) - Math.log(ALTITUDE.min)),
   )
-  return MAX_TILT * t * t * (3 - 2 * t)
+  // FIX: raiz quadrada inclina mais cedo, para mostrar o horizonte já no nível continente
+  return MAX_TILT * Math.sqrt(t)
 }
 
 export function dirOf(lat: number, lon: number): Vec3 {
