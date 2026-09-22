@@ -35,6 +35,8 @@ export function genesis(seed: number): { readonly world: WorldConfig; readonly s
       active: [],
       lastEnded: EVENTS.map(() => NEVER),
       lastDecision: null,
+      echoes: [],
+      lastCrossing: null,
       status: 'running',
     },
   }

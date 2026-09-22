@@ -1,3 +1,6 @@
+import type { CrossingKind } from './crossing.ts'
+import type { Echo } from './echo.ts'
+
 export const SECTORS = ['agriculture', 'industry', 'research', 'conservation'] as const
 export type Sector = (typeof SECTORS)[number]
 export type Allocation = Readonly<Record<Sector, number>>
@@ -50,6 +53,8 @@ export interface WorldState {
   readonly active: readonly ActiveEvent[]
   readonly lastEnded: readonly number[]
   readonly lastDecision: { readonly tick: number; readonly sectors: readonly Sector[] } | null
+  readonly echoes: readonly Echo[]
+  readonly lastCrossing: { readonly tick: number; readonly kind: CrossingKind } | null
   readonly status: Status
 }
 
