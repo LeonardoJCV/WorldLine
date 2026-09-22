@@ -305,21 +305,6 @@ for (const level of ['Continent', 'Region'] as const) {
   })
 }
 
-const CAPITAL = { lat: 0.373, lon: -0.572 } as const
-const START = { lat: 0.35, lon: 0 } as const
-const PAN_STEP = 40
-
-async function panToCapital(page: Page, altitude: number) {
-  const canvas = page.locator('.surface__canvas')
-  const box = await canvas.boundingBox()
-  const rate = (altitude * 1.4 * PAN_STEP) / Math.max(1, box?.height ?? 1)
-  await canvas.focus()
-  const east = Math.round(((START.lon - CAPITAL.lon) * Math.cos(START.lat)) / rate)
-  for (let i = 0; i < east; i++) await canvas.press('ArrowLeft')
-  const north = Math.round((CAPITAL.lat - START.lat) / rate)
-  for (let i = 0; i < north; i++) await canvas.press('ArrowUp')
-}
-
 async function enterLife(page: Page, level: 'Continent' | 'Region', steps: number) {
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -343,12 +328,7 @@ async function enterLife(page: Page, level: 'Continent' | 'Region', steps: numbe
   await hour.focus()
   await hour.press('Home')
   for (let i = 0; i < 8; i++) await hour.press('ArrowRight')
-  await page.waitForTimeout(2000)
-  await panToCapital(page, level === 'Region' ? 0.03 : 0.35)
-  if (level === 'Continent') {
-    for (let i = 0; i < 3; i++) await page.locator('.surface__canvas').press('+')
-  }
-  await page.waitForTimeout(3000)
+  await page.waitForTimeout(4000)
 }
 
 test('surface life region', async ({ page }) => {

@@ -23,7 +23,12 @@ describe('objectTile', () => {
 
   it('places buildings around the first site and every candidate inside its tile', () => {
     const set = objectTile(terrain, sites, tile, 1)
-    expect(set.buildings.length / STRIDE).toBeGreaterThan(10)
+    let core = 0
+    for (let i = 0; i < set.buildings.length; i += STRIDE) {
+      if (set.buildings[i + 6] === home.index && (set.buildings[i + 7] ?? 1) < 0.03) core++
+    }
+    expect(set.buildings.length / STRIDE).toBeGreaterThan(50)
+    expect(core).toBeGreaterThan(5)
     for (const kind of OBJECT_KINDS) {
       const data = set[kind]
       for (let i = 0; i < data.length; i += STRIDE) {

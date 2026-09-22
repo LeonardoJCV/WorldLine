@@ -131,8 +131,8 @@ export function PlanetView({
     const canvas = canvasRef.current
     if (!canvas) return
     let disposed = false
-    void import('./scene.ts')
-      .then(({ createSurfaceScene }) => {
+    void Promise.all([import('./scene.ts'), terrainSites(seed).catch((): readonly Site[] => [])])
+      .then(([{ createSurfaceScene }, list]) => {
         if (disposed) return
         const scene = createSurfaceScene(canvas, {
           seed,
@@ -142,6 +142,7 @@ export function PlanetView({
           terrain: terrainClient(),
           density: DENSITY[tier],
           tileBudget: TILE_BUDGET[tier],
+          start: list[0]?.dir ?? null,
           onLevel: setLevel,
         })
         sceneRef.current = scene

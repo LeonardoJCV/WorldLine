@@ -49,6 +49,15 @@ const LIFE_IN_FLIGHT = 2
 const SELECT_MS = 120
 const DAY_SPEED = 0.012
 const VOID = 0x0a0b1e
+const GROW_FROM = 0.03
+const GROW_TO = 0.35
+const GROW_MAX = 3
+
+// FEAT: objetos crescem de longe para que florestas e cidades se leiam no continente
+function growAt(altitude: number): number {
+  const t = Math.min(1, Math.max(0, (altitude - GROW_FROM) / (GROW_TO - GROW_FROM)))
+  return 1 + (GROW_MAX - 1) * t * t * (3 - 2 * t)
+}
 
 export interface SurfaceSceneOptions {
   readonly seed: number
@@ -58,6 +67,7 @@ export interface SurfaceSceneOptions {
   readonly terrain: TerrainClient
   readonly density: number
   readonly tileBudget: number
+  readonly start: Vec3 | null
   readonly onLevel: (level: Level) => void
 }
 
@@ -155,14 +165,18 @@ export function createSurfaceScene(
   const lifeTiles = new Map<string, ObjectSet>()
   const lifePending = new Set<string>()
   let lifeWanted: string[] = []
+  let lifeCenter: Vec3 = [1, 0, 0]
+  let lifeReach = 0
+  let lifeFrom = ''
   let lifeDirty = false
   let lifeClock = 0
   let model: SurfaceModel | null = null
   let modelDirty = false
   const animated = options.tier !== 'low' && !options.still
 
-  let lat = 0.35
-  let lon = 0
+  const start = options.start
+  let lat = start ? Math.asin(Math.max(-1, Math.min(1, start[1]))) : 0.35
+  let lon = start ? Math.atan2(start[2], start[0]) : 0
   let altitude: number = LEVEL_ALTITUDE.orbit
   let goal: number = altitude
   let level: Level = levelOf(altitude)
@@ -256,10 +270,16 @@ export function createSurfaceScene(
   }
 
   function selectLife(): void {
-    const next = wantedTiles(dirOf(lat, lon), altitude, options.tileBudget)
-    if (next.join() !== lifeWanted.join()) {
-      lifeWanted = next
-      lifeDirty = true
+    const from = `${lat.toFixed(5)},${lon.toFixed(5)},${altitude.toFixed(5)}`
+    if (from !== lifeFrom) {
+      lifeFrom = from
+      lifeCenter = dirOf(lat, lon)
+      const area = wantedTiles(lifeCenter, altitude, options.tileBudget)
+      lifeReach = area.reach
+      if (area.keys.join() !== lifeWanted.join()) {
+        lifeWanted = area.keys
+        lifeDirty = true
+      }
     }
     if (lifeTiles.size > options.tileBudget * 2) {
       const keep = new Set(lifeWanted)
@@ -276,7 +296,6 @@ export function createSurfaceScene(
         return set ? [set] : []
       }),
     )
-    if (import.meta.env.DEV) canvas.dataset.life = String(life.count())
   }
 
   const inView = (center: Vec3, radius: number) => {
@@ -345,6 +364,11 @@ export function createSurfaceScene(
     select(now)
     if (dirty) refresh()
     if (lifeDirty) refreshLife()
+    life.setView(lifeCenter, lifeReach, growAt(altitude))
+    if (import.meta.env.DEV) {
+      const shown = `${life.drawn()}/${life.count()}`
+      if (canvas.dataset.life !== shown) canvas.dataset.life = shown
+    }
     if (animated) lifeClock += dt
     if (modelDirty) {
       modelDirty = false

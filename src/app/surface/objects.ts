@@ -17,8 +17,8 @@ export type ObjectKind = (typeof OBJECT_KINDS)[number]
 export type ObjectSet = Record<ObjectKind, Float32Array>
 
 export const DENSITY = { low: 0.35, high: 1, ultra: 2.4 } as const
-const PER_TILE = { trees: 700, animals: 90 } as const
-const PER_SITE = { buildings: 420, fields: 260, boats: 40, factories: 24, mines: 16 } as const
+const PER_TILE = { trees: 1400, animals: 150 } as const
+const PER_SITE = { buildings: 900, fields: 700, boats: 60, factories: 32, mines: 16 } as const
 const RING = {
   buildings: [0, BUILT_MAX],
   fields: [0.12, 1],
