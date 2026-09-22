@@ -66,6 +66,14 @@ export function CausalPanel() {
           t('causal.decision', { year: formatYear(node.cause.tick) }),
           node.cause.sectors.map((sector) => t(`sector.${sector}`)).join(', '),
         ]
+      case 'crossing':
+        return [
+          t('causal.crossing', {
+            kind: t(`cross.kind.${node.cause.crossing}`),
+            year: formatYear(node.cause.tick),
+          }),
+          '',
+        ]
     }
   }
 

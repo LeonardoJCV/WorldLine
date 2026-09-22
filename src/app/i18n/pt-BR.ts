@@ -58,6 +58,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'causal.decision': 'Decisão no ano {year}',
   'causal.repeated': 'já mostrado',
   'causal.unknown': 'Evento desconhecido',
+  'causal.crossing': '{kind} que atravessou de outra worldline no ano {year}',
   'allocation.title': 'Alocação de esforço',
   'allocation.apply': 'Aplicar decisão',
   'allocation.reset': 'Desfazer ajustes',
@@ -200,6 +201,8 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'cross.open': 'Abrir a travessia',
   'cross.openFromYear': 'Cruzar no ano {year}',
   'cross.done': 'Chegou de {id}: {kind}.',
+  'cross.received': 'Chegou {kind} de {id}',
+  'cross.sent': 'Pessoas partiram para {id}',
   'cross.loading': 'Lendo a outra realidade…',
   'cross.playing': 'Pause os anos antes: o preço muda enquanto a simulação corre.',
   'cross.needsWorlds':

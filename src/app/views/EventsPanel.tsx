@@ -1,27 +1,24 @@
 import { useMemo } from 'react'
-import { EVENTS, type EventRecord } from '../../engine/events.ts'
+import { EVENTS } from '../../engine/events.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
+import { historyRows } from './cross.ts'
 
 const EPISODES = new Set(EVENTS.filter((def) => def.kind === 'condition').map((def) => def.id))
 const LIMIT = 200
+const NO_CROSSINGS = Object.freeze([])
 
 export function EventsPanel() {
   const t = useT()
   const events = useSimulation((s) => s.events)
   const selected = useSimulation((s) => s.selected)
-  const fork = useSimulation((s) => s.worlds.find((w) => w.info.id === s.focus)?.info.fork ?? 0)
-  const select = simulation.getState().select
+  const world = useSimulation((s) => s.worlds.find((w) => w.info.id === s.focus))
+  const fork = world?.info.fork ?? 0
+  const crossings = world?.crossings ?? NO_CROSSINGS
+  const { select, setCursor } = simulation.getState()
 
-  const recent = useMemo(() => {
-    const list: { readonly record: EventRecord; readonly index: number }[] = []
-    for (let i = events.length - 1; i >= 0 && list.length < LIMIT; i--) {
-      const record = events[i]
-      if (record) list.push({ record, index: i })
-    }
-    return list
-  }, [events])
+  const recent = useMemo(() => historyRows(events, crossings, LIMIT), [events, crossings])
 
   return (
     <section className="panel events" aria-labelledby="events-title">
@@ -32,25 +29,50 @@ export function EventsPanel() {
         <p className="panel__empty">{t('events.empty')}</p>
       ) : (
         <ol className="events__list">
-          {recent.map(({ record, index }) => (
-            <li key={index}>
-              <button
-                type="button"
-                className="events__item"
-                aria-current={selected === index ? 'true' : undefined}
-                onClick={() => select(index)}
-              >
-                <span className="events__year">{formatYear(record.start)}</span>
-                <span>{t(`event.${record.event}`)}</span>
-                {record.start < fork && (
-                  <span className="events__inherited">{t('events.inherited')}</span>
-                )}
-                {record.end === null && EPISODES.has(record.event) && (
-                  <span className="events__ongoing">{t('events.ongoing')}</span>
-                )}
-              </button>
-            </li>
-          ))}
+          {recent.map((row, position) =>
+            row.kind === 'event' ? (
+              <li key={`e${row.index}`}>
+                <button
+                  type="button"
+                  className="events__item"
+                  data-kind="event"
+                  aria-current={selected === row.index ? 'true' : undefined}
+                  onClick={() => select(row.index)}
+                >
+                  <span className="events__year">{formatYear(row.year)}</span>
+                  <span>{t(`event.${row.record.event}`)}</span>
+                  {row.year < fork && (
+                    <span className="events__inherited">{t('events.inherited')}</span>
+                  )}
+                  {row.record.end === null && EPISODES.has(row.record.event) && (
+                    <span className="events__ongoing">{t('events.ongoing')}</span>
+                  )}
+                </button>
+              </li>
+            ) : (
+              <li key={`c${position}-${row.year}`}>
+                <button
+                  type="button"
+                  className="events__item"
+                  data-kind="crossing"
+                  onClick={() => setCursor(row.year)}
+                >
+                  <span className="events__year">{formatYear(row.year)}</span>
+                  <span>
+                    {row.crossing.direction === 'out'
+                      ? t('cross.sent', { id: row.crossing.origin.world })
+                      : t('cross.received', {
+                          kind: t(`cross.kind.${row.crossing.kind}`),
+                          id: row.crossing.origin.world,
+                        })}
+                  </span>
+                  {row.year < fork && (
+                    <span className="events__inherited">{t('events.inherited')}</span>
+                  )}
+                </button>
+              </li>
+            ),
+          )}
         </ol>
       )}
     </section>

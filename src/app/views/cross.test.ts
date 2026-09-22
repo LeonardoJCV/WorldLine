@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { causalDistance } from '../../engine/distance.ts'
-import { crossingAmounts, crossingCost, DOSES } from '../../engine/crossing.ts'
+import { crossingAmounts, crossingCost, DOSES, type Crossing } from '../../engine/crossing.ts'
+import type { EventId, EventRecord } from '../../engine/events.ts'
 import { HORIZON } from '../../engine/params.ts'
 import type { Status, Variable } from '../../engine/state.ts'
 import { MAX_WORLDLINES, type Snapshot, type WorldlineId } from '../../worker/protocol.ts'
@@ -9,6 +10,7 @@ import {
   crossOrigins,
   crossQuote,
   DOSES_FOR,
+  historyRows,
   worldEnded,
   type CrossBlockInput,
 } from './cross.ts'
@@ -255,5 +257,64 @@ describe('crossBlock', () => {
       key: 'cross.limit',
       params: {},
     })
+  })
+})
+
+describe('historyRows', () => {
+  const record = (event: EventId, start: number): EventRecord => ({
+    event,
+    start,
+    end: null,
+    causes: [],
+  })
+
+  const crossing = (tick: number, overrides: Partial<Crossing> = {}): Crossing => ({
+    tick,
+    kind: 'knowledge',
+    dose: 1,
+    amounts: [1],
+    origin: { world: 'A', tick },
+    cost: 3,
+    direction: 'in',
+    ...overrides,
+  })
+
+  it('keeps the events newest first and the index each one has in the record list', () => {
+    const events = [record('famine', 10), record('civil_unrest', 40), record('epidemic', 25)]
+    expect(historyRows(events, [], 200)).toEqual([
+      { kind: 'event', year: 40, index: 1, record: events[1] },
+      { kind: 'event', year: 25, index: 2, record: events[2] },
+      { kind: 'event', year: 10, index: 0, record: events[0] },
+    ])
+  })
+
+  it('files a crossing by its year among the events', () => {
+    const events = [record('famine', 10), record('epidemic', 60)]
+    expect(historyRows(events, [crossing(30)], 200).map((row) => [row.kind, row.year])).toEqual([
+      ['event', 60],
+      ['crossing', 30],
+      ['event', 10],
+    ])
+  })
+
+  it('keeps the event of a year above the crossing of the same year', () => {
+    const rows = historyRows([record('famine', 30)], [crossing(30)], 200)
+    expect(rows.map((row) => row.kind)).toEqual(['event', 'crossing'])
+  })
+
+  it('carries the direction and the origin of each crossing', () => {
+    const rows = historyRows(
+      [],
+      [crossing(30, { direction: 'out', origin: { world: 'C', tick: 5 } })],
+      200,
+    )
+    expect(rows[0]).toMatchObject({ kind: 'crossing', year: 30 })
+    expect(rows[0]?.kind === 'crossing' && rows[0].crossing.direction).toBe('out')
+  })
+
+  it('never returns more rows than the limit, keeping the most recent ones', () => {
+    const events = Array.from({ length: 5 }, (_, i) => record('famine', i * 10))
+    const rows = historyRows(events, [crossing(45)], 3)
+    expect(rows.map((row) => row.year)).toEqual([45, 40, 30])
   })
 })

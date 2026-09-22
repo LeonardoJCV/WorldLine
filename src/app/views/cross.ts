@@ -3,9 +3,11 @@ import {
   crossingAmounts,
   crossingCost,
   DOSES,
+  type Crossing,
   type CrossingKind,
   type Dose,
 } from '../../engine/crossing.ts'
+import type { EventRecord } from '../../engine/events.ts'
 import { HORIZON } from '../../engine/params.ts'
 import { MAX_WORLDLINES, type Snapshot, type WorldlineId } from '../../worker/protocol.ts'
 import type { MessageKey } from '../i18n/en.ts'
@@ -32,6 +34,32 @@ export function crossOrigins<T extends OriginCandidate>(
   focus: WorldlineId,
 ): readonly T[] {
   return worlds.filter((world) => world.info.id !== focus && !worldEnded(world.present))
+}
+
+export type HistoryRow =
+  | {
+      readonly kind: 'event'
+      readonly year: number
+      readonly index: number
+      readonly record: EventRecord
+    }
+  | { readonly kind: 'crossing'; readonly year: number; readonly crossing: Crossing }
+
+// FEAT: a travessia entra na mesma lista dos eventos, sem mexer no índice que o painel causal usa
+export function historyRows(
+  events: readonly EventRecord[],
+  crossings: readonly Crossing[],
+  limit: number,
+): readonly HistoryRow[] {
+  const rows: HistoryRow[] = []
+  for (let i = events.length - 1; i >= 0; i--) {
+    const record = events[i]
+    if (record) rows.push({ kind: 'event', year: record.start, index: i, record })
+  }
+  for (const crossing of crossings) {
+    rows.push({ kind: 'crossing', year: crossing.tick, crossing })
+  }
+  return rows.sort((a, b) => b.year - a.year).slice(0, limit)
 }
 
 export interface CrossQuoteInput {

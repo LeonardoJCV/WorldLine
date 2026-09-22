@@ -2,6 +2,7 @@ import type { Cause, EventRecord } from '../../engine/events.ts'
 
 type ConditionCause = Extract<Cause, { kind: 'condition' }>
 type DecisionCause = Extract<Cause, { kind: 'decision' }>
+type CrossingCause = Extract<Cause, { kind: 'crossing' }>
 
 interface NodeBase {
   readonly key: string
@@ -14,6 +15,7 @@ export type CausalNode =
   | (NodeBase & { readonly kind: 'event'; readonly record: number; readonly repeated: boolean })
   | (NodeBase & { readonly kind: 'condition'; readonly cause: ConditionCause })
   | (NodeBase & { readonly kind: 'decision'; readonly cause: DecisionCause })
+  | (NodeBase & { readonly kind: 'crossing'; readonly cause: CrossingCause })
 
 export interface CausalTree {
   readonly nodes: readonly CausalNode[]
@@ -41,9 +43,7 @@ export function buildCausalTree(
     const key = parent === null ? `e${index}` : `${parent}/e${index}`
     const repeated = path.has(index)
     const record = records[index]
-    const known = record && !repeated && depth < maxDepth ? record.causes : []
-    // FEAT: a travessia só ganha nó próprio no modo Cruzar
-    const causes = known.filter((cause) => cause.kind !== 'crossing')
+    const causes = record && !repeated && depth < maxDepth ? record.causes : []
     const within = new Set(path).add(index)
     const rows: number[] = []
     deepest = Math.max(deepest, depth)
@@ -59,7 +59,9 @@ export function buildCausalTree(
       nodes.push(
         cause.kind === 'condition'
           ? { ...base, kind: 'condition', cause }
-          : { ...base, kind: 'decision', cause },
+          : cause.kind === 'decision'
+            ? { ...base, kind: 'decision', cause }
+            : { ...base, kind: 'crossing', cause },
       )
       rows.push(row)
     })

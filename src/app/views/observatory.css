@@ -463,6 +463,11 @@ button.state__row:hover,
   cursor: pointer;
 }
 
+.events__item[data-kind='crossing'] {
+  border-left-color: var(--starlight);
+  border-left-style: dashed;
+}
+
 .events__item[aria-current='true'] {
   background: var(--nebula);
   border-color: var(--dim);
@@ -526,6 +531,19 @@ button.state__row:hover,
 
 .causal__node[data-kind='decision'] {
   border-left: 3px solid var(--starlight);
+}
+
+.causal__node[data-kind='crossing'] {
+  border-left: 3px dashed var(--starlight);
+}
+
+/* FEAT: a frase da travessia é longa e ocupa as duas linhas do nó */
+.causal__node[data-kind='crossing'] .causal__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
 }
 
 button.causal__node {

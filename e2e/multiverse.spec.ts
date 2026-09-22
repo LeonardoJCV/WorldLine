@@ -6,6 +6,14 @@ async function worldAtYear(page: Page, years: number) {
   for (let i = 0; i < years; i++) await step.click()
 }
 
+// FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
+async function pickOrigin(page: Page) {
+  await page
+    .getByRole('group', { name: 'Where it comes from' })
+    .getByRole('button', { name: 'From worldline A' })
+    .click()
+}
+
 async function branchFromStart(page: Page) {
   await page.getByRole('button', { name: 'Intervene' }).click()
   const history = page.getByRole('slider', { name: /Worldline history/ })
@@ -150,4 +158,53 @@ test('announces a crossing only once the worker has recorded it', async ({ page 
   await page.getByRole('button', { name: 'Open the crossing' }).click()
   await expect(arrived).toBeVisible()
   await expect(page.locator('.notices p')).toHaveCount(0)
+})
+test('files an arriving crossing among the events of the worldline that received it', async ({
+  page,
+}) => {
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  const arrival = page.locator('.events__item', { hasText: 'Received Knowledge from A' })
+  await expect(arrival).toBeVisible()
+  await expect(arrival.locator('.events__year')).toHaveText('0005')
+  await page.getByRole('button', { name: 'Focus on worldline A' }).click()
+  await expect(page.locator('.events__item', { hasText: 'Received Knowledge from A' })).toHaveCount(
+    0,
+  )
+})
+
+test('shows the departure in the worldline the people left', async ({ page }) => {
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'People' }).click()
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await expect(page.locator('.events__item', { hasText: 'Received People from A' })).toBeVisible()
+  await page.getByRole('button', { name: 'Focus on worldline A' }).click()
+  await expect(page.locator('.events__item', { hasText: 'People left for B' })).toBeVisible()
+})
+
+test('shows the crossing as a cause of the events it changed', async ({ page }) => {
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Doctrine' }).click()
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  const golden = page.locator('.events__item', { hasText: 'Golden age' }).first()
+  await expect(golden).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await golden.click()
+  await expect(
+    page.locator('.causal__node[data-kind="crossing"]', { hasText: 'Doctrine that crossed in' }),
+  ).toBeVisible()
 })

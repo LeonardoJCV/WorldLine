@@ -61,7 +61,7 @@ describe('buildCausalTree', () => {
     expect(tree.nodes.find((n) => n.kind === 'decision')).toMatchObject({ depth: 1, row: 0 })
   })
 
-  it('leaves a crossing cause out of the tree for now', () => {
+  it('shows a crossing as a leaf in the order it was recorded', () => {
     const tree = buildCausalTree(
       [
         record('famine', 40, [
@@ -71,8 +71,27 @@ describe('buildCausalTree', () => {
       ],
       0,
     )
-    expect(tree.nodes).toHaveLength(2)
-    expect(tree.nodes.filter((n) => n.kind === 'condition')).toHaveLength(1)
+    expect(tree.nodes).toHaveLength(3)
+    expect(tree.nodes.find((n) => n.kind === 'crossing')).toMatchObject({
+      depth: 1,
+      row: 0,
+      parent: 'e0',
+      cause: { tick: 30, crossing: 'resource' },
+    })
+    expect(tree.nodes.find((n) => n.kind === 'condition')).toMatchObject({ depth: 1, row: 1 })
+  })
+
+  it('keeps a crossing under the event it caused, inside the depth limit', () => {
+    const records = [
+      record('famine', 40, [{ kind: 'crossing', tick: 30, crossing: 'resource' }]),
+      record('civil_unrest', 60, [{ kind: 'event', record: 0 }]),
+    ]
+    const tree = buildCausalTree(records, 1, 1)
+    expect(tree.nodes.filter((n) => n.kind === 'crossing')).toHaveLength(0)
+    expect(buildCausalTree(records, 1).nodes.find((n) => n.kind === 'crossing')).toMatchObject({
+      depth: 2,
+      parent: 'e1/e0',
+    })
   })
 
   it('tolerates causes that point to missing records', () => {
