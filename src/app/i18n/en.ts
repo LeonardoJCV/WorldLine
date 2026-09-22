@@ -158,6 +158,7 @@ export const en = {
   'surface.autoHour': 'Follow the sun',
   'surface.hint': 'Arrow keys move, + and - zoom, Esc goes back to the currents',
   'city.label': '{name}, {state}',
+  'micro.list': 'Microevents on the current',
   'micro.founding': '{city} is founded',
   'micro.harvest': 'Record harvest in {city}',
   'micro.outbreak': 'Outbreak in {city}',

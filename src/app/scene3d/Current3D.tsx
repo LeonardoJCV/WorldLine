@@ -17,7 +17,7 @@ import { planetPalette, planetState } from '../planet/uniforms.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import type { View } from '../sim/store.ts'
-import { lensStore } from '../surface/lens.ts'
+import { lensStore, type LensTarget } from '../surface/lens.ts'
 import { microevents, type MicroEvent, type YearSeries } from '../surface/micro.ts'
 import { cityNames } from '../surface/names.ts'
 import { terrainMap, terrainSites } from '../surface/runtime.ts'
@@ -66,6 +66,9 @@ interface TouchState {
 
 const CLICK_SLOP = 6
 const FALLBACK_MAP: TerrainMap = { width: 1, height: 1, data: new Float32Array(4) }
+
+const NO_MICRO: readonly MicroEvent[] = []
+const SAME_YEAR_SPREAD = 0.6
 
 const ERA_EVENTS = new Set(EVENTS.filter((def) => def.kind === 'era').map((def) => def.id))
 
@@ -118,7 +121,10 @@ export function Current3D({
   const [loaded, setLoaded] = useState<{ seed: number; map: TerrainMap } | null>(null)
   const zoomed = to - from <= MICRO_WINDOW
   const [sites, setSites] = useState<{ seed: number; sites: readonly Site[] } | null>(null)
-  const [yearly, setYearly] = useState<(YearSeries & { focus: string }) | null>(null)
+  const [yearly, setYearly] = useState<
+    (YearSeries & { seed: number; focus: string; window: string }) | null
+  >(null)
+  const windowKey = `${from}:${to}`
   const names = useMemo(() => cityNames(seed, MAX_SITES), [seed])
   const needSites = zoomed && sites?.seed !== seed
 
@@ -288,13 +294,20 @@ export function Current3D({
   }, [needSites, seed])
 
   useEffect(() => {
-    if (!zoomed || worlds.length === 0) return
+    if (!zoomed || worlds.length === 0 || paused) return
     let cancelled = false
     const frameId = requestAnimationFrame(() => {
       client.range(focus, from, to, to - from + 1).then(
         (result) => {
           if (!cancelled)
-            setYearly({ focus, from: result.from, to: result.to, values: result.series })
+            setYearly({
+              seed,
+              focus,
+              window: `${from}:${to}`,
+              from: result.from,
+              to: result.to,
+              values: result.series,
+            })
         },
         () => {
           if (!cancelled) setYearly(null)
@@ -305,15 +318,30 @@ export function Current3D({
       cancelled = true
       cancelAnimationFrame(frameId)
     }
-  }, [zoomed, worlds.length, focus, from, to])
+  }, [zoomed, worlds.length, paused, seed, focus, from, to])
 
-  const micro = useMemo<MicroEvent[]>(
+  const freshMicro = useMemo<readonly MicroEvent[] | null>(
     () =>
-      zoomed && yearly?.focus === focus && sites?.seed === seed
+      zoomed &&
+      yearly?.seed === seed &&
+      yearly.focus === focus &&
+      yearly.window === windowKey &&
+      sites?.seed === seed
         ? microevents({ seed, sites: sites.sites, series: yearly })
-        : [],
-    [zoomed, yearly, focus, sites, seed],
+        : null,
+    [zoomed, yearly, focus, windowKey, sites, seed],
   )
+  // FIX: só aceita a série da janela atual; enquanto a nova chega, mantém a última do mesmo mundo
+  const [keptMicro, setKeptMicro] = useState<{
+    seed: number
+    focus: string
+    events: readonly MicroEvent[]
+  } | null>(null)
+  if (freshMicro && freshMicro !== keptMicro?.events)
+    setKeptMicro({ seed, focus, events: freshMicro })
+  const micro =
+    freshMicro ??
+    (zoomed && keptMicro?.seed === seed && keptMicro.focus === focus ? keptMicro.events : NO_MICRO)
 
   const sceneWorlds = useMemo<SceneWorld[]>(() => {
     if (!fetched) return []
@@ -377,9 +405,18 @@ export function Current3D({
         if (point)
           list.push({ key: `decision:${decision.tick}`, kind: 'decision', position: point })
       }
+      const perYear = new Map<number, number>()
+      for (const e of micro) perYear.set(e.year, (perYear.get(e.year) ?? 0) + 1)
+      const seen = new Map<number, number>()
       for (const e of micro) {
         if (e.year < fetched.from || e.year > fetched.to) continue
-        const point = axisPoint(focusPath, (e.year - fetched.from) / span)
+        const order = seen.get(e.year) ?? 0
+        seen.set(e.year, order + 1)
+        const count = perYear.get(e.year) ?? 1
+        // FIX: eventos do mesmo ano se afastam um pouco no eixo para não se sobrepor
+        const shift = count > 1 ? (order / (count - 1) - 0.5) * SAME_YEAR_SPREAD : 0
+        const u = Math.min(1, Math.max(0, (e.year + shift - fetched.from) / span))
+        const point = axisPoint(focusPath, u)
         if (point) list.push({ key: microKey(e), kind: 'micro', position: point })
       }
     }
@@ -396,9 +433,16 @@ export function Current3D({
     return list
   }, [fetched, focusPath, events, decisions, micro, sceneWorlds, worlds])
 
-  const microCount = useMemo(
-    () => markers.filter((marker) => marker.kind === 'micro').length,
-    [markers],
+  const microList = useMemo(
+    () =>
+      sites?.seed === seed
+        ? markers.flatMap((marker) => {
+            if (marker.kind !== 'micro') return []
+            const target = microTarget(marker.key, sites.sites)
+            return target ? [{ key: marker.key, target }] : []
+          })
+        : [],
+    [markers, sites, seed],
   )
 
   useEffect(() => {
@@ -510,9 +554,12 @@ export function Current3D({
     dive(() => lensStore.getState().openAt(target))
   }
 
+  const describeMicro = (target: LensTarget): string =>
+    t(`micro.${target.kind}`, { city: names[target.site] ?? '' })
+
   const microTitle = (key: string): string => {
     const target = sites?.seed === seed ? microTarget(key, sites.sites) : null
-    return target ? t(`micro.${target.kind}`, { city: names[target.site] ?? '' }) : ''
+    return target ? describeMicro(target) : ''
   }
 
   const yearAt = useCallback(
@@ -599,7 +646,7 @@ export function Current3D({
   }, [yearAt])
 
   return (
-    <div className="scene3d" style={{ width, height }} inert={paused} data-micro={microCount}>
+    <div className="scene3d" style={{ width, height }} inert={paused} data-micro={microList.length}>
       <canvas
         ref={canvasRef}
         className="scene3d__canvas"
@@ -706,6 +753,17 @@ export function Current3D({
       <p id="scene3d-hint" className="scene3d__hint">
         {t('scene.label', { year: formatYear(present) })}
       </p>
+      {microList.length > 0 && (
+        <ul className="scene3d__micros" aria-label={t('micro.list')}>
+          {microList.map(({ key, target }) => (
+            <li key={key}>
+              <button type="button" onClick={() => openMicro(key)}>
+                <span>{describeMicro(target)}</span>, <span>{formatYear(target.year)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="scene3d__labels" aria-hidden="true">
         {labels.map((label) => (
           <span

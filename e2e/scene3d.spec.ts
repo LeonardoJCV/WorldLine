@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { useGraphics } from './stage.ts'
 
 test('shows the 3D current by default', async ({ page }) => {
@@ -194,16 +194,47 @@ test.describe('touch', () => {
   })
 })
 
+// FIX: sob carga o relógio avança menos; espera o ano em vez do tempo
+async function playUntil(page: Page, year: number) {
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await expect
+    .poll(async () => Number(await page.getByTestId('year').textContent()), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(year)
+  await page.getByRole('button', { name: 'Pause' }).click()
+}
+
 test('shows microevents when the current is zoomed to a few decades', async ({ page }) => {
   test.slow()
   await page.goto('/?seed=482913')
-  await page.getByRole('button', { name: '×256' }).click()
-  await page.getByRole('button', { name: 'Play' }).click()
-  await page.waitForTimeout(2500)
-  await page.getByRole('button', { name: 'Pause' }).click()
+  await playUntil(page, 300)
   await expect(page.locator('.scene3d')).toHaveAttribute('data-micro', '0')
   const current = page.getByRole('slider', { name: /Worldline history/ })
   await current.focus()
-  for (let i = 0; i < 12; i++) await current.press('+')
+  for (let i = 0; i < 20; i++) await current.press('+')
   await expect(page.locator('.scene3d')).not.toHaveAttribute('data-micro', '0', { timeout: 10_000 })
+})
+
+test('opens the planet at a microevent reached from the keyboard', async ({ page }) => {
+  test.slow()
+  await page.goto('/?seed=482913')
+  await playUntil(page, 300)
+  const current = page.getByRole('slider', { name: /Worldline history/ })
+  await current.focus()
+  for (let i = 0; i < 20; i++) await current.press('+')
+  const list = page.getByRole('list', { name: 'Microevents on the current' })
+  await expect(list.getByRole('button').first()).toBeAttached({ timeout: 10_000 })
+  await page.waitForTimeout(1000)
+  const first = list.getByRole('button').first()
+  const text = (await first.locator('span').first().textContent()) ?? ''
+  expect(text).not.toBe('')
+  const name = (await first.textContent()) ?? ''
+  const micro = list.getByRole('button', { name, exact: true })
+  await micro.focus()
+  await micro.press('Enter')
+  await expect(page.locator('main.stage')).toHaveAttribute('data-lens', 'planet')
+  await expect(page.locator('.surface')).toHaveAttribute('data-level', 'region', {
+    timeout: 10_000,
+  })
+  await expect(page.getByRole('dialog').getByRole('heading')).toHaveText(text)
 })

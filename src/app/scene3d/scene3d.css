@@ -28,7 +28,8 @@
   cursor: pointer;
 }
 
-.scene3d__hint {
+.scene3d__hint,
+.scene3d__micros {
   position: absolute;
   width: 1px;
   height: 1px;

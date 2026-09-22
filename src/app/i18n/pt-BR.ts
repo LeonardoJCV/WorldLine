@@ -156,6 +156,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'surface.autoHour': 'Acompanhar o sol',
   'surface.hint': 'Setas movem, + e - aproximam ou afastam, Esc volta às correntes',
   'city.label': '{name}, {state}',
+  'micro.list': 'Microeventos na corrente',
   'micro.founding': 'Fundação de {city}',
   'micro.harvest': 'Colheita recorde em {city}',
   'micro.outbreak': 'Surto em {city}',
