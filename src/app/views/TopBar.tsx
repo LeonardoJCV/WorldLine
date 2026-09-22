@@ -6,7 +6,7 @@ import { simulation, useSimulation } from '../sim/runtime.ts'
 import type { Mode } from '../sim/store.ts'
 
 const OPTIONS: readonly Speed[] = [...SPEEDS, 'max']
-const MODES: readonly Mode[] = ['observe', 'intervene']
+const MODES: readonly Mode[] = ['observe', 'intervene', 'cross']
 
 export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const t = useT()

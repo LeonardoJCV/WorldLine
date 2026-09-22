@@ -623,6 +623,112 @@ button.causal__node:hover {
   font-weight: 600;
 }
 
+.band__main > .cross {
+  grid-column: 1 / -1;
+}
+
+.cross__groups {
+  display: grid;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.cross__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.cross__label {
+  min-width: 14ch;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.cross__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cross__group button,
+.cross__actions button {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.cross__group button:hover:not(:disabled),
+.cross__actions button:hover:not(:disabled) {
+  border-color: var(--dim);
+}
+
+.cross__group button[aria-pressed='true'] {
+  border-color: var(--starlight);
+  background: var(--nebula);
+  font-weight: 600;
+}
+
+.cross__group button:disabled,
+.cross__actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cross__quote {
+  max-width: 48ch;
+  margin-top: 12px;
+}
+
+.cross__price {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-stretch: 87%;
+}
+
+.cross__carries,
+.cross__note,
+.cross__status {
+  margin: 2px 0 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.cross__note {
+  max-width: 48ch;
+  margin: 0;
+}
+
+.cross__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  max-width: 640px;
+  margin-top: 12px;
+}
+
+.cross__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cross__open:not(:disabled) {
+  background: var(--nebula);
+  border-color: var(--starlight);
+  font-weight: 600;
+}
+
+.cross__status {
+  max-width: 48ch;
+  margin-top: 8px;
+}
+
 .zoom {
   position: absolute;
   top: 12px;

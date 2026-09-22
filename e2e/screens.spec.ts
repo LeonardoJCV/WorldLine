@@ -94,6 +94,49 @@ test('observatory multiverse', async ({ page }) => {
   await page.screenshot({ path: 'screens/observatory-multiverse.png' })
 })
 
+async function enterCross(page: Page, width: number, height: number) {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width, height })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  for (let i = 0; i < 6; i++) await history.press('Shift+ArrowRight')
+  await expect(page.getByRole('button', { name: /Branch from year/ })).toBeEnabled()
+  const industry = page.getByRole('slider', { name: /Industry/ })
+  await industry.focus()
+  for (let i = 0; i < 25; i++) await industry.press('ArrowRight')
+  await page.getByRole('button', { name: /Branch from year/ }).click()
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await page.getByRole('button', { name: 'From worldline A' }).click()
+  await expect(page.locator('.cross__price')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
+  await page.waitForTimeout(300)
+}
+
+test('cross panel', async ({ page }) => {
+  await enterCross(page, 1440, 900)
+  await page.screenshot({ path: 'screens/cross-panel.png' })
+})
+
+test('cross panel mobile', async ({ page }) => {
+  await enterCross(page, 390, 844)
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBe(0)
+  const action = page.getByRole('button', { name: 'Open the crossing' })
+  await action.scrollIntoViewIfNeeded()
+  await expect(action).toBeInViewport()
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: 'screens/cross-panel-mobile.png' })
+})
+
 test('observatory multiverse 3d', async ({ page }) => {
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })

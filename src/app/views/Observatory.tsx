@@ -16,6 +16,7 @@ import { isCompatibleVersion, type MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
+import { CrossPanel } from './CrossPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
 import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
@@ -56,8 +57,10 @@ export function Observatory({
   const worldFocus = useSimulation((s) => s.focus)
   const cursor = useSimulation((s) => s.cursor)
   const inspectedTick = useSimulation((s) => s.inspected?.tick ?? null)
+  const crossOrigin = useSimulation((s) => s.crossOrigin)
   const observed = useSimulation((s) => s.inspected ?? s.present)
   const linkVersion = useSimulation((s) => s.linkVersion)
+  const remount = `${seed}:${worldFocus}:${cursor === null ? 'now' : (inspectedTick ?? 'pending')}`
   const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
   const fullFrame = useMemo(() => {
     if (!size) return null
@@ -117,9 +120,9 @@ export function Observatory({
         <StatePanel focus={focus} onFocus={setFocus} />
         <div className="band__main">
           {mode === 'intervene' ? (
-            <AllocationPanel
-              key={`${seed}:${worldFocus}:${cursor === null ? 'now' : (inspectedTick ?? 'pending')}`}
-            />
+            <AllocationPanel key={remount} />
+          ) : mode === 'cross' ? (
+            <CrossPanel key={`${remount}:${crossOrigin ?? 'none'}`} />
           ) : (
             <>
               <EventsPanel />
