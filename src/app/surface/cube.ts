@@ -64,6 +64,28 @@ export function cubeDir(face: number, u: number, v: number): [number, number, nu
   return [x / length, y / length, z / length]
 }
 
+export function faceUV(dir: Vec3): { face: number; u: number; v: number } {
+  const [x, y, z] = dir
+  const ax = Math.abs(x)
+  const ay = Math.abs(y)
+  const az = Math.abs(z)
+  if (ax >= ay && ax >= az) {
+    return x > 0 ? { face: 0, u: -z / ax, v: y / ax } : { face: 1, u: z / ax, v: y / ax }
+  }
+  if (ay >= az) {
+    return y > 0 ? { face: 2, u: x / ay, v: -z / ay } : { face: 3, u: x / ay, v: z / ay }
+  }
+  return z > 0 ? { face: 4, u: x / az, v: y / az } : { face: 5, u: -x / az, v: y / az }
+}
+
+export function tileOf(dir: Vec3, level: number): ChunkKey {
+  const { face, u, v } = faceUV(dir)
+  const cells = 2 ** level
+  const clamp = (value: number) =>
+    Math.min(cells - 1, Math.max(0, Math.floor(((value + 1) / 2) * cells)))
+  return { face, level, x: clamp(u), y: clamp(v) }
+}
+
 export function chunkCorner(key: ChunkKey): { u0: number; v0: number; size: number } {
   const size = chunkSize(key)
   return { u0: -1 + key.x * size, v0: -1 + key.y * size, size }

@@ -5,11 +5,13 @@ import {
   chunkExtent,
   cubeDir,
   displaySet,
+  faceUV,
   keyOf,
   parentOf,
   parseKey,
   rootKeys,
   selectChunks,
+  tileOf,
   type Vec3,
 } from './cube.ts'
 
@@ -108,6 +110,28 @@ describe('selectChunks', () => {
         p = parentOf(p)
       }
     }
+  })
+})
+
+describe('faceUV', () => {
+  it('inverts cubeDir on every face', () => {
+    for (let face = 0; face < 6; face++) {
+      for (const [u, v] of [
+        [0.3, -0.7],
+        [-0.99, 0.5],
+        [0, 0],
+      ] as const) {
+        const back = faceUV(cubeDir(face, u, v))
+        expect(back.face).toBe(face)
+        expect(back.u).toBeCloseTo(u, 10)
+        expect(back.v).toBeCloseTo(v, 10)
+      }
+    }
+  })
+
+  it('finds the tile holding a direction', () => {
+    const key = { face: 4, level: 6, x: 40, y: 12 }
+    expect(tileOf(chunkCenter(key), 6)).toEqual(key)
   })
 })
 
