@@ -86,24 +86,24 @@ async function planetPoint(page: import('@playwright/test').Page) {
   const canvas = page.locator('.scene3d__canvas')
   const label = page.locator('.scene3d__letter').first()
   await expect(label).toBeVisible()
-  // FIX: espera a câmera assentar no trilho (rótulo parado) antes de procurar o planeta
-  let before = await label.boundingBox()
-  await expect
-    .poll(
-      async () => {
-        await page.waitForTimeout(300)
-        const now = await label.boundingBox()
-        const still =
-          before !== null &&
-          now !== null &&
-          Math.abs(now.x - before.x) < 0.5 &&
-          Math.abs(now.y - before.y) < 0.5
-        before = now
-        return still
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(true)
+  // FIX: espera a câmera assentar no trilho (rótulo parado por vários quadros) antes de procurar
+  await label.evaluate(
+    (el: HTMLElement) =>
+      new Promise<void>((resolve) => {
+        const read = () => el.getBoundingClientRect()
+        let last = read()
+        let still = 0
+        const step = () => {
+          const now = read()
+          const moved = Math.hypot(now.x - last.x, now.y - last.y)
+          still = moved < 0.3 ? still + 1 : 0
+          last = now
+          if (still >= 12) resolve()
+          else requestAnimationFrame(step)
+        }
+        requestAnimationFrame(step)
+      }),
+  )
   const box = await label.boundingBox()
   if (!box) throw new Error('planet label is not visible')
   const hits: { x: number; y: number }[] = []
