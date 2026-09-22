@@ -26,6 +26,16 @@ const CROSSED: readonly Crossing[] = [
     direction: 'in',
   },
   {
+    tick: 700,
+    kind: 'doctrine',
+    dose: 1,
+    amounts: [],
+    origin: { world: 'B', tick: 700 },
+    cost: 2,
+    direction: 'in',
+    allocation: { agriculture: 20, industry: 40, research: 30, conservation: 10 },
+  },
+  {
     tick: 900,
     kind: 'resource',
     dose: 2,
@@ -71,6 +81,6 @@ export const GOLDEN_CASES: readonly GoldenCase[] = [
   { seed: 0xffffffff, script: 'steady', year: 5000, hash: '68b49e5f' },
   { seed: 0xffffffff, script: 'shifting', year: 1000, hash: 'ae5e39c0' },
   { seed: 0xffffffff, script: 'shifting', year: 5000, hash: '795871e1' },
-  { seed: 482913, script: 'crossed', year: 1000, hash: '1df3efe6' },
-  { seed: 482913, script: 'crossed', year: 5000, hash: '58e27ab7' },
+  { seed: 482913, script: 'crossed', year: 1000, hash: 'eb5d6473' },
+  { seed: 482913, script: 'crossed', year: 5000, hash: '17cf388c' },
 ]

@@ -13,6 +13,7 @@ import { GOLDEN_CASES, GOLDEN_SCRIPTS } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
 import { VARIABLES, type Allocation, type Decision } from './state.ts'
+import { step } from './step.ts'
 import { Worldline } from './worldline.ts'
 
 const allocation = fc
@@ -66,6 +67,36 @@ const crossScript = (maxTick: number) =>
     )
     .map((entries) =>
       entries.sort(([a], [b]) => a - b).map(([tick, kind, dose]) => crossingAt(tick, kind, dose)),
+    )
+
+const departureAt = (tick: number, amount: number): Crossing => ({
+  tick,
+  kind: 'people',
+  dose: 3,
+  amounts: [amount],
+  origin: { world: 'donor', tick },
+  cost: 0,
+  direction: 'out',
+})
+
+// FEAT: mistura chegadas com partidas, inclusive uma grande o bastante para esvaziar o mundo
+const drainScript = (maxTick: number) =>
+  fc
+    .array(
+      fc.tuple(
+        fc.integer({ min: 0, max: maxTick }),
+        fc.constantFrom(...CROSSING_KINDS),
+        fc.constantFrom(...DOSES),
+        fc.oneof(fc.constant(0), fc.double({ min: 1, max: 1e12, noNaN: true })),
+      ),
+      { maxLength: 6 },
+    )
+    .map((entries) =>
+      entries
+        .sort(([a], [b]) => a - b)
+        .map(([tick, kind, dose, drain]) =>
+          drain > 0 ? departureAt(tick, drain) : crossingAt(tick, kind, dose),
+        ),
     )
 
 describe('golden hashes', () => {
@@ -189,17 +220,83 @@ describe('determinism properties', () => {
     )
   })
 
-  it('never produces non-finite values over the whole horizon', () => {
+  it('a people crossing moves into the destination exactly what it takes out of the origin', () => {
     fc.assert(
-      fc.property(seed, script(HORIZON - 1), (s, decisions) => {
-        const w = new Worldline(s, decisions)
-        w.advance(HORIZON)
-        for (let t = 0; t <= w.present.tick; t += 97) {
-          for (const variable of VARIABLES)
-            if (!Number.isFinite(w.valueAt(variable, t))) return false
+      fc.property(
+        seed,
+        seed,
+        fc.integer({ min: 1, max: 600 }),
+        fc.constantFrom(...DOSES),
+        (from, to, at, dose) => {
+          const origin = new Worldline(from)
+          const destination = new Worldline(to)
+          origin.advance(at)
+          destination.advance(at)
+          if (origin.ended || destination.ended) return true
+          const [moved = 0] = crossingAmounts('people', dose, origin.present)
+          if (moved <= 0) return false
+          const leaving = departureAt(at, moved)
+          const arriving: Crossing = { ...leaving, direction: 'in', cost: 1, dose }
+          const left = step(origin.present, origin.world, origin.records.length, undefined, [
+            leaving,
+          ])
+          const emptier = step(
+            { ...origin.present, population: origin.present.population - moved },
+            origin.world,
+            origin.records.length,
+          )
+          const arrived = step(
+            destination.present,
+            destination.world,
+            destination.records.length,
+            undefined,
+            [arriving],
+          )
+          const fuller = step(
+            { ...destination.present, population: destination.present.population + moved },
+            destination.world,
+            destination.records.length,
+          )
+          return (
+            left.state.population === emptier.state.population &&
+            arrived.state.population === fuller.state.population
+          )
+        },
+      ),
+      { numRuns: 25 },
+    )
+  })
+
+  it('never lets a stock go negative in a crossed history', () => {
+    fc.assert(
+      fc.property(seed, script(2999), drainScript(2999), (s, decisions, crossings) => {
+        const w = new Worldline(s, decisions, null, crossings)
+        w.advance(3000)
+        for (let t = 0; t <= w.present.tick; t += 31) {
+          for (const variable of VARIABLES) if (w.valueAt(variable, t) < 0) return false
         }
         return true
       }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('never produces non-finite values over the whole horizon', () => {
+    fc.assert(
+      fc.property(
+        seed,
+        script(HORIZON - 1),
+        crossScript(HORIZON - 1),
+        (s, decisions, crossings) => {
+          const w = new Worldline(s, decisions, null, crossings)
+          w.advance(HORIZON)
+          for (let t = 0; t <= w.present.tick; t += 97) {
+            for (const variable of VARIABLES)
+              if (!Number.isFinite(w.valueAt(variable, t))) return false
+          }
+          return true
+        },
+      ),
       { numRuns: 30 },
     )
   })

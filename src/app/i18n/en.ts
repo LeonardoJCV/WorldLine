@@ -113,7 +113,7 @@ export const en = {
   'library.meta': 'Year {year}, saved {date}',
   'verify.title': 'Reproducibility',
   'verify.lead':
-    'WORLDLINE promises that the same seed and the same decisions always produce the same history, in any browser. This page re-runs reference worlds here, in your browser, and compares the fingerprint of each one with the value recorded in the repository. One of them also receives knowledge, supplies and people sent over from another world, so a history touched from outside has to come out the same way too.',
+    'WORLDLINE promises that the same seed and the same decisions always produce the same history, in any browser. This page re-runs reference worlds here, in your browser, and compares the fingerprint of each one with the value recorded in the repository. One of them also receives knowledge, supplies, a creed and people sent over from another world, so a history touched from outside has to come out the same way too.',
   'verify.running': 'Running the reference worlds…',
   'verify.passed': 'All {count} fingerprints match in this browser.',
   'verify.failed': '{failed} of {count} fingerprints differ in this browser.',
@@ -127,7 +127,7 @@ export const en = {
   'verify.mismatch': 'Differs',
   'verify.script.steady': 'None',
   'verify.script.shifting': 'Three shifts',
-  'verify.script.crossed': 'Three shifts, three arrivals',
+  'verify.script.crossed': 'Three shifts, four arrivals',
   'verify.back': 'Open WORLDLINE',
   'worlds.title': 'Worldlines',
   'worlds.root': 'Original',

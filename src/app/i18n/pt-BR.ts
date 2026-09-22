@@ -111,7 +111,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'library.meta': 'Ano {year}, salvo em {date}',
   'verify.title': 'Reprodutibilidade',
   'verify.lead':
-    'O WORLDLINE promete que a mesma semente e as mesmas decisões produzem sempre a mesma história, em qualquer navegador. Esta página refaz mundos de referência aqui, no seu navegador, e compara a impressão digital de cada um com o valor registrado no repositório. Um deles ainda recebe conhecimento, recursos e pessoas vindos de outro mundo, para que uma história tocada de fora também tenha de sair igual.',
+    'O WORLDLINE promete que a mesma semente e as mesmas decisões produzem sempre a mesma história, em qualquer navegador. Esta página refaz mundos de referência aqui, no seu navegador, e compara a impressão digital de cada um com o valor registrado no repositório. Um deles ainda recebe conhecimento, recursos, uma doutrina e pessoas vindos de outro mundo, para que uma história tocada de fora também tenha de sair igual.',
   'verify.running': 'Executando os mundos de referência…',
   'verify.passed': 'As {count} impressões digitais conferem neste navegador.',
   'verify.failed': '{failed} de {count} impressões digitais diferem neste navegador.',
@@ -125,7 +125,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'verify.mismatch': 'Difere',
   'verify.script.steady': 'Nenhuma',
   'verify.script.shifting': 'Três mudanças',
-  'verify.script.crossed': 'Três mudanças, três chegadas',
+  'verify.script.crossed': 'Três mudanças, quatro chegadas',
   'verify.back': 'Abrir o WORLDLINE',
   'worlds.title': 'Realidades',
   'worlds.root': 'Original',
