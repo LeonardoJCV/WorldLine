@@ -56,13 +56,20 @@ describe('credit', () => {
     ).toBe(6)
   })
 
-  it('ignores extinct worlds for the count but keeps their history and their spending', () => {
+  it('ignores extinct worlds for the count and for the years, but keeps their spending', () => {
     expect(
       credit([
         { tick: 1000, ended: false, spent: 3 },
         { tick: 1000, ended: true, spent: 2 },
       ]),
-    ).toBe(2 + 0 + 2 - 5)
+    ).toBe(2 + 0 + 1 - 5)
+  })
+
+  it('stops counting the years of a world once it dies, without giving its cost back', () => {
+    const alive = { tick: 3000, ended: false, spent: 0 }
+    const doomed = { tick: 3000, ended: false, spent: 4 }
+    expect(credit([alive, doomed])).toBe(2 + 2 + 6 - 4)
+    expect(credit([alive, { ...doomed, ended: true }])).toBe(2 + 0 + 3 - 4)
   })
 })
 
@@ -121,6 +128,14 @@ describe('validateCrossings', () => {
     expect(() => validateCrossings([doctrine])).toThrow(RangeError)
     const uneven = { agriculture: 40, industry: 30, research: 20, conservation: 5 }
     expect(() => validateCrossings([{ ...doctrine, allocation: uneven }])).toThrow(RangeError)
+  })
+
+  it('refuses an allocation on a crossing that is not doctrine', () => {
+    const allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+    expect(() => validateCrossings([{ ...one, allocation }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, kind: 'people', amounts: [2], allocation }])).toThrow(
+      RangeError,
+    )
   })
 
   it('accepts a doctrine crossing with a valid allocation and deep-copies it', () => {

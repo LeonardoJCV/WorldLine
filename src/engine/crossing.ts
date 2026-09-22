@@ -70,10 +70,12 @@ export function credit(worlds: readonly CreditWorld[]): number {
   let years = 0
   let living = 0
   let spent = 0
+  // FIX: só realidade viva soma anos à capacidade; o que ela gastou continua gasto depois de morrer
   for (const world of worlds) {
-    years += Math.max(0, world.tick)
     spent += Math.max(0, world.spent)
-    if (!world.ended) living++
+    if (world.ended) continue
+    years += Math.max(0, world.tick)
+    living++
   }
   const capacity = 2 + 2 * Math.max(0, living - 1) + Math.floor(years / 1000)
   return capacity - spent
@@ -108,6 +110,10 @@ export function validateCrossings(crossings: readonly Crossing[]): Crossing[] {
       !isValidAllocation(crossing.allocation ?? ({} as Allocation))
     ) {
       throw new RangeError('a doctrine crossing carries an allocation')
+    }
+    // FIX: o link não sabe escrever alocação fora da doutrina, então os dois formatos só combinam recusando-a
+    if (crossing.kind !== 'doctrine' && crossing.allocation !== undefined) {
+      throw new RangeError('only a doctrine crossing carries an allocation')
     }
     previous = crossing.tick
   }
