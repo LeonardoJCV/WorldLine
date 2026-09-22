@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
+import { useStore } from 'zustand'
 import { useGraphics, useTier } from '../graphics/store.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
@@ -16,6 +17,7 @@ import { LEVELS, type Level } from './camera.ts'
 import { CityCard, type Card } from './CityCard.tsx'
 import { surfaceModel, type SurfaceModel } from './civilization.ts'
 import type { Vec3 } from './cube.ts'
+import { lensStore } from './lens.ts'
 import { anchorOf, cityEvents, foundedYear, recentEvents } from './labels.ts'
 import { TILE_BUDGET } from './lifeTiles.ts'
 import { microevents, type MicroEvent, type YearSeries } from './micro.ts'
@@ -68,6 +70,8 @@ export function PlanetView({
   const anchorsRef = useRef<ReadonlyMap<string, Anchor>>(new Map())
   const elsRef = useRef(new Map<string, HTMLElement>())
   const tier = useTier()
+  const target = useStore(lensStore, (s) => s.target)
+  const [ready, setReady] = useState(false)
   const still = useGraphics((s) => s.reducedMotion)
   const seed = useSimulation((s) => s.seed ?? 0)
   const year = useSimulation((s) => s.cursor ?? s.present?.tick ?? 0)
@@ -228,6 +232,17 @@ export function PlanetView({
   }, [anchors])
 
   useEffect(() => {
+    const scene = sceneRef.current
+    if (!target || !ready || !scene) return
+    scene.goTo(target.dir, 'region')
+    setChosen({
+      kind: 'micro',
+      event: { year: target.year, kind: target.kind, site: target.site },
+    })
+    lensStore.getState().clearTarget()
+  }, [target, ready])
+
+  useEffect(() => {
     modelRef.current = model
     sceneRef.current?.setModel(model)
   }, [model])
@@ -273,6 +288,7 @@ export function PlanetView({
           }
         })
         canvas.focus()
+        setReady(true)
       })
       .catch(() => {
         if (!disposed) exitRef.current()
@@ -282,6 +298,7 @@ export function PlanetView({
       unsubscribe?.()
       sceneRef.current?.dispose(!canvas.isConnected)
       sceneRef.current = null
+      setReady(false)
     }
   }, [seed, palette, tier, still])
 

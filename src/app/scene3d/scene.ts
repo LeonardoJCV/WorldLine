@@ -67,7 +67,7 @@ export interface SceneWorld {
 
 export interface SceneMarker {
   readonly key: string
-  readonly kind: 'event' | 'decision' | 'fork'
+  readonly kind: 'event' | 'decision' | 'fork' | 'micro'
   readonly position: Vec3
 }
 
@@ -246,12 +246,14 @@ export function createCurrentScene(
     event: new SphereGeometry(0.07, 12, 8),
     decision: new OctahedronGeometry(0.08),
     fork: new SphereGeometry(0.09, 16, 12),
+    micro: new OctahedronGeometry(0.05),
   }
   const markerMaterial = {
     event: new MeshBasicMaterial({ color: 0xe6e4f5 }),
     selected: new MeshBasicMaterial({ color: 0xffffff }),
     decision: new MeshBasicMaterial({ color: 0x6a5a94 }),
     fork: new MeshBasicMaterial({ color: 0x9a8fc4 }),
+    micro: new MeshBasicMaterial({ color: 0xf2d9a8 }),
   }
 
   const cursorPlane = new Mesh(

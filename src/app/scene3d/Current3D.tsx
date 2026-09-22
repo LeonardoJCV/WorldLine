@@ -18,7 +18,10 @@ import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import type { View } from '../sim/store.ts'
 import { lensStore } from '../surface/lens.ts'
-import { terrainMap } from '../surface/runtime.ts'
+import { microevents, type MicroEvent, type YearSeries } from '../surface/micro.ts'
+import { cityNames } from '../surface/names.ts'
+import { terrainMap, terrainSites } from '../surface/runtime.ts'
+import { MAX_SITES, type Site } from '../surface/sites.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
@@ -35,7 +38,7 @@ import {
 import { axisPoint, buildPath, headPoint, type PathData } from './path.ts'
 import type { CurrentScene, SceneMarker, SceneWorld } from './scene.ts'
 import { SAMPLES, axisOffsets, resample } from './space.ts'
-import { screenTargets } from './targets.ts'
+import { MICRO_WINDOW, microKey, microTarget, screenTargets } from './targets.ts'
 import './scene3d.css'
 
 interface Fetched {
@@ -113,6 +116,11 @@ export function Current3D({
   const { from, to } = resolveView(view, present)
   const palette = useMemo(() => planetPalette(seed), [seed])
   const [loaded, setLoaded] = useState<{ seed: number; map: TerrainMap } | null>(null)
+  const zoomed = to - from <= MICRO_WINDOW
+  const [sites, setSites] = useState<{ seed: number; sites: readonly Site[] } | null>(null)
+  const [yearly, setYearly] = useState<(YearSeries & { focus: string }) | null>(null)
+  const names = useMemo(() => cityNames(seed, MAX_SITES), [seed])
+  const needSites = zoomed && sites?.seed !== seed
 
   const measure = setting === 'auto' && measured === null
   const measureRef = useRef(measure)
@@ -263,6 +271,50 @@ export function Current3D({
     }
   }, [worlds, from, to])
 
+  useEffect(() => {
+    if (!needSites) return
+    let live = true
+    terrainSites(seed).then(
+      (list) => {
+        if (live) setSites({ seed, sites: list })
+      },
+      () => {
+        if (live) setSites(null)
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [needSites, seed])
+
+  useEffect(() => {
+    if (!zoomed || worlds.length === 0) return
+    let cancelled = false
+    const frameId = requestAnimationFrame(() => {
+      client.range(focus, from, to, to - from + 1).then(
+        (result) => {
+          if (!cancelled)
+            setYearly({ focus, from: result.from, to: result.to, values: result.series })
+        },
+        () => {
+          if (!cancelled) setYearly(null)
+        },
+      )
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frameId)
+    }
+  }, [zoomed, worlds.length, focus, from, to])
+
+  const micro = useMemo<MicroEvent[]>(
+    () =>
+      zoomed && yearly?.focus === focus && sites?.seed === seed
+        ? microevents({ seed, sites: sites.sites, series: yearly })
+        : [],
+    [zoomed, yearly, focus, sites, seed],
+  )
+
   const sceneWorlds = useMemo<SceneWorld[]>(() => {
     if (!fetched) return []
     const span = Math.max(1, fetched.to - fetched.from)
@@ -325,6 +377,11 @@ export function Current3D({
         if (point)
           list.push({ key: `decision:${decision.tick}`, kind: 'decision', position: point })
       }
+      for (const e of micro) {
+        if (e.year < fetched.from || e.year > fetched.to) continue
+        const point = axisPoint(focusPath, (e.year - fetched.from) / span)
+        if (point) list.push({ key: microKey(e), kind: 'micro', position: point })
+      }
     }
     const pathsById = new Map(
       sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.path]),
@@ -337,7 +394,12 @@ export function Current3D({
       if (point) list.push({ key: `fork:${world.info.id}`, kind: 'fork', position: point })
     }
     return list
-  }, [fetched, focusPath, events, decisions, sceneWorlds, worlds])
+  }, [fetched, focusPath, events, decisions, micro, sceneWorlds, worlds])
+
+  const microCount = useMemo(
+    () => markers.filter((marker) => marker.kind === 'micro').length,
+    [markers],
+  )
 
   useEffect(() => {
     const selectedKey = selected === null ? null : String(selected)
@@ -433,11 +495,24 @@ export function Current3D({
     return scene ? screenTargets(sceneWorlds, markers, (point) => scene.project(point)) : []
   }
 
-  const enter = () => {
+  const dive = (open: () => void) => {
     const scene = sceneRef.current
-    const open = () => lensStore.getState().setLens('planet')
     if (scene) void scene.dive().then(open)
     else open()
+  }
+
+  const enter = () => dive(() => lensStore.getState().setLens('planet'))
+
+  const openMicro = (key: string) => {
+    const target = sites?.seed === seed ? microTarget(key, sites.sites) : null
+    if (!target) return
+    simulation.getState().setCursor(target.year)
+    dive(() => lensStore.getState().openAt(target))
+  }
+
+  const microTitle = (key: string): string => {
+    const target = sites?.seed === seed ? microTarget(key, sites.sites) : null
+    return target ? t(`micro.${target.kind}`, { city: names[target.site] ?? '' }) : ''
   }
 
   const yearAt = useCallback(
@@ -524,7 +599,7 @@ export function Current3D({
   }, [yearAt])
 
   return (
-    <div className="scene3d" style={{ width, height }} inert={paused}>
+    <div className="scene3d" style={{ width, height }} inert={paused} data-micro={microCount}>
       <canvas
         ref={canvasRef}
         className="scene3d__canvas"
@@ -564,6 +639,10 @@ export function Current3D({
             simulation.getState().select(Number(hit.key))
             return
           }
+          if (hit?.kind === 'micro') {
+            openMicro(hit.key)
+            return
+          }
           event.currentTarget.setPointerCapture(event.pointerId)
           if (hit?.kind === 'enter') {
             // FEAT: entra no planeta só no clique; arrastar a partir dele varre o tempo
@@ -596,7 +675,9 @@ export function Current3D({
             if (year !== null) simulation.getState().setCursor(year)
             return
           }
-          event.currentTarget.style.cursor = pickTarget(targets(), x, y) ? 'pointer' : ''
+          const hover = pickTarget(targets(), x, y)
+          event.currentTarget.style.cursor = hover ? 'pointer' : ''
+          event.currentTarget.title = hover?.kind === 'micro' ? microTitle(hover.key) : ''
         }}
         onPointerUp={(event: PointerEvent<HTMLCanvasElement>) => {
           const press = pressRef.current

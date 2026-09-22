@@ -3,7 +3,8 @@ import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { FOCUS_RADIUS, pickTarget, type Vec3 } from './camera.ts'
 import { buildPath, headPoint } from './path.ts'
-import { screenTargets, type TargetWorld } from './targets.ts'
+import type { Site } from '../surface/sites.ts'
+import { EVENT_PICK, microKey, microTarget, screenTargets, type TargetWorld } from './targets.ts'
 
 function series(): RangeResult {
   const out = {} as Record<Variable, Float32Array>
@@ -57,5 +58,41 @@ describe('screenTargets', () => {
     )
     expect(pickTarget(targets, 501, 300)).toMatchObject({ kind: 'event', key: '3' })
     expect(targets.some((target) => target.key === 'fork:B')).toBe(false)
+  })
+})
+
+describe('microTarget', () => {
+  const sites: Site[] = Array.from({ length: 5 }, (_, index) => ({
+    index,
+    dir: [index / 10, 1, 0],
+    height: 0.1,
+    coast: false,
+    score: 1,
+  }))
+
+  it('decodes the key of a microevent into a planet target', () => {
+    expect(microTarget(microKey({ year: 1724, kind: 'fire', site: 3 }), sites)).toEqual({
+      dir: sites[3]?.dir,
+      year: 1724,
+      site: 3,
+      kind: 'fire',
+    })
+  })
+
+  it('rejects other keys, missing sites and unknown kinds', () => {
+    expect(microTarget('event:12', sites)).toBeNull()
+    expect(microTarget('micro:1724:fire:9', sites)).toBeNull()
+    expect(microTarget('micro:1724:flood:3', sites)).toBeNull()
+  })
+
+  it('turns visible micro markers into pick targets', () => {
+    const targets = screenTargets(
+      [],
+      [{ key: 'micro:1724:fire:3', kind: 'micro', position: [0, 0, 0] }],
+      project,
+    )
+    expect(targets).toEqual([
+      { kind: 'micro', key: 'micro:1724:fire:3', x: 500, y: 300, radius: EVENT_PICK },
+    ])
   })
 })

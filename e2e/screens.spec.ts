@@ -150,6 +150,22 @@ test('observatory 3d cursor', async ({ page }) => {
   await page.screenshot({ path: 'screens/observatory-3d-cursor.png' })
 })
 
+test('current micro', async ({ page }) => {
+  await useGraphics(page, 'high')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(3000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const current = page.getByRole('slider', { name: /Worldline history/ })
+  await current.focus()
+  for (let i = 0; i < 12; i++) await current.press('+')
+  await expect(page.locator('.scene3d')).not.toHaveAttribute('data-micro', '0', { timeout: 10_000 })
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: 'screens/current-micro.png' })
+})
+
 test('observatory 3d mobile', async ({ page }) => {
   await useGraphics(page, 'low')
   await page.setViewportSize({ width: 390, height: 844 })

@@ -1,9 +1,13 @@
 import { FOCUS_RADIUS, type ScreenTarget, type Vec3 } from './camera.ts'
+import type { LensTarget } from '../surface/lens.ts'
+import { MICRO_KINDS, type MicroEvent, type MicroKind } from '../surface/micro.ts'
+import type { Site } from '../surface/sites.ts'
 import { axisPoint, type PathData } from './path.ts'
 
 export const OTHER_PLANET_PICK = 32
 export const STREAM_PICK = 14
 export const EVENT_PICK = 10
+export const MICRO_WINDOW = 60
 
 export interface TargetWorld {
   readonly key: string
@@ -14,7 +18,7 @@ export interface TargetWorld {
 
 export interface TargetMarker {
   readonly key: string
-  readonly kind: 'event' | 'decision' | 'fork'
+  readonly kind: 'event' | 'decision' | 'fork' | 'micro'
   readonly position: Vec3
 }
 
@@ -57,9 +61,23 @@ export function screenTargets(
     }
   }
   for (const marker of markers) {
-    if (marker.kind !== 'event') continue
+    if (marker.kind !== 'event' && marker.kind !== 'micro') continue
     const p = project(marker.position)
-    if (p.visible) list.push({ kind: 'event', key: marker.key, x: p.x, y: p.y, radius: EVENT_PICK })
+    if (p.visible)
+      list.push({ kind: marker.kind, key: marker.key, x: p.x, y: p.y, radius: EVENT_PICK })
   }
   return list
+}
+
+export function microKey(e: MicroEvent): string {
+  return `micro:${e.year}:${e.kind}:${e.site}`
+}
+
+export function microTarget(key: string, sites: readonly Site[]): LensTarget | null {
+  const [tag, year, kind, site] = key.split(':')
+  const index = Number(site)
+  const place = sites[index]
+  if (tag !== 'micro' || !place || !(MICRO_KINDS as readonly string[]).includes(kind ?? ''))
+    return null
+  return { dir: place.dir, year: Number(year), site: index, kind: kind as MicroKind }
 }

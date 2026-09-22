@@ -193,3 +193,17 @@ test.describe('touch', () => {
     await expect(page.getByRole('button', { name: 'Show all' })).toBeEnabled()
   })
 })
+
+test('shows microevents when the current is zoomed to a few decades', async ({ page }) => {
+  test.slow()
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.locator('.scene3d')).toHaveAttribute('data-micro', '0')
+  const current = page.getByRole('slider', { name: /Worldline history/ })
+  await current.focus()
+  for (let i = 0; i < 12; i++) await current.press('+')
+  await expect(page.locator('.scene3d')).not.toHaveAttribute('data-micro', '0', { timeout: 10_000 })
+})
