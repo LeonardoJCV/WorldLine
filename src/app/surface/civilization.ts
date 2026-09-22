@@ -123,8 +123,8 @@ export function surfaceModel(input: CivilizationInput): SurfaceModel {
     const activity: CityActivity =
       port && works
         ? k % 2 === 0
-          ? 'port'
-          : 'industrial'
+          ? 'industrial'
+          : 'port'
         : port
           ? 'port'
           : works
