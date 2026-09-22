@@ -3,6 +3,7 @@ import { Era, type Allocation, type Variable } from '../../engine/state.ts'
 import { planetPalette } from '../planet/uniforms.ts'
 import {
   CITY_BASE,
+  bustle,
   packLife,
   surfaceModel,
   thresholds,
@@ -172,6 +173,29 @@ describe('packLife', () => {
     if (!first) throw new Error('no city')
     expect(packed.city[first.site * 4 + 1]).toBe(1)
     expect(packed.life3[2]).toBe(3)
+  })
+
+  it('lets the economy fill the harbours and the roads', () => {
+    const poor = surfaceModel(input({}, { economy: 2 }))
+    const rich = surfaceModel(input({}, { economy: 9 }))
+    expect(rich.economy).toBeGreaterThan(poor.economy)
+    expect(rich.boats).toBeGreaterThan(poor.boats)
+    expect(packLife(rich, 0).life[3]).toBeGreaterThan(packLife(poor, 0).life[3])
+    expect(bustle(rich)).toBeGreaterThan(bustle(poor))
+    expect(bustle(surfaceModel(input({ status: 'extinct' }, { population: 0 })))).toBe(0.4)
+  })
+
+  it('packs the activity of each city for the shaders', () => {
+    const industrial = { eras: Era.agricultural | Era.industrial }
+    const busy = { ...allocation, industry: 50, agriculture: 20 }
+    const model = surfaceModel(input({ ...industrial, allocation: busy }, { economy: 9 }))
+    const packed = packLife(model, 0)
+    const code = { agrarian: 0, industrial: 1, port: 2 } as const
+    for (const city of model.cities) {
+      expect(packed.city2[city.site * 4 + 3]).toBe(code[city.activity])
+    }
+    expect(model.cities.some((c) => c.activity === 'port')).toBe(true)
+    expect(model.cities.some((c) => c.activity === 'industrial')).toBe(true)
   })
 
   it('scales electric light by city size', () => {

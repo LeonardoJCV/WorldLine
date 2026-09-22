@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Era } from '../../engine/state.ts'
 import { planetPalette } from '../planet/uniforms.ts'
 import { surfaceModel } from './civilization.ts'
-import { aliveKey, buildRoads, ROAD_SAMPLES } from './roads.ts'
+import { roadKey, buildRoads, ROAD_SAMPLES } from './roads.ts'
 import { findSites } from './sites.ts'
 import { createTerrain } from './terrain.ts'
 
@@ -39,6 +39,16 @@ describe('buildRoads', () => {
     expect(roads.length).toBeGreaterThan(0)
   })
 
+  it('adds trade routes to a second older neighbour when the economy is strong', () => {
+    const poor = buildRoads({ ...model, economy: 3 }, sites, terrain)
+    const rich = buildRoads({ ...model, economy: 6 }, sites, terrain)
+    expect(rich.length).toBeGreaterThan(poor.length)
+    const pairs = new Set(rich.map((r) => `${r.from}-${r.to}`))
+    expect(pairs.size).toBe(rich.length)
+    for (const road of poor) expect(pairs.has(`${road.from}-${road.to}`)).toBe(true)
+    expect(roadKey({ ...model, economy: 6 })).not.toBe(roadKey({ ...model, economy: 3 }))
+  })
+
   it('drapes roads on the relief', () => {
     for (const road of buildRoads(model, sites, terrain)) {
       for (let i = 0; i < road.points.length; i += 3) {
@@ -62,8 +72,8 @@ describe('buildRoads', () => {
 
   it('keys the roads by the set of living cities', () => {
     const alive = model.cities.filter((c) => c.state === 'alive').map((c) => c.site)
-    expect(aliveKey(model)).toBe(alive.join())
-    expect(aliveKey(null)).toBe('')
+    expect(roadKey({ ...model, economy: 3 })).toBe(alive.join())
+    expect(roadKey(null)).toBe('')
   })
 
   it('flags the samples that fall on the sea', () => {

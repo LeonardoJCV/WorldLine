@@ -40,7 +40,7 @@ import { wantedTiles } from './lifeTiles.ts'
 import { createNight } from './night.ts'
 import { focalPixels, lodOf } from './lod.ts'
 import type { ObjectSet } from './objects.ts'
-import { aliveKey, buildRoads, type Road } from './roads.ts'
+import { roadKey, buildRoads, type Road } from './roads.ts'
 import { shadeByDaySide, skyFragment, skyVertex } from './shading.ts'
 import type { Site } from './sites.ts'
 import { createTerrain, surfaceRadius } from './terrain.ts'
@@ -421,7 +421,7 @@ export function createSurfaceScene(
       modelDirty = false
       life.group.visible = model !== null
       if (model) life.setUniforms(packLife(model, lifeClock))
-      const living = aliveKey(model)
+      const living = roadKey(model)
       if (living !== roadsFor) {
         roadsFor = living
         roads = model ? buildRoads(model, options.sites, sampler) : []

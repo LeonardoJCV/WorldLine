@@ -26,6 +26,7 @@ export interface SurfaceModel {
   readonly factories: number
   readonly mines: number
   readonly electric: number
+  readonly economy: number
   readonly dry: boolean
   readonly burnt: boolean
   readonly unrest: boolean
@@ -49,6 +50,8 @@ export interface CivilizationInput {
 export const CITY_BASE = 150_000
 export const CITY_GROWTH = 1.12
 export const METROPOLIS = 20_000_000
+export const TRADE_ECONOMY = 5
+const ECONOMY_FULL = 10
 const RUIN_SIZE = 0.3
 const HEIGHT: Readonly<Record<CityEra, number>> = {
   village: 0.6,
@@ -114,12 +117,19 @@ export function surfaceModel(input: CivilizationInput): SurfaceModel {
     if (!site) break
     const living = k < alive
     const share = living ? population / (k + 1) / (harmonic || 1) : 0
+    const port = site.coast && values.economy >= TRADE_ECONOMY
+    const works = (era === 'industrial' || era === 'modern') && allocation.industry >= 35
+    // FIX: quase todo sítio é costeiro; alternar evita que os portos apaguem as cidades industriais
     const activity: CityActivity =
-      site.coast && values.economy >= 5
-        ? 'port'
-        : (era === 'industrial' || era === 'modern') && allocation.industry >= 35
-          ? 'industrial'
-          : 'agrarian'
+      port && works
+        ? k % 2 === 0
+          ? 'port'
+          : 'industrial'
+        : port
+          ? 'port'
+          : works
+            ? 'industrial'
+            : 'agrarian'
     cities.push({
       site: site.index,
       state: living ? 'alive' : 'ruin',
@@ -153,11 +163,17 @@ export function surfaceModel(input: CivilizationInput): SurfaceModel {
     mines: extinct || values.technology < 20 ? 0 : clamp01(allocation.industry / 100),
     electric:
       extinct || !industrious ? 0 : era === 'modern' ? 0.7 + 0.3 * energy : 0.35 + 0.35 * energy,
+    economy: extinct || !Number.isFinite(values.economy) ? 0 : Math.max(0, values.economy),
     dry,
     burnt,
     unrest,
     extinct,
   }
+}
+
+// FEAT: a economia enche as estradas; mesmo pobre, ainda há algum movimento
+export function bustle(model: SurfaceModel): number {
+  return 0.4 + 0.6 * clamp01(model.economy / ECONOMY_FULL)
 }
 
 export interface LifeUniforms {

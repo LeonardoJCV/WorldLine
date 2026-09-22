@@ -80,6 +80,10 @@ const MODELS: Readonly<Record<ObjectKind, () => BufferGeometry>> = {
 }
 
 const BODY_TOP = 0.0012
+// FEAT: portos juntam mais barcos; fábricas se concentram nas cidades industriais
+export const PORT_BOATS = 2
+export const WORKS_ELSEWHERE = 0.3
+const QUIET_BOATS = 0.5
 const SKY_FILL = 0.12
 const FADE_FROM = 0.55
 
@@ -163,10 +167,12 @@ vWindow = 0.0;
   if (!pasture) vTint = vec3(0.62, 0.45, 0.3);
   shift = (side * sin(t * 0.4 + spin * 3.0) + front * cos(t * 0.3 + spin)) * 0.0006;
 #elif LIFE_KIND == 4
-  show = alive && rank < uLife.w ? 1.0 : 0.0;
+  float harbour = city2.w > 1.5 ? PORT_BOATS : QUIET_BOATS;
+  show = alive && rank < uLife.w * harbour ? 1.0 : 0.0;
   shift = (side * cos(t * 0.15 + spin) + front * sin(t * 0.15 + spin)) * 0.0018;
 #elif LIFE_KIND == 5
-  show = alive && rank < uLife2.x ? 1.0 : 0.0;
+  bool works = city2.w > 0.5 && city2.w < 1.5;
+  show = alive && rank < uLife2.x * (works ? 1.0 : WORKS_ELSEWHERE) ? 1.0 : 0.0;
 #else
   show = alive && rank < uLife2.y ? 1.0 : 0.0;
 #endif
@@ -266,6 +272,9 @@ export function createLife(options: LifeOptions): Life {
       BODY_TOP: BODY_TOP.toFixed(5),
       SKY_FILL: SKY_FILL.toFixed(2),
       FADE_FROM: FADE_FROM.toFixed(2),
+      PORT_BOATS: PORT_BOATS.toFixed(2),
+      QUIET_BOATS: QUIET_BOATS.toFixed(2),
+      WORKS_ELSEWHERE: WORKS_ELSEWHERE.toFixed(2),
       DAY_FROM: DAY_FROM.toFixed(2),
       DAY_TO: DAY_TO.toFixed(2),
       NIGHT_FLOOR: NIGHT_FLOOR.toFixed(2),
@@ -308,7 +317,7 @@ export function createLife(options: LifeOptions): Life {
       buildings: 0.92,
       fields: 0.85,
       animals: Math.max(life.y, life.z * 0.6) * thin,
-      boats: life.w,
+      boats: life.w * PORT_BOATS,
       factories: life2.x,
       mines: life2.y,
     }

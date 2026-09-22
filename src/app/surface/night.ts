@@ -23,8 +23,8 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { hexToRgb } from '../theme/color.ts'
-import type { SurfaceModel } from './civilization.ts'
-import type { LifeShared } from './life.ts'
+import { bustle, type SurfaceModel } from './civilization.ts'
+import { WORKS_ELSEWHERE, type LifeShared } from './life.ts'
 import { STRIDE, scatter, type ObjectSet } from './objects.ts'
 import type { Road } from './roads.ts'
 import { DAY_FROM, DAY_TO, NIGHT_FLOOR } from './shading.ts'
@@ -210,7 +210,8 @@ void main() {
   float alpha;
   bool show;
 #if PARTICLE_KIND == 0
-  show = alive && rank < uLife2.x;
+  bool works = city2.w > 0.5 && city2.w < 1.5;
+  show = alive && rank < uLife2.x * (works ? 1.0 : WORKS_ELSEWHERE);
   vec3 ref = abs(up.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
   vec3 east = normalize(cross(ref, up));
   vec3 north = cross(up, east);
@@ -507,7 +508,12 @@ export function createNight(options: NightOptions): Night {
         uColor: { value: new Color(color) },
         uCore: { value: new Color(core) },
       },
-      defines: { ...defines, PARTICLE_KIND: kind, UNREST_RANK: UNREST_RANK.toFixed(2) },
+      defines: {
+        ...defines,
+        PARTICLE_KIND: kind,
+        UNREST_RANK: UNREST_RANK.toFixed(2),
+        WORKS_ELSEWHERE: WORKS_ELSEWHERE.toFixed(2),
+      },
       transparent: true,
       depthWrite: false,
       ...(additive ? { blending: AdditiveBlending } : {}),
@@ -683,10 +689,11 @@ export function createNight(options: NightOptions): Night {
     lamps.geometry = lampGeometry
     lines.visible = segments > 0
     lamps.visible = segments > 0
-    crowdSize = walking
-      ? Math.min(MAX_PEOPLE, Math.floor(list.length * PEOPLE_PER_ROAD * options.density))
-      : 0
-    for (let i = 0; i < crowdSize; i++) {
+  }
+
+  function populate(from: number, to: number): void {
+    const list = roads
+    for (let i = from; i < to; i++) {
       const r = i % Math.max(1, list.length)
       const wet = list[r]?.wet
       const last = wet ? wet.length - 1 : 0
@@ -706,14 +713,27 @@ export function createNight(options: NightOptions): Night {
       walkSpeed[i] = scatter(0x51f7, i, 3, 0) < 0.5 ? -pace : pace
       walkSide[i] = (scatter(0x51f7, i, 4, 0) < 0.5 ? -1 : 1) * SIDE_STEP
     }
-    crowd.count = 0
+  }
+
+  function crowdFor(model: SurfaceModel | null, list: readonly Road[]): number {
+    if (!walking || !model) return 0
+    const people = list.length * PEOPLE_PER_ROAD * options.density * bustle(model)
+    return Math.min(MAX_PEOPLE, Math.floor(people))
   }
 
   return {
     group,
     setModel(model, sites, nextRoads) {
       group.visible = model !== null
-      if (nextRoads !== roads) setRoads(nextRoads)
+      const size = crowdFor(model, nextRoads)
+      // FIX: só reposiciona quem já anda se as estradas mudaram; a economia só acrescenta ou tira gente
+      if (nextRoads !== roads) {
+        setRoads(nextRoads)
+        populate(0, size)
+      } else if (size > crowdSize) {
+        populate(crowdSize, size)
+      }
+      crowdSize = size
       if (!model) return
       uElectric.value = model.electric
       let count = 0
