@@ -85,6 +85,15 @@ export type ToWorker =
       readonly kind: CrossingKind
       readonly dose: Dose
     }
+  | {
+      readonly type: 'crossBranch'
+      readonly requestId: number
+      readonly parent: WorldlineId
+      readonly tick: number
+      readonly origin: WorldlineId
+      readonly kind: CrossingKind
+      readonly dose: Dose
+    }
   | { readonly type: 'remove'; readonly world: WorldlineId }
   | {
       readonly type: 'range'

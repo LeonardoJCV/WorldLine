@@ -43,6 +43,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'mode.label': 'Modo',
   'mode.observe': 'Observar',
   'mode.intervene': 'Intervir',
+  'mode.cross': 'Cruzar',
   'state.title': 'Estado no ano {year}',
   'state.change': 'Variação desde o ano anterior',
   'state.versus': 'vs {id}',

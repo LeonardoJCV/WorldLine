@@ -110,6 +110,16 @@ export class SimulationHost {
             message.dose,
           )
           break
+        case 'crossBranch':
+          this.#crossBranch(
+            message.requestId,
+            message.parent,
+            message.tick,
+            message.origin,
+            message.kind,
+            message.dose,
+          )
+          break
         case 'remove':
           this.#remove(message.world)
           break
@@ -324,13 +334,13 @@ export class SimulationHost {
     validateCrossings([...line.crossings, crossing])
   }
 
-  #cross(
-    requestId: number,
+  // FEAT: as duas pontas de qualquer travessia passam pelas mesmas recusas
+  #ends(
     originId: WorldlineId,
     destinationId: WorldlineId,
     kind: CrossingKind,
     dose: Dose,
-  ): void {
+  ): { origin: Entry; destination: Entry } {
     if (!CROSSING_KINDS.includes(kind)) throw new RangeError(`unknown crossing kind ${kind}`)
     if (!DOSES.includes(dose)) throw new RangeError('a crossing carries a dose of 1, 2 or 3')
     const origin = this.#entry(originId)
@@ -339,17 +349,32 @@ export class SimulationHost {
       throw new RangeError('origin and destination are the same worldline')
     }
     this.#living(origin, 'origin')
-    this.#living(destination, 'destination')
+    return { origin, destination }
+  }
 
-    const originState = origin.worldline.stateAt(this.#now)
-    const destinationState = destination.worldline.stateAt(this.#now)
-    const cost = crossingCost(kind, dose, causalDistance(originState, destinationState))
+  #afford(cost: number): void {
     const available = this.#credit()
     if (cost > available) {
       throw new RangeError(
         `not enough credit: this crossing costs ${cost} and ${cost - available} is missing`,
       )
     }
+  }
+
+  #cross(
+    requestId: number,
+    originId: WorldlineId,
+    destinationId: WorldlineId,
+    kind: CrossingKind,
+    dose: Dose,
+  ): void {
+    const { origin, destination } = this.#ends(originId, destinationId, kind, dose)
+    this.#living(destination, 'destination')
+
+    const originState = origin.worldline.stateAt(this.#now)
+    const destinationState = destination.worldline.stateAt(this.#now)
+    const cost = crossingCost(kind, dose, causalDistance(originState, destinationState))
+    this.#afford(cost)
 
     const crossing: Crossing = {
       tick: this.#now,
@@ -379,6 +404,48 @@ export class SimulationHost {
 
     this.#report()
     this.#send({ type: 'crossed', requestId, world: destinationId, crossing: recorded })
+  }
+
+  // FEAT: travessia num ano passado ramifica, e a travessia nasce no ano da bifurcação
+  #crossBranch(
+    requestId: number,
+    parentId: WorldlineId,
+    tick: number,
+    originId: WorldlineId,
+    kind: CrossingKind,
+    dose: Dose,
+  ): void {
+    if (kind === 'people') {
+      throw new RangeError(
+        'people only cross in the present, because sending them into a past year would rewrite the history of the origin as well',
+      )
+    }
+    const { origin, destination: parent } = this.#ends(originId, parentId, kind, dose)
+    if (this.#entries.length >= MAX_WORLDLINES) throw new RangeError('worldline limit reached')
+    if (!Number.isInteger(tick) || tick < 0 || tick > parent.worldline.present.tick) {
+      throw new RangeError(`worldline ${parentId} never lived through year ${tick}`)
+    }
+
+    const originState = origin.worldline.stateAt(tick)
+    const parentState = parent.worldline.stateAt(tick)
+    const cost = crossingCost(kind, dose, causalDistance(originState, parentState))
+    this.#afford(cost)
+
+    const crossing: Crossing = {
+      tick,
+      kind,
+      dose,
+      amounts: crossingAmounts(kind, dose, originState),
+      origin: { world: originId, tick },
+      cost,
+      direction: 'in',
+      ...(kind === 'doctrine' ? { allocation: originState.allocation } : {}),
+    }
+    const id = this.#freeId()
+    const line = this.#grow(this.#seed, parent, tick, [], this.#now, [crossing])
+    this.#add(id, parentId, tick, line)
+    this.#report()
+    this.#send({ type: 'branched', requestId, world: id })
   }
 
   #remove(id: WorldlineId): void {

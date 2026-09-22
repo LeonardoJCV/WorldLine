@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { crossingAmounts } from '../engine/crossing.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
@@ -611,5 +612,155 @@ describe('SimulationHost: crossings', () => {
     host.handle({ type: 'branch', requestId: 4, parent: 'C', tick: 2005, allocation: balanced })
     expect(world(sent, 'D')?.crossings).toHaveLength(1)
     expect(last(sent, 'progress')?.credit).toBe(spent + 8)
+  })
+
+  it('branches with the crossing already in the fork year', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 2000 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: starved })
+    host.handle({ type: 'step', years: 100 })
+    host.handle({
+      type: 'crossBranch',
+      requestId: 2,
+      parent: 'B',
+      tick: 200,
+      origin: 'A',
+      kind: 'knowledge',
+      dose: 2,
+    })
+    expect(last(sent, 'branched')).toEqual({ type: 'branched', requestId: 2, world: 'C' })
+    const reference = new Worldline(SEED)
+    reference.advance(200)
+    const c = world(sent, 'C')
+    expect(c?.info).toMatchObject({ id: 'C', parent: 'B', fork: 200 })
+    expect(c?.present.tick).toBe(2100)
+    expect(c?.crossings).toHaveLength(1)
+    expect(c?.crossings[0]).toMatchObject({
+      tick: 200,
+      kind: 'knowledge',
+      dose: 2,
+      direction: 'in',
+      origin: { world: 'A', tick: 200 },
+    })
+    expect(c?.crossings[0]?.amounts).toEqual(crossingAmounts('knowledge', 2, reference.present))
+    expect(c?.crossings[0]?.cost).toBeGreaterThan(0)
+    expect(c?.present.values.technology).not.toBe(world(sent, 'B')?.present.values.technology)
+    expect(world(sent, 'B')?.crossings).toEqual([])
+  })
+
+  it('carries the origin allocation when doctrine crosses into the fork year', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'decide', world: 'A', allocation: starved })
+    host.handle({ type: 'step', years: 10 })
+    host.handle({
+      type: 'crossBranch',
+      requestId: 2,
+      parent: 'B',
+      tick: 2005,
+      origin: 'A',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    expect(world(sent, 'C')?.crossings[0]).toMatchObject({ tick: 2005, allocation: starved })
+    expect(world(sent, 'C')?.present.allocation).toEqual(starved)
+  })
+
+  it('refuses a crossBranch when the worldline limit is reached', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 100 })
+    for (let i = 1; i <= 5; i++) {
+      host.handle({ type: 'branch', requestId: i, parent: 'A', tick: i, allocation: balanced })
+    }
+    host.handle({
+      type: 'crossBranch',
+      requestId: 6,
+      parent: 'B',
+      tick: 50,
+      origin: 'A',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 6, message: 'worldline limit reached' })
+    expect(last(sent, 'progress')?.worlds).toHaveLength(6)
+  })
+
+  it('refuses a crossBranch from an extinct origin or into a fork year the parent never lived', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 2000 })
+    expect(world(sent, 'B')?.present.status).toBe('extinct')
+    host.handle({
+      type: 'crossBranch',
+      requestId: 2,
+      parent: 'A',
+      tick: 100,
+      origin: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 2 })
+    expect(last(sent, 'error')?.message).toMatch(/extinct/)
+    host.handle({
+      type: 'crossBranch',
+      requestId: 3,
+      parent: 'B',
+      tick: 5000,
+      origin: 'A',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 3 })
+    expect(last(sent, 'error')?.message).toMatch(/year 5000/)
+    host.handle({
+      type: 'crossBranch',
+      requestId: 4,
+      parent: 'A',
+      tick: 100,
+      origin: 'F',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 4, message: 'unknown worldline F' })
+    expect(last(sent, 'progress')?.worlds).toHaveLength(2)
+  })
+
+  it('charges the crossBranch to the credit exactly once', () => {
+    const { host, sent } = pair()
+    const before = last(sent, 'progress')?.credit ?? 0
+    host.handle({
+      type: 'crossBranch',
+      requestId: 2,
+      parent: 'B',
+      tick: 500,
+      origin: 'A',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    const cost = world(sent, 'C')?.crossings[0]?.cost ?? 0
+    expect(cost).toBeGreaterThan(0)
+    expect(last(sent, 'progress')?.credit).toBe(before + 4 - cost)
+    host.handle({ type: 'branch', requestId: 3, parent: 'C', tick: 2000, allocation: balanced })
+    expect(world(sent, 'D')?.crossings).toHaveLength(1)
+    expect(last(sent, 'progress')?.credit).toBe(before + 8 - cost)
+  })
+
+  it('refuses people on a crossBranch', () => {
+    const { host, sent } = pair()
+    host.handle({
+      type: 'crossBranch',
+      requestId: 2,
+      parent: 'B',
+      tick: 500,
+      origin: 'A',
+      kind: 'people',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 2 })
+    expect(last(sent, 'error')?.message).toMatch(/people/)
+    expect(last(sent, 'progress')?.worlds).toHaveLength(2)
   })
 })

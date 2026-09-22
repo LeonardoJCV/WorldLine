@@ -117,6 +117,27 @@ export class SimulationClient {
     return reply.crossing
   }
 
+  async crossBranch(
+    parent: WorldlineId,
+    tick: number,
+    origin: WorldlineId,
+    kind: CrossingKind,
+    dose: Dose,
+  ): Promise<WorldlineId> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, {
+      type: 'crossBranch',
+      requestId,
+      parent,
+      tick,
+      origin,
+      kind,
+      dose,
+    })
+    if (reply.type !== 'branched') throw new Error(`unexpected ${reply.type} reply`)
+    return reply.world
+  }
+
   remove(world: WorldlineId): void {
     this.#port.send({ type: 'remove', world })
   }

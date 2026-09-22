@@ -93,6 +93,35 @@ describe('SimulationClient', () => {
     expect(received.every((m) => m.type === 'progress')).toBe(true)
   })
 
+  it('resolves a crossBranch request into the new worldline', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    client.open(482913, 0, [], [])
+    client.step(2000)
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    const crossed = await client.crossBranch(id, 500, 'A', 'knowledge', 1)
+    expect(crossed).toBe('C')
+  })
+
+  it('rejects a crossBranch the worker refuses', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    client.open(482913, 0, [], [])
+    client.step(2000)
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    await expect(client.crossBranch(id, 500, 'A', 'people', 1)).rejects.toThrow(/people/)
+  })
+
   it('rejects a crossing the worker refuses', async () => {
     const { port } = connectInProcess()
     const client = new SimulationClient(port)

@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import type { Crossing } from '../../engine/crossing.ts'
+import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { EventRecord } from '../../engine/events.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
@@ -14,7 +14,7 @@ import type {
 import type { MultiverseLink } from '../world/link.ts'
 import type { SimulationClient } from './client.ts'
 
-export type Mode = 'observe' | 'intervene'
+export type Mode = 'observe' | 'intervene' | 'cross'
 
 export interface View {
   readonly span: number
@@ -45,6 +45,7 @@ export interface SimulationState {
   readonly inspected: Snapshot | null
   readonly inspectedOrigin: Snapshot | null
   readonly mode: Mode
+  readonly crossOrigin: WorldlineId | null
   readonly selected: number | null
   readonly decisions: readonly Decision[]
   readonly view: View | null
@@ -58,9 +59,11 @@ export interface SimulationState {
   step(years: number): void
   setCursor(tick: number | null): void
   setMode(mode: Mode): void
+  setCrossOrigin(id: WorldlineId | null): void
   select(index: number | null): void
   decide(allocation: Allocation): void
   branch(allocation: Allocation): void
+  cross(kind: CrossingKind, dose: Dose): void
   remove(id: WorldlineId): void
   setFocus(id: WorldlineId): void
   setView(view: View | null): void
@@ -106,6 +109,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     inspected: null,
     inspectedOrigin: null,
     mode: 'observe',
+    crossOrigin: null,
     selected: null,
     decisions: [],
     view: null,
@@ -130,6 +134,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         inspected: null,
         inspectedOrigin: null,
         mode: 'observe',
+        crossOrigin: null,
         selected: null,
         decisions: [],
         view: null,
@@ -186,7 +191,10 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       )
     },
     setMode(mode) {
-      set({ mode })
+      set({ mode, ...(mode === 'cross' ? {} : { crossOrigin: null }) })
+    },
+    setCrossOrigin(id) {
+      set({ crossOrigin: id })
     },
     select(index) {
       set({ selected: index })
@@ -209,6 +217,25 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         (error: unknown) => set({ branching: false, error: messageOf(error) }),
       )
     },
+    cross(kind, dose) {
+      const { focus, crossOrigin, cursor } = get()
+      if (crossOrigin === null) return
+      if (cursor === null) {
+        client.cross(crossOrigin, focus, kind, dose).catch((error: unknown) => {
+          set({ error: messageOf(error) })
+        })
+        return
+      }
+      set({ branching: true })
+      client.crossBranch(focus, cursor, crossOrigin, kind, dose).then(
+        (id) => {
+          set({ branching: false })
+          get().setCursor(null)
+          get().setFocus(id)
+        },
+        (error: unknown) => set({ branching: false, error: messageOf(error) }),
+      )
+    },
     remove(id) {
       client.remove(id)
     },
@@ -217,6 +244,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       if (!worlds.some((world) => world.info.id === id)) return
       set({
         focus: id,
+        ...(get().crossOrigin === id ? { crossOrigin: null } : {}),
         selected: null,
         inspected: null,
         inspectedOrigin: null,

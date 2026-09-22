@@ -45,6 +45,7 @@ export const en = {
   'mode.label': 'Mode',
   'mode.observe': 'Observe',
   'mode.intervene': 'Intervene',
+  'mode.cross': 'Cross',
   'state.title': 'State in year {year}',
   'state.change': 'Change since the previous year',
   'state.versus': 'vs {id}',
