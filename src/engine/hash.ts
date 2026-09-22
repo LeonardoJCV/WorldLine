@@ -1,3 +1,5 @@
+import { CROSSING_KINDS } from './crossing.ts'
+import { ECHO_TARGETS } from './echo.ts'
 import { SECTORS, VARIABLES, type WorldState } from './state.ts'
 
 const FNV_OFFSET = 0x811c9dc5
@@ -25,5 +27,14 @@ export function hashState(s: WorldState): string {
   h = feed(h, s.lastDecision ? s.lastDecision.tick : -1)
   for (const sector of s.lastDecision?.sectors ?? []) h = feed(h, SECTORS.indexOf(sector))
   h = feed(h, s.status === 'running' ? 0 : 1)
+  // FEAT: campos de travessia só entram quando existem, para não mover os fingerprints antigos
+  for (const echo of s.echoes) {
+    h = feed(h, ECHO_TARGETS.indexOf(echo.target))
+    h = feed(h, echo.remaining)
+  }
+  if (s.lastCrossing) {
+    h = feed(h, s.lastCrossing.tick)
+    h = feed(h, CROSSING_KINDS.indexOf(s.lastCrossing.kind))
+  }
   return h.toString(16).padStart(8, '0')
 }

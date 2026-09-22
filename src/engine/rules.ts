@@ -146,7 +146,8 @@ export function integrate(s: WorldState, d: Derived, mods: Modifiers): WorldStat
   )
 
   const population = Math.max(0, s.population * (1 + d.birthRate - d.deathRate))
-  const growth = (population - s.population) / s.population
+  // FIX: um mundo esvaziado por uma partida não tem crescimento a medir
+  const growth = s.population > 0 ? (population - s.population) / s.population : 0
   const stabilityTarget =
     100 *
       clamp(

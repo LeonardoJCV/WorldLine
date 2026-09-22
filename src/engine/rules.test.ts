@@ -112,6 +112,13 @@ describe('integrate', () => {
     expect(richNext.energy - rich.energy).toBeGreaterThan(poorNext.energy - poor.energy)
   })
 
+  it('survives an emptied world', () => {
+    const s = makeState({ population: 0 })
+    const next = integrate(s, derive(s, TEST_WORLD, neutral, calm), neutral)
+    expect(next.population).toBe(0)
+    expect(next.stability).toBeGreaterThanOrEqual(0)
+  })
+
   it('reports the first non-finite variable', () => {
     const s = makeState({ population: NaN, tick: 42 })
     const run = () => integrate(s, derive(s, TEST_WORLD, neutral, calm), neutral)

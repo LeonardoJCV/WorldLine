@@ -21,6 +21,25 @@ describe('hashState', () => {
     ).not.toBe(base)
   })
 
+  it('ignores the crossing fields while they are empty', () => {
+    expect(hashState({ ...state, echoes: [], lastCrossing: null })).toBe(hashState(state))
+  })
+
+  it('separates two worlds that assimilate different things', () => {
+    const a = hashState({ ...state, echoes: [{ target: 'technology', remaining: 10 }] })
+    const b = hashState({ ...state, echoes: [{ target: 'food', remaining: 10 }] })
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(hashState(state))
+  })
+
+  it('separates two worlds by their last crossing', () => {
+    const base = hashState(state)
+    const a = hashState({ ...state, lastCrossing: { tick: 0, kind: 'knowledge' } })
+    const b = hashState({ ...state, lastCrossing: { tick: 0, kind: 'people' } })
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(base)
+  })
+
   it('pins the genesis hash', () => {
     expect(hashState(state)).toMatchInlineSnapshot(`"77ebb9f5"`)
   })

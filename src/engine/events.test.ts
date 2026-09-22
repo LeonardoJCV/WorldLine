@@ -194,6 +194,21 @@ describe('evaluateEvents', () => {
     expect(withEra.started[0]?.causes).toContainEqual({ kind: 'event', record: 4 })
   })
 
+  it('links a recent crossing and forgets an old one', () => {
+    const defs = [shortage]
+    const recent = world(defs, { lastCrossing: { tick: 80, kind: 'resource' } })
+    const old = world(defs, { lastCrossing: { tick: 10, kind: 'resource' } })
+    const metrics = makeMetrics({ foodSecurity: 0.8 })
+    expect(evaluateEvents(recent, metrics, 1, 0, defs).started[0]?.causes).toContainEqual({
+      kind: 'crossing',
+      tick: 80,
+      crossing: 'resource',
+    })
+    expect(evaluateEvents(old, metrics, 1, 0, defs).started[0]?.causes).toEqual([
+      { kind: 'condition', metric: 'foodSecurity', op: '<', threshold: 0.9, value: 0.8 },
+    ])
+  })
+
   it('does not link a cause that started in the same year', () => {
     const defs = [awakening, shortage]
     const outcome = evaluateEvents(

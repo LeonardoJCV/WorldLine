@@ -1,3 +1,4 @@
+import type { CrossingKind } from './crossing.ts'
 import { smoothstep } from './math.ts'
 import { CAUSAL_WINDOW, EXTINCTION_THRESHOLD } from './params.ts'
 import { Channel, uniform } from './rng.ts'
@@ -72,6 +73,7 @@ export type Cause =
     }
   | { readonly kind: 'event'; readonly record: number }
   | { readonly kind: 'decision'; readonly tick: number; readonly sectors: readonly Sector[] }
+  | { readonly kind: 'crossing'; readonly tick: number; readonly crossing: CrossingKind }
 
 export interface EventRecord {
   readonly event: EventId
@@ -287,6 +289,11 @@ function causesOf(
   if (decision && s.tick - decision.tick <= CAUSAL_WINDOW) {
     const sectors = decision.sectors.filter((sector) => SECTOR_INFLUENCES[sector].some(involved))
     if (sectors.length > 0) causes.push({ kind: 'decision', tick: decision.tick, sectors })
+  }
+
+  const crossing = s.lastCrossing
+  if (crossing && s.tick - crossing.tick <= CAUSAL_WINDOW) {
+    causes.push({ kind: 'crossing', tick: crossing.tick, crossing: crossing.kind })
   }
   return causes
 }

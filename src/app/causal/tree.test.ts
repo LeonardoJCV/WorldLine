@@ -61,6 +61,20 @@ describe('buildCausalTree', () => {
     expect(tree.nodes.find((n) => n.kind === 'decision')).toMatchObject({ depth: 1, row: 0 })
   })
 
+  it('leaves a crossing cause out of the tree for now', () => {
+    const tree = buildCausalTree(
+      [
+        record('famine', 40, [
+          { kind: 'crossing', tick: 30, crossing: 'resource' },
+          condition('foodSecurity', 0.8),
+        ]),
+      ],
+      0,
+    )
+    expect(tree.nodes).toHaveLength(2)
+    expect(tree.nodes.filter((n) => n.kind === 'condition')).toHaveLength(1)
+  })
+
   it('tolerates causes that point to missing records', () => {
     const tree = buildCausalTree([record('famine', 40, [{ kind: 'event', record: 99 }])], 0)
     expect(tree.nodes.filter((n) => n.kind === 'event')).toHaveLength(2)

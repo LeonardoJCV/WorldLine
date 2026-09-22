@@ -41,7 +41,9 @@ export function buildCausalTree(
     const key = parent === null ? `e${index}` : `${parent}/e${index}`
     const repeated = path.has(index)
     const record = records[index]
-    const causes = record && !repeated && depth < maxDepth ? record.causes : []
+    const known = record && !repeated && depth < maxDepth ? record.causes : []
+    // FEAT: a travessia só ganha nó próprio no modo Cruzar
+    const causes = known.filter((cause) => cause.kind !== 'crossing')
     const within = new Set(path).add(index)
     const rows: number[] = []
     deepest = Math.max(deepest, depth)
