@@ -5,6 +5,7 @@ import { formatDecimal, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import type { WorldView } from '../sim/store.ts'
+import { crossOrigins } from './cross.ts'
 
 function distanceToOrigin(world: WorldView, worlds: readonly WorldView[]): number | null {
   const origin = worlds.find((candidate) => candidate.info.id === world.info.parent)
@@ -17,9 +18,13 @@ export function WorldsStrip() {
   const locale = useLocale()
   const worlds = useSimulation((s) => s.worlds)
   const focus = useSimulation((s) => s.focus)
+  const mode = useSimulation((s) => s.mode)
+  const crossOrigin = useSimulation((s) => s.crossOrigin)
   const [confirming, setConfirming] = useState<WorldlineId | null>(null)
   if (worlds.length < 2) return null
-  const { setFocus, remove } = simulation.getState()
+  const { setFocus, remove, setCrossOrigin } = simulation.getState()
+  // FEAT: no modo Cruzar, a tira oferece as mesmas origens que o painel considera utilizáveis
+  const usable = mode === 'cross' ? crossOrigins(worlds, focus) : []
 
   return (
     <section className="worlds" aria-labelledby="worlds-title">
@@ -31,6 +36,8 @@ export function WorldsStrip() {
           const { id, parent, fork } = world.info
           const extinct = world.present.status === 'extinct'
           const distance = distanceToOrigin(world, worlds)
+          const isOrigin = id === crossOrigin
+          const canPickOrigin = usable.some((candidate) => candidate.info.id === id)
           return (
             <li key={id} className="worlds__item">
               <button
@@ -38,6 +45,7 @@ export function WorldsStrip() {
                 className="worlds__chip"
                 aria-pressed={id === focus}
                 aria-label={t('worlds.focus', { id })}
+                data-origin={isOrigin ? 'true' : undefined}
                 onClick={() => setFocus(id)}
               >
                 <span className="worlds__id">{id}</span>
@@ -58,6 +66,16 @@ export function WorldsStrip() {
                   )}
                 </span>
               </button>
+              {canPickOrigin && (
+                <button
+                  type="button"
+                  className="worlds__origin"
+                  aria-pressed={isOrigin}
+                  onClick={() => setCrossOrigin(id)}
+                >
+                  {t('cross.origin', { id })}
+                </button>
+              )}
               {parent !== null &&
                 (confirming === id ? (
                   <span className="worlds__confirm" role="alert">

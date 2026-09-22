@@ -679,7 +679,11 @@ export function Current3D({
           }
           const hit = pickTarget(targets(), x, y)
           if (hit?.kind === 'world') {
-            simulation.getState().setFocus(hit.key as WorldlineId)
+            const state = simulation.getState()
+            const id = hit.key as WorldlineId
+            // FEAT: no modo Cruzar, clicar outra corrente escolhe a origem em vez do foco
+            if (state.mode === 'cross' && id !== state.focus) state.setCrossOrigin(id)
+            else state.setFocus(id)
             return
           }
           if (hit?.kind === 'event') {
@@ -724,7 +728,13 @@ export function Current3D({
           }
           const hover = pickTarget(targets(), x, y)
           event.currentTarget.style.cursor = hover ? 'pointer' : ''
-          event.currentTarget.title = hover?.kind === 'micro' ? microTitle(hover.key) : ''
+          // FEAT: sob o ponteiro, a dica diz o que o clique fará no modo Cruzar
+          event.currentTarget.title =
+            hover?.kind === 'micro'
+              ? microTitle(hover.key)
+              : hover?.kind === 'world' && simulation.getState().mode === 'cross'
+                ? t('cross.origin', { id: hover.key })
+                : ''
         }}
         onPointerUp={(event: PointerEvent<HTMLCanvasElement>) => {
           const press = pressRef.current

@@ -113,7 +113,11 @@ async function enterCross(page: Page, width: number, height: number) {
   for (let i = 0; i < 25; i++) await industry.press('ArrowRight')
   await page.getByRole('button', { name: /Branch from year/ }).click()
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
-  await page.getByRole('button', { name: 'From worldline A' }).click()
+  // FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
+  await page
+    .getByRole('group', { name: 'Where it comes from' })
+    .getByRole('button', { name: 'From worldline A' })
+    .click()
   await expect(page.locator('.cross__price')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
   await page.waitForTimeout(300)

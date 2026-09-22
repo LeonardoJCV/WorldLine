@@ -273,6 +273,11 @@
   border-color: var(--starlight);
 }
 
+.worlds__chip[data-origin='true'] {
+  border-style: dashed;
+  border-color: var(--starlight);
+}
+
 .worlds__id {
   font-stretch: 125%;
   font-weight: 650;
@@ -287,13 +292,19 @@
 }
 
 .worlds__remove,
-.worlds__confirm button {
+.worlds__confirm button,
+.worlds__origin {
   padding: 2px 8px;
   background: transparent;
   border: 1px solid var(--haze);
   border-radius: var(--radius);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+.worlds__origin[aria-pressed='true'] {
+  border-style: dashed;
+  border-color: var(--starlight);
 }
 
 .worlds__confirm {

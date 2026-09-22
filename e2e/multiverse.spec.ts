@@ -139,7 +139,10 @@ test('keeps the keyboard and the choices when a crossing origin is picked', asyn
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
   const supplies = page.getByRole('button', { name: 'Supplies' })
   await supplies.click()
-  const origin = page.getByRole('button', { name: 'From worldline A' })
+  // FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
+  const origin = page
+    .getByRole('group', { name: 'Where it comes from' })
+    .getByRole('button', { name: 'From worldline A' })
   await origin.focus()
   await page.keyboard.press('Enter')
   await expect(origin).toHaveAttribute('aria-pressed', 'true')
@@ -152,13 +155,18 @@ test('announces a crossing only once the worker has recorded it', async ({ page 
   await worldAtYear(page, 5)
   await branchFromStart(page)
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
-  await page.getByRole('button', { name: 'From worldline A' }).click()
+  // FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
+  await page
+    .getByRole('group', { name: 'Where it comes from' })
+    .getByRole('button', { name: 'From worldline A' })
+    .click()
   const arrived = page.getByText('Knowledge arrived from A.')
   await expect(arrived).toHaveCount(0)
   await page.getByRole('button', { name: 'Open the crossing' }).click()
   await expect(arrived).toBeVisible()
   await expect(page.locator('.notices p')).toHaveCount(0)
 })
+
 test('files an arriving crossing among the events of the worldline that received it', async ({
   page,
 }) => {
