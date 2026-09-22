@@ -564,7 +564,8 @@ export function createNight(options: NightOptions): Night {
 
   const walking = options.animated && !options.still
   const capacity = walking ? MAX_PEOPLE : 1
-  const personGeometry = new BoxGeometry(0.00022, 0.00052, 0.00022).translate(0, 0.00026, 0)
+  // FIX: gente bem menor que a porta de uma casa
+  const personGeometry = new BoxGeometry(0.00007, 0.00018, 0.00007).translate(0, 0.00009, 0)
   const personMaterial = new MeshStandardMaterial({
     color: '#ffffff',
     flatShading: true,

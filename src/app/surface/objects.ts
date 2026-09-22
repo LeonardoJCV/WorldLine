@@ -26,7 +26,7 @@ const RING = {
   factories: [0.18, 0.55],
   mines: [0.3, 1],
 } as const
-const SINK = 0.0002
+export const SINK = 0.0002
 const TAU = 6.283185307179586
 
 // FIX: hash3 correlaciona coordenadas vizinhas (fileiras e centro vazio); mistura mais forte para espalhar

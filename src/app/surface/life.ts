@@ -16,7 +16,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { hexToRgb } from '../theme/color.ts'
 import type { LifeUniforms } from './civilization.ts'
-import { OBJECT_KINDS, STRIDE, type ObjectKind, type ObjectSet } from './objects.ts'
+import { OBJECT_KINDS, SINK, STRIDE, type ObjectKind, type ObjectSet } from './objects.ts'
 import { DAY_FROM, DAY_TO, NIGHT_FLOOR } from './shading.ts'
 import type { Vec3 } from './cube.ts'
 import { MAX_SITES } from './sites.ts'
@@ -59,7 +59,9 @@ const MODELS: Readonly<Record<ObjectKind, () => BufferGeometry>> = {
         '#b0563a',
       ),
     ]),
-  fields: () => painted(new BoxGeometry(0.003, 0.0004, 0.002).translate(0, 0.0002, 0), '#ffffff'),
+  // FIX: lavoura é uma placa fina rente ao chão, para abraçar encostas e não cobrir estradas
+  fields: () =>
+    painted(new BoxGeometry(0.003, FIELD, 0.002).translate(0, SINK + FIELD * 0.1, 0), '#ffffff'),
   animals: () =>
     painted(new BoxGeometry(0.00045, 0.0003, 0.00025).translate(0, 0.00016, 0), '#f0e8d8'),
   boats: () =>
@@ -80,6 +82,7 @@ const MODELS: Readonly<Record<ObjectKind, () => BufferGeometry>> = {
 }
 
 const BODY_TOP = 0.0012
+const FIELD = 0.0001
 // FEAT: portos juntam mais barcos; fábricas se concentram nas cidades industriais
 export const PORT_BOATS = 2
 export const WORKS_ELSEWHERE = 0.3
@@ -117,6 +120,7 @@ uniform float uThin;
 varying vec3 vTint;
 varying float vWindow;
 varying float vLocalY;
+varying float vRise;
 varying vec3 vSurface;
 `
 
@@ -183,6 +187,7 @@ float scale = aData.x * show * fade * uGrow;
 float rise = min(position.y, BODY_TOP) * lift + max(position.y - BODY_TOP, 0.0);
 vec3 transformed = aPlace.xyz + shift + (side * position.x + up * rise + front * position.z) * scale;
 vLocalY = position.y;
+vRise = rise;
 vSurface = aPlace.xyz;
 `
 
@@ -191,6 +196,7 @@ uniform vec3 uSun;
 varying vec3 vTint;
 varying float vWindow;
 varying float vLocalY;
+varying float vRise;
 varying vec3 vSurface;
 `
 
@@ -198,7 +204,8 @@ const fragmentLight = `
 float dayLight = smoothstep(DAY_FROM, DAY_TO, dot(normalize(vSurface), uSun));
 outgoingLight += diffuseColor.rgb * SKY_FILL;
 outgoingLight *= NIGHT_FLOOR + (1.0 - NIGHT_FLOOR) * dayLight;
-float rows = step(0.5, fract(vLocalY * 2600.0)) * step(vLocalY, BODY_TOP);
+// FIX: as fileiras seguem a altura já erguida, uma por andar, em vez de esticar três faixas
+float rows = step(0.5, fract(vRise * 2600.0)) * step(vLocalY, BODY_TOP);
 outgoingLight += vec3(1.0, 0.78, 0.45) * vWindow * rows * (1.0 - dayLight) * 1.2;
 #include <opaque_fragment>
 `
