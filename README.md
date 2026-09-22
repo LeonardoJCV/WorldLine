@@ -4,7 +4,7 @@
 
 **Every decision creates a different future.**
 
-WORLDLINE is an experimental civilization simulator. You create a world from a seed, let it run for thousands of years, and watch history emerge from a small set of causal rules: harvests and famines, industrial revolutions, ecological crises, golden ages. At any moment you can step in, change how the civilization allocates its effort, and see a different future unfold.
+WORLDLINE is an experimental civilization simulator. You create a world from a seed, let it run for thousands of years, and watch history emerge from a small set of causal rules: harvests and famines, industrial revolutions, ecological crises, golden ages. At any moment you can step in, change how the civilization allocates its effort, and see a different future unfold — beside the original, as a second worldline you can compare it with.
 
 ![The observatory: six braided variables flowing into a living planet](docs/images/observatory.png)
 
@@ -22,6 +22,14 @@ It is not a game with a win condition and it is not a dashboard. It is an instru
 - **Intervene** by reallocating effort between agriculture, industry, research and conservation. The decision takes effect from the present year and the world diverges from there.
 
   ![Intervene mode: coupled sliders that always sum to 100%](docs/images/intervene.png)
+
+- **Branch and compare.** Decide in a past year and the world splits in two. Up to six worldlines run side by side on a shared present, drawn as braided particle streams whose distance apart is the causal distance between them; every panel can read one against another.
+
+  ![Six worldlines flowing side by side, each ending in its own planet](docs/images/multiverse.png)
+
+- **Descend to the surface.** Dive into any planet and follow it from orbit down to a single region: terrain and biomes carved from the seed, then forests, fields, mines, towns and cities that grow, industrialise and fall to ruins as the state of the world changes. At night the cities light up, traffic moves along the roads, and named towns carry their own small history — foundings, record harvests, inventions, fires, revolts — which you can also reach from the timeline.
+
+  ![A lit city at night on the planet surface, roads leading out of it](docs/images/surface.png)
 
 - **Share and keep** worlds: the address bar always holds a link with the seed, the decisions and the year; worlds can be saved in the browser or exported as JSON files.
 
@@ -62,8 +70,8 @@ flowchart LR
 ```
 
 - **`src/engine`**: pure TypeScript with no DOM access, checked by its own TypeScript configuration and lint rules: state, rules, events and causes, worldline history with checkpoints, replay and fork.
-- **`src/worker`**: runs the engine off the main thread in time slices, streams progress once per frame and answers range and inspection requests.
-- **`src/app`**: the interface: the Canvas timeline, the three.js planet (loaded on demand, with a 2D fallback), the state, events, causal-chain and allocation panels, English and Portuguese copy, links and persistence.
+- **`src/worker`**: runs the engine off the main thread in time slices, keeps every worldline on a shared present, streams progress once per frame and answers range, distance and inspection requests.
+- **`src/app`**: the interface: the three.js scene (particle streams, planets and the surface, all loaded on demand, with a Canvas 2D fallback when WebGL is missing or motion is reduced), quality tiers measured on the device, terrain and chunked level of detail built in their own worker, the state, events, causal-chain and allocation panels, English and Portuguese copy, links and persistence.
 - **`src/verify`**: the reproducibility page.
 
 ## Tech stack
@@ -85,12 +93,11 @@ npm run probe      # calibration report
 
 ## Roadmap
 
-This first version explores a single worldline. The engine already models lineage and forks; next come:
+Worldlines can already be branched, compared and explored down to their surface. Each worldline still evolves alone; what comes next is what happens when they touch.
 
-1. **Branching**: split a worldline at any year and compare the diverging futures.
-2. **Crossline**: let information, resources or decisions cross from one worldline into another, under conditions set by the worlds themselves.
-3. **Causal debt and paradoxes**: track what a world receives that its own history could not have produced.
-4. **Merge and collapse**: reconcile two histories into a coherent new one, or watch an inconsistent one fall apart.
+1. **Crossline**: let information, resources or decisions cross from one worldline into another, under conditions set by the worlds themselves.
+2. **Causal debt and paradoxes**: track what a world receives that its own history could not have produced.
+3. **Merge and collapse**: reconcile two histories into a coherent new one, or watch an inconsistent one fall apart.
 
 ## License
 
