@@ -1,32 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
-
-async function worldAtYear(page: Page, years: number) {
-  await page.goto('/?seed=482913')
-  const step = page.getByRole('button', { name: 'Advance one year' })
-  for (let i = 0; i < years; i++) await step.click()
-}
-
-// FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
-async function pickOrigin(page: Page) {
-  await page
-    .getByRole('group', { name: 'Where it comes from' })
-    .getByRole('button', { name: 'From worldline A' })
-    .click()
-}
-
-async function branchFromStart(page: Page) {
-  await page.getByRole('button', { name: 'Intervene' }).click()
-  const history = page.getByRole('slider', { name: /Worldline history/ })
-  await history.focus()
-  await history.press('Home')
-  const branch = page.getByRole('button', { name: 'Branch from year 0000' })
-  // espera o painel carregar o ano observado
-  await expect(branch).toBeEnabled()
-  const agriculture = page.getByRole('slider', { name: /Agriculture/ })
-  await agriculture.focus()
-  for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
-  await branch.click()
-}
+import { expect, test } from '@playwright/test'
+import { branchFromStart, pickOrigin, worldAtYear } from './support.ts'
 
 test('branches from the past into a new focused worldline', async ({ page }) => {
   await worldAtYear(page, 5)
@@ -139,10 +112,7 @@ test('keeps the keyboard and the choices when a crossing origin is picked', asyn
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
   const supplies = page.getByRole('button', { name: 'Supplies' })
   await supplies.click()
-  // FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
-  const origin = page
-    .getByRole('group', { name: 'Where it comes from' })
-    .getByRole('button', { name: 'From worldline A' })
+  const origin = page.getByRole('button', { name: 'From worldline A' })
   await origin.focus()
   await page.keyboard.press('Enter')
   await expect(origin).toHaveAttribute('aria-pressed', 'true')
@@ -155,11 +125,7 @@ test('announces a crossing only once the worker has recorded it', async ({ page 
   await worldAtYear(page, 5)
   await branchFromStart(page)
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
-  // FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
-  await page
-    .getByRole('group', { name: 'Where it comes from' })
-    .getByRole('button', { name: 'From worldline A' })
-    .click()
+  await pickOrigin(page)
   const arrived = page.getByText('Knowledge arrived from A.')
   await expect(arrived).toHaveCount(0)
   await page.getByRole('button', { name: 'Open the crossing' }).click()
@@ -215,4 +181,7 @@ test('shows the crossing as a cause of the events it changed', async ({ page }) 
   await expect(
     page.locator('.causal__node[data-kind="crossing"]', { hasText: 'Doctrine that crossed in' }),
   ).toBeVisible()
+  // a linha da travessia não tem índice de evento: escolhê-la larga a cadeia causal anterior
+  await page.locator('.events__item', { hasText: 'Received Doctrine from A' }).click()
+  await expect(page.getByText('Select an event to trace its causes.')).toBeVisible()
 })

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { useGraphics } from './stage.ts'
+import { pickOrigin } from './support.ts'
 
 test.skip(!process.env.SCREENS, 'screenshots are captured on demand')
 
@@ -113,11 +114,7 @@ async function enterCross(page: Page, width: number, height: number) {
   for (let i = 0; i < 25; i++) await industry.press('ArrowRight')
   await page.getByRole('button', { name: /Branch from year/ }).click()
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
-  // FIX: a tira também oferece "From worldline A"; escopa ao grupo do painel
-  await page
-    .getByRole('group', { name: 'Where it comes from' })
-    .getByRole('button', { name: 'From worldline A' })
-    .click()
+  await pickOrigin(page)
   await expect(page.locator('.cross__price')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
   await page.waitForTimeout(300)
@@ -146,10 +143,7 @@ test('cross causal', async ({ page }) => {
   for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
   await branch.click()
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
-  await page
-    .getByRole('group', { name: 'Where it comes from' })
-    .getByRole('button', { name: 'From worldline A' })
-    .click()
+  await pickOrigin(page)
   await page.getByRole('button', { name: 'Doctrine' }).click()
   await page.getByRole('button', { name: 'Open the crossing' }).click()
   await page.getByRole('button', { name: 'Observe' }).click()
