@@ -39,4 +39,15 @@ describe('panBy', () => {
     expect(Math.abs(latFar)).toBeGreaterThan(Math.abs(latNear))
     expect(panBy(1.4, 0, 2, 0, 10_000, 800)[0]).toBeLessThanOrEqual(1.45)
   })
+
+  it('carries the ground with the pointer', () => {
+    const [, east] = panBy(0, 0, 2, 100, 0, 800)
+    const [, west] = panBy(0, 0, 2, -100, 0, 800)
+    expect(east).toBeGreaterThan(0)
+    expect(west).toBeLessThan(0)
+    const [down] = panBy(0, 0, 2, 0, 100, 800)
+    const [up] = panBy(0, 0, 2, 0, -100, 800)
+    expect(down).toBeLessThan(0)
+    expect(up).toBeGreaterThan(0)
+  })
 })

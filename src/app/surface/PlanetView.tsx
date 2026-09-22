@@ -388,10 +388,10 @@ export function PlanetView({
       '+': () => scene?.zoom(0.8),
       '=': () => scene?.zoom(0.8),
       '-': () => scene?.zoom(1.25),
-      ArrowLeft: () => scene?.pan(40, 0),
-      ArrowRight: () => scene?.pan(-40, 0),
-      ArrowUp: () => scene?.pan(0, 40),
-      ArrowDown: () => scene?.pan(0, -40),
+      ArrowLeft: () => scene?.pan(-40, 0),
+      ArrowRight: () => scene?.pan(40, 0),
+      ArrowUp: () => scene?.pan(0, -40),
+      ArrowDown: () => scene?.pan(0, 40),
     }
     const move = moves[event.key]
     if (!move) return

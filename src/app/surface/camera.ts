@@ -88,8 +88,9 @@ export function panBy(
   dy: number,
   viewport: number,
 ): [number, number] {
+  // FIX: o terreno acompanha o ponteiro, como num globo que se agarra
   const rate = (altitude * 1.4) / Math.max(1, viewport)
-  const nextLat = Math.min(1.45, Math.max(-1.45, lat + dy * rate))
-  const nextLon = lon - (dx * rate) / Math.max(0.2, Math.cos(lat))
+  const nextLat = Math.min(1.45, Math.max(-1.45, lat - dy * rate))
+  const nextLon = lon + (dx * rate) / Math.max(0.2, Math.cos(lat))
   return [nextLat, nextLon]
 }
