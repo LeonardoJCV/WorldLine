@@ -97,4 +97,21 @@ describe('validateCrossings', () => {
   it('accepts two crossings in the same year', () => {
     expect(validateCrossings([one, { ...one, kind: 'people', amounts: [10] }])).toHaveLength(2)
   })
+
+  it('refuses a doctrine crossing without a valid allocation', () => {
+    const doctrine: Crossing = { ...one, kind: 'doctrine', amounts: [] }
+    expect(() => validateCrossings([doctrine])).toThrow(RangeError)
+    const uneven = { agriculture: 40, industry: 30, research: 20, conservation: 5 }
+    expect(() => validateCrossings([{ ...doctrine, allocation: uneven }])).toThrow(RangeError)
+  })
+
+  it('accepts a doctrine crossing with a valid allocation and deep-copies it', () => {
+    const allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+    const doctrine: Crossing = { ...one, kind: 'doctrine', amounts: [], allocation }
+    const list = validateCrossings([doctrine])
+    expect(list).toHaveLength(1)
+    expect(list[0]?.allocation).toEqual(allocation)
+    allocation.agriculture = 0
+    expect(list[0]?.allocation?.agriculture).toBe(40)
+  })
 })

@@ -1,4 +1,3 @@
-import { causalDistance } from './distance.ts'
 import { HORIZON } from './params.ts'
 import { isValidAllocation, type Allocation, type WorldState } from './state.ts'
 
@@ -110,9 +109,4 @@ export function validateCrossings(crossings: readonly Crossing[]): Crossing[] {
     origin: { ...c.origin },
     ...(c.allocation ? { allocation: { ...c.allocation } } : {}),
   }))
-}
-
-// FEAT: expõe a distância causal sem que o host precise importar distance.ts
-export function distanceBetween(a: WorldState, b: WorldState): number {
-  return causalDistance(a, b)
 }
