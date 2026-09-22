@@ -315,6 +315,7 @@ interface LifeRun {
   readonly seed?: number
   readonly back?: number
   readonly zoom?: number
+  readonly until?: string
 }
 
 async function enterLife(page: Page, run: LifeRun) {
@@ -343,6 +344,13 @@ async function enterLife(page: Page, run: LifeRun) {
   } else if (run.steps) {
     const step = page.getByRole('button', { name: 'Advance one year' })
     for (let i = 0; i < run.steps; i++) await step.click()
+  } else if (run.until) {
+    await page.getByRole('button', { name: '×64' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await expect(page.locator('.events__item', { hasText: run.until })).toBeVisible({
+      timeout: 120_000,
+    })
+    await page.getByRole('button', { name: 'Pause' }).click()
   } else {
     await page.getByRole('button', { name: '×256' }).click()
     await page.getByRole('button', { name: 'Play' }).click()
@@ -405,7 +413,13 @@ test('surface life orbit day', async ({ page }) => {
 })
 
 test('surface life industrial', async ({ page }) => {
-  await enterLife(page, { level: 'Region', industry: 50, seconds: 5 })
+  test.setTimeout(180_000)
+  await enterLife(page, {
+    level: 'Region',
+    industry: 50,
+    until: 'Industrial revolution',
+    seconds: 2,
+  })
   await page.screenshot({ path: 'screens/surface-life-industrial.png' })
 })
 
