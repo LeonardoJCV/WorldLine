@@ -1,6 +1,6 @@
 import type { Terrain } from './terrain.ts'
 import { surfaceRadius } from './terrain.ts'
-import { chunkCorner, cubeDir, chunkSize, keyOf, type ChunkKey } from './cube.ts'
+import { chunkCenter, chunkCorner, cubeDir, chunkSize, keyOf, type ChunkKey } from './cube.ts'
 
 export interface ChunkMesh {
   readonly key: string
@@ -12,8 +12,6 @@ export interface ChunkMesh {
 export function skirtDrop(key: ChunkKey): number {
   return Math.min(0.02, chunkSize(key) * 0.25)
 }
-
-type Point = readonly [number, number, number]
 
 export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number): ChunkMesh {
   const { u0, v0, size } = chunkCorner(key)
@@ -27,59 +25,123 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
       const r = surfaceRadius(s.height)
       const c = terrain.color(s)
       const at = (j * side + i) * 3
-      grid.set([d[0] * r, d[1] * r, d[2] * r], at)
-      tint.set(c, at)
+      grid[at] = d[0] * r
+      grid[at + 1] = d[1] * r
+      grid[at + 2] = d[2] * r
+      tint[at] = c[0]
+      tint[at + 1] = c[1]
+      tint[at + 2] = c[2]
     }
   }
+
   const triangles = resolution * resolution * 2 + 4 * resolution * 2
   const positions = new Float32Array(triangles * 9)
   const normals = new Float32Array(triangles * 9)
   const colors = new Float32Array(triangles * 9)
   let cursor = 0
 
-  const point = (index: number): Point => [
-    grid[index * 3] ?? 0,
-    grid[index * 3 + 1] ?? 0,
-    grid[index * 3 + 2] ?? 0,
-  ]
-  const color = (index: number): Point => [
-    tint[index * 3] ?? 0,
-    tint[index * 3 + 1] ?? 0,
-    tint[index * 3 + 2] ?? 0,
-  ]
-
-  const push = (a: Point, b: Point, c: Point, rgb: Point, outward?: Point) => {
-    const ab: Point = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
-    const ac: Point = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
-    let n: Point = [
-      ab[1] * ac[2] - ab[2] * ac[1],
-      ab[2] * ac[0] - ab[0] * ac[2],
-      ab[0] * ac[1] - ab[1] * ac[0],
-    ]
-    let [p, q] = [b, c]
-    if (n[0] * a[0] + n[1] * a[1] + n[2] * a[2] < 0) {
-      n = [-n[0], -n[1], -n[2]]
-      ;[p, q] = [c, b]
+  // FIX: vira b/c se a normal apontar para dentro da referência (origem ou centro do bloco).
+  const push = (
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
+    cr: number,
+    cg: number,
+    cb: number,
+    refX: number,
+    refY: number,
+    refZ: number,
+    outX?: number,
+    outY?: number,
+    outZ?: number,
+  ) => {
+    const abx = bx - ax
+    const aby = by - ay
+    const abz = bz - az
+    const acx = cx - ax
+    const acy = cy - ay
+    const acz = cz - az
+    let nx = aby * acz - abz * acy
+    let ny = abz * acx - abx * acz
+    let nz = abx * acy - aby * acx
+    let px = bx
+    let py = by
+    let pz = bz
+    let qx = cx
+    let qy = cy
+    let qz = cz
+    if (nx * (ax - refX) + ny * (ay - refY) + nz * (az - refZ) < 0) {
+      nx = -nx
+      ny = -ny
+      nz = -nz
+      px = cx
+      py = cy
+      pz = cz
+      qx = bx
+      qy = by
+      qz = bz
     }
-    if (outward) n = outward
-    const length = Math.hypot(n[0], n[1], n[2]) || 1
-    for (const v of [a, p, q]) {
-      positions.set(v, cursor)
-      normals.set([n[0] / length, n[1] / length, n[2] / length], cursor)
-      colors.set(rgb, cursor)
-      cursor += 3
+    if (outX !== undefined) {
+      nx = outX
+      ny = outY ?? 0
+      nz = outZ ?? 0
     }
+    const length = Math.hypot(nx, ny, nz) || 1
+    const nnx = nx / length
+    const nny = ny / length
+    const nnz = nz / length
+    positions[cursor] = ax
+    positions[cursor + 1] = ay
+    positions[cursor + 2] = az
+    normals[cursor] = nnx
+    normals[cursor + 1] = nny
+    normals[cursor + 2] = nnz
+    colors[cursor] = cr
+    colors[cursor + 1] = cg
+    colors[cursor + 2] = cb
+    cursor += 3
+    positions[cursor] = px
+    positions[cursor + 1] = py
+    positions[cursor + 2] = pz
+    normals[cursor] = nnx
+    normals[cursor + 1] = nny
+    normals[cursor + 2] = nnz
+    colors[cursor] = cr
+    colors[cursor + 1] = cg
+    colors[cursor + 2] = cb
+    cursor += 3
+    positions[cursor] = qx
+    positions[cursor + 1] = qy
+    positions[cursor + 2] = qz
+    normals[cursor] = nnx
+    normals[cursor + 1] = nny
+    normals[cursor + 2] = nnz
+    colors[cursor] = cr
+    colors[cursor + 1] = cg
+    colors[cursor + 2] = cb
+    cursor += 3
   }
 
-  const average = (...list: Point[]): Point => {
-    const sum: [number, number, number] = [0, 0, 0]
-    for (const c of list) {
-      sum[0] += c[0]
-      sum[1] += c[1]
-      sum[2] += c[2]
-    }
-    return [sum[0] / list.length, sum[1] / list.length, sum[2] / list.length]
-  }
+  const pushSurface = (
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
+    cr: number,
+    cg: number,
+    cb: number,
+  ) => push(ax, ay, az, bx, by, bz, cx, cy, cz, cr, cg, cb, 0, 0, 0)
 
   for (let j = 0; j < resolution; j++) {
     for (let i = 0; i < resolution; i++) {
@@ -87,17 +149,84 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
       const b = a + 1
       const c = a + side + 1
       const d = a + side
-      push(point(a), point(b), point(c), average(color(a), color(b), color(c)))
-      push(point(a), point(c), point(d), average(color(a), color(c), color(d)))
+      const ax = grid[a * 3] ?? 0
+      const ay = grid[a * 3 + 1] ?? 0
+      const az = grid[a * 3 + 2] ?? 0
+      const bx = grid[b * 3] ?? 0
+      const by = grid[b * 3 + 1] ?? 0
+      const bz = grid[b * 3 + 2] ?? 0
+      const cx = grid[c * 3] ?? 0
+      const cy = grid[c * 3 + 1] ?? 0
+      const cz = grid[c * 3 + 2] ?? 0
+      const dx = grid[d * 3] ?? 0
+      const dy = grid[d * 3 + 1] ?? 0
+      const dz = grid[d * 3 + 2] ?? 0
+      const ar = tint[a * 3] ?? 0
+      const ag = tint[a * 3 + 1] ?? 0
+      const ab = tint[a * 3 + 2] ?? 0
+      const br = tint[b * 3] ?? 0
+      const bg = tint[b * 3 + 1] ?? 0
+      const bb = tint[b * 3 + 2] ?? 0
+      const cr = tint[c * 3] ?? 0
+      const cg = tint[c * 3 + 1] ?? 0
+      const cb = tint[c * 3 + 2] ?? 0
+      const dr = tint[d * 3] ?? 0
+      const dg = tint[d * 3 + 1] ?? 0
+      const db = tint[d * 3 + 2] ?? 0
+      pushSurface(
+        ax,
+        ay,
+        az,
+        bx,
+        by,
+        bz,
+        cx,
+        cy,
+        cz,
+        (ar + br + cr) / 3,
+        (ag + bg + cg) / 3,
+        (ab + bb + cb) / 3,
+      )
+      pushSurface(
+        ax,
+        ay,
+        az,
+        cx,
+        cy,
+        cz,
+        dx,
+        dy,
+        dz,
+        (ar + cr + dr) / 3,
+        (ag + cg + dg) / 3,
+        (ab + cb + db) / 3,
+      )
     }
   }
 
   const drop = skirtDrop(key)
-  const lowered = (p: Point): Point => {
-    const r = Math.hypot(...p)
-    const k = (r - drop) / r
-    return [p[0] * k, p[1] * k, p[2] * k]
-  }
+  const centre = chunkCenter(key)
+  const cxr = centre[0]
+  const cyr = centre[1]
+  const czr = centre[2]
+  const pushSkirt = (
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
+    cr: number,
+    cg: number,
+    cb: number,
+    upx: number,
+    upy: number,
+    upz: number,
+  ) => push(ax, ay, az, bx, by, bz, cx, cy, cz, cr, cg, cb, cxr, cyr, czr, upx, upy, upz)
+
   const edges: number[][] = [
     Array.from({ length: side }, (_, i) => i),
     Array.from({ length: side }, (_, i) => resolution * side + i),
@@ -106,14 +235,32 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
   ]
   for (const edge of edges) {
     for (let k = 0; k < resolution; k++) {
-      const e0 = point(edge[k] ?? 0)
-      const e1 = point(edge[k + 1] ?? 0)
-      const rgb0 = color(edge[k] ?? 0)
-      const rgb: Point = [rgb0[0] * 0.8, rgb0[1] * 0.8, rgb0[2] * 0.8]
-      const length0 = Math.hypot(...e0) || 1
-      const up: Point = [e0[0] / length0, e0[1] / length0, e0[2] / length0]
-      push(e0, e1, lowered(e1), rgb, up)
-      push(e0, lowered(e1), lowered(e0), rgb, up)
+      const i0 = edge[k] ?? 0
+      const i1 = edge[k + 1] ?? 0
+      const e0x = grid[i0 * 3] ?? 0
+      const e0y = grid[i0 * 3 + 1] ?? 0
+      const e0z = grid[i0 * 3 + 2] ?? 0
+      const e1x = grid[i1 * 3] ?? 0
+      const e1y = grid[i1 * 3 + 1] ?? 0
+      const e1z = grid[i1 * 3 + 2] ?? 0
+      const rr = (tint[i0 * 3] ?? 0) * 0.8
+      const rg = (tint[i0 * 3 + 1] ?? 0) * 0.8
+      const rb = (tint[i0 * 3 + 2] ?? 0) * 0.8
+      const r0 = Math.hypot(e0x, e0y, e0z) || 1
+      const upx = e0x / r0
+      const upy = e0y / r0
+      const upz = e0z / r0
+      const k0 = (r0 - drop) / r0
+      const l0x = e0x * k0
+      const l0y = e0y * k0
+      const l0z = e0z * k0
+      const r1 = Math.hypot(e1x, e1y, e1z) || 1
+      const k1 = (r1 - drop) / r1
+      const l1x = e1x * k1
+      const l1y = e1y * k1
+      const l1z = e1z * k1
+      pushSkirt(e0x, e0y, e0z, e1x, e1y, e1z, l1x, l1y, l1z, rr, rg, rb, upx, upy, upz)
+      pushSkirt(e0x, e0y, e0z, l1x, l1y, l1z, l0x, l0y, l0z, rr, rg, rb, upx, upy, upz)
     }
   }
 

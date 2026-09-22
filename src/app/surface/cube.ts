@@ -81,7 +81,7 @@ export interface Selection {
 }
 
 export function selectChunks({ camera, maxLevel, split }: Selection): ChunkKey[] {
-  const distance = Math.hypot(...camera)
+  const distance = Math.max(Math.hypot(...camera), 1e-6)
   const toCamera: Vec3 = [camera[0] / distance, camera[1] / distance, camera[2] / distance]
   const horizon = Math.acos(Math.min(1, 1 / Math.max(distance, 1.0001)))
   const out: ChunkKey[] = []

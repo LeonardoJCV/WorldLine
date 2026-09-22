@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { planetPalette } from '../planet/uniforms.ts'
-import { buildChunk } from './chunk.ts'
-import { createTerrain } from './terrain.ts'
+import { buildChunk, skirtDrop } from './chunk.ts'
+import { chunkCenter, type ChunkKey } from './cube.ts'
+import { createTerrain, surfaceRadius } from './terrain.ts'
 
 const terrain = createTerrain(482913, planetPalette(482913))
 
@@ -55,5 +56,57 @@ describe('buildChunk', () => {
     const b = edge(right, 0)
     expect(a.size).toBe(res + 1)
     expect([...a].sort()).toEqual([...b].sort())
+  })
+
+  it('drops every skirt vertex to exactly its edge radius minus skirtDrop', () => {
+    const res = 6
+    const key: ChunkKey = { face: 4, level: 2, x: 1, y: 1 }
+    const mesh = buildChunk(terrain, key, res)
+    const drop = skirtDrop(key)
+    const surface = res * res * 2 * 9
+    for (let i = surface; i < mesh.positions.length; i += 3) {
+      const x = mesh.positions[i] ?? 0
+      const y = mesh.positions[i + 1] ?? 0
+      const z = mesh.positions[i + 2] ?? 0
+      const radius = Math.hypot(x, y, z)
+      const top = surfaceRadius(terrain.sample(x / radius, y / radius, z / radius).height)
+      const onTop = Math.abs(radius - top) < 1e-5
+      const onBottom = Math.abs(radius - (top - drop)) < 1e-5
+      expect(onTop || onBottom).toBe(true)
+    }
+  })
+
+  it('faces every skirt triangle away from its own chunk centre', () => {
+    const res = 6
+    const keys: ChunkKey[] = [0, 1, 2, 3, 4, 5]
+      .map((face): ChunkKey => ({ face, level: 0, x: 0, y: 0 }))
+      .concat([{ face: 4, level: 2, x: 1, y: 1 }])
+    for (const key of keys) {
+      const mesh = buildChunk(terrain, key, res)
+      const centre = chunkCenter(key)
+      const surface = res * res * 2 * 9
+      for (let i = surface; i < mesh.positions.length; i += 9) {
+        const ax = mesh.positions[i] ?? 0
+        const ay = mesh.positions[i + 1] ?? 0
+        const az = mesh.positions[i + 2] ?? 0
+        const bx = mesh.positions[i + 3] ?? 0
+        const by = mesh.positions[i + 4] ?? 0
+        const bz = mesh.positions[i + 5] ?? 0
+        const cx = mesh.positions[i + 6] ?? 0
+        const cy = mesh.positions[i + 7] ?? 0
+        const cz = mesh.positions[i + 8] ?? 0
+        const abx = bx - ax
+        const aby = by - ay
+        const abz = bz - az
+        const acx = cx - ax
+        const acy = cy - ay
+        const acz = cz - az
+        const nx = aby * acz - abz * acy
+        const ny = abz * acx - abx * acz
+        const nz = abx * acy - aby * acx
+        const dot = nx * (ax - centre[0]) + ny * (ay - centre[1]) + nz * (az - centre[2])
+        expect(dot).toBeGreaterThan(-1e-6)
+      }
+    }
   })
 })
