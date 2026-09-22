@@ -1,5 +1,4 @@
 import {
-  BufferAttribute,
   BufferGeometry,
   Color,
   DoubleSide,
@@ -12,7 +11,6 @@ import {
   OctahedronGeometry,
   PerspectiveCamera,
   PlaneGeometry,
-  Points,
   PointsMaterial,
   RingGeometry,
   Scene,
@@ -51,6 +49,7 @@ import {
   type Vec3,
 } from './camera.ts'
 import { axisPoint, type PathData } from './path.ts'
+import { starField } from './stars.ts'
 import { createStream, particleCounts, type Stream } from './streams.ts'
 
 const VOID = 0x0a0b1e
@@ -105,22 +104,6 @@ interface Entry {
   guide: Line
   body: PlanetBody
   detail: string
-}
-
-function starField(seed: number): Points {
-  const count = 1500
-  const positions = new Float32Array(count * 3)
-  let state = seed >>> 0 || 7
-  for (let i = 0; i < count * 3; i++) {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    positions[i] = (state / 4294967296 - 0.5) * 120
-  }
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new BufferAttribute(positions, 3))
-  return new Points(
-    geometry,
-    new PointsMaterial({ color: 0x8e88b5, size: 0.06, transparent: true, opacity: 0.6 }),
-  )
 }
 
 function softwareRenderer(renderer: WebGLRenderer): boolean {
