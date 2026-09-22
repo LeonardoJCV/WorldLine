@@ -26,7 +26,7 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
   const webgl = useGraphics((s) => s.webgl)
   const tier = useTier()
   const [renderer, setRenderer] = useState(() => (webgl ? 'webgl' : 'fallback'))
-  const [map, setMap] = useState<TerrainMap | null>(null)
+  const [loaded, setLoaded] = useState<{ seed: number; map: TerrainMap } | null>(null)
   const palette = useMemo(() => planetPalette(seed), [seed])
   const state = useMemo(() => (snapshot ? planetState(snapshot) : null), [snapshot])
 
@@ -35,10 +35,11 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
   }, [size, state])
 
   useEffect(() => {
+    if (renderer !== 'webgl') return
     let live = true
     terrainMap(seed).then(
       (m) => {
-        if (live) setMap(m)
+        if (live) setLoaded({ seed, map: m })
       },
       () => {
         if (live) setRenderer('fallback')
@@ -47,10 +48,10 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
     return () => {
       live = false
     }
-  }, [seed])
+  }, [renderer, seed])
 
   useEffect(() => {
-    if (renderer !== 'webgl' || !map) return
+    if (renderer !== 'webgl' || !loaded || loaded.seed !== seed) return
     const canvas = canvasRef.current
     if (!canvas) return
     let disposed = false
@@ -64,7 +65,7 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
           detail,
           TIERS[tier].dpr,
           reducedMotion,
-          map,
+          loaded.map,
         )
         sceneRef.current = scene
         scene.resize(latest.current.size, window.devicePixelRatio || 1)
@@ -78,7 +79,7 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
       sceneRef.current?.dispose()
       sceneRef.current = null
     }
-  }, [renderer, palette, detail, tier, map])
+  }, [renderer, palette, detail, tier, loaded, seed])
 
   useEffect(() => {
     sceneRef.current?.resize(size, window.devicePixelRatio || 1)

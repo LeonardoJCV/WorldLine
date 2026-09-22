@@ -92,7 +92,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   const seed = useSimulation((s) => s.seed ?? 0)
   const { from, to } = resolveView(view, present)
   const palette = useMemo(() => planetPalette(seed), [seed])
-  const [map, setMap] = useState<TerrainMap | null>(null)
+  const [loaded, setLoaded] = useState<{ seed: number; map: TerrainMap } | null>(null)
 
   const measure = setting === 'auto' && measured === null
   const measureRef = useRef(measure)
@@ -106,7 +106,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     let live = true
     terrainMap(seed).then(
       (m) => {
-        if (live) setMap(m)
+        if (live) setLoaded({ seed, map: m })
       },
       () => {
         if (live) graphicsStore.getState().setWebglFailed()
@@ -119,7 +119,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !map) return
+    if (!canvas || !loaded || loaded.seed !== seed) return
     let disposed = false
     let unsubscribeFrame: (() => void) | null = null
     void import('./scene.ts')
@@ -130,7 +130,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           tier,
           still: reducedMotion,
           seed,
-          map,
+          map: loaded.map,
           onMeasured: (ms: number, software: boolean) => {
             if (measureRef.current) graphicsStore.getState().setMeasured(chooseTier(ms, software))
           },
@@ -185,7 +185,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
       sceneRef.current?.dispose(!canvas.isConnected)
       sceneRef.current = null
     }
-  }, [tier, palette, reducedMotion, seed, map])
+  }, [tier, palette, reducedMotion, seed, loaded])
 
   useEffect(() => {
     sceneRef.current?.resize(width, height, window.devicePixelRatio || 1)
