@@ -1,4 +1,4 @@
-import { tileOf, keyOf, type Vec3 } from './cube.ts'
+import { tangentFrame, tileOf, keyOf, type Vec3 } from './cube.ts'
 import { OBJECT_LEVEL } from './objects.ts'
 
 export const LIFE_FROM = 0.45
@@ -38,17 +38,7 @@ function ring(cells: number): { x: number; y: number; gap: number }[] {
 export function wantedTiles(dir: Vec3, altitude: number, budget: number): LifeArea {
   const target = lifeReach(altitude)
   if (target <= 0 || budget <= 0) return { keys: [], reach: 0 }
-  const ref: Vec3 = Math.abs(dir[1]) > 0.99 ? [1, 0, 0] : [0, 1, 0]
-  const e0 = ref[1] * dir[2] - ref[2] * dir[1]
-  const e1 = ref[2] * dir[0] - ref[0] * dir[2]
-  const e2 = ref[0] * dir[1] - ref[1] * dir[0]
-  const el = Math.sqrt(e0 * e0 + e1 * e1 + e2 * e2) || 1
-  const east: Vec3 = [e0 / el, e1 / el, e2 / el]
-  const north: Vec3 = [
-    dir[1] * east[2] - dir[2] * east[1],
-    dir[2] * east[0] - dir[0] * east[2],
-    dir[0] * east[1] - dir[1] * east[0],
-  ]
+  const [east, north] = tangentFrame(dir)
   const keys: string[] = []
   const seen = new Set<string>()
   for (const { x, y, gap } of ring(Math.ceil(target / STEP))) {

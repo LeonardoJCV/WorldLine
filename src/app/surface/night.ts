@@ -21,10 +21,9 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { hexToRgb } from '../theme/color.ts'
 import { bustle, type SurfaceModel } from './civilization.ts'
 import { WORKS_ELSEWHERE, type LifeShared } from './life.ts'
+import { TANGENT_FRAME, merged, painted } from './models.ts'
 import { STRIDE, scatter, type ObjectSet } from './objects.ts'
 import type { Road } from './roads.ts'
 import { DAY_FROM, DAY_TO, NIGHT_FLOOR } from './shading.ts'
@@ -212,9 +211,7 @@ void main() {
 #if PARTICLE_KIND == 0
   bool works = city2.w > 0.5 && city2.w < 1.5;
   show = alive && rank < uLife2.x * (works ? 1.0 : WORKS_ELSEWHERE);
-  vec3 ref = abs(up.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-  vec3 east = normalize(cross(ref, up));
-  vec3 north = cross(up, east);
+  ${TANGENT_FRAME}
   vec3 side = east * cos(aSpin) + north * sin(aSpin);
   float h = fract(t * 0.2 + aPhase.x);
   p = position + (side * 0.0004 + up * 0.002) * s + (up * 0.006 + side * 0.0012) * h * uGrow;
@@ -279,9 +276,7 @@ varying vec3 vSurface;
 
 const impostorBody = `
 vec3 up = normalize(aPlace.xyz);
-vec3 ref = abs(up.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-vec3 east = normalize(cross(ref, up));
-vec3 north = cross(up, east);
+${TANGENT_FRAME}
 vec3 side = east * cos(aPlace.w) + north * sin(aPlace.w);
 vec3 front = cross(side, up);
 float near = dot(up, uView.xyz);
@@ -301,18 +296,6 @@ outgoingLight += diffuseColor.rgb * SKY_FILL;
 outgoingLight *= NIGHT_FLOOR + (1.0 - NIGHT_FLOOR) * dayLight;
 #include <opaque_fragment>
 `
-
-function painted(geometry: BufferGeometry, hex: string): BufferGeometry {
-  const flat = geometry.index ? geometry.toNonIndexed() : geometry
-  if (flat !== geometry) geometry.dispose()
-  flat.deleteAttribute('uv')
-  const [r, g, b] = hexToRgb(hex)
-  const count = flat.getAttribute('position').count
-  const colors = new Float32Array(count * 3)
-  for (let i = 0; i < count; i++) colors.set([r, g, b], i * 3)
-  flat.setAttribute('color', new BufferAttribute(colors, 3))
-  return flat
-}
 
 const BLOCKS: readonly (readonly [number, number, number, number])[] = [
   [0, 0, 0.28, 0.42],
@@ -341,10 +324,7 @@ function clusterModel(): BufferGeometry {
       ),
     )
   }
-  const geometry = mergeGeometries(parts)
-  for (const part of parts) part.dispose()
-  if (!geometry) throw new Error('could not merge the city cluster')
-  return geometry
+  return merged(parts)
 }
 
 const surfaceDefines = {

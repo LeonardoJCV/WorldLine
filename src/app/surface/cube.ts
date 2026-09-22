@@ -195,3 +195,18 @@ export function displaySet(wanted: readonly string[], loaded: ReadonlySet<string
     return true
   })
 }
+
+export function tangentFrame(dir: Vec3): [Vec3, Vec3] {
+  const ref: Vec3 = Math.abs(dir[1]) > 0.99 ? [1, 0, 0] : [0, 1, 0]
+  const ex = ref[1] * dir[2] - ref[2] * dir[1]
+  const ey = ref[2] * dir[0] - ref[0] * dir[2]
+  const ez = ref[0] * dir[1] - ref[1] * dir[0]
+  const el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1
+  const east: Vec3 = [ex / el, ey / el, ez / el]
+  const north: Vec3 = [
+    dir[1] * east[2] - dir[2] * east[1],
+    dir[2] * east[0] - dir[0] * east[2],
+    dir[0] * east[1] - dir[1] * east[0],
+  ]
+  return [east, north]
+}

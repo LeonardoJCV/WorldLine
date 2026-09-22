@@ -1,6 +1,5 @@
 import {
   BoxGeometry,
-  BufferAttribute,
   ConeGeometry,
   CylinderGeometry,
   Group,
@@ -13,32 +12,12 @@ import {
   Vector4,
   type BufferGeometry,
 } from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { hexToRgb } from '../theme/color.ts'
 import type { LifeUniforms } from './civilization.ts'
+import { TANGENT_FRAME, merged, painted } from './models.ts'
 import { OBJECT_KINDS, SINK, STRIDE, type ObjectKind, type ObjectSet } from './objects.ts'
 import { DAY_FROM, DAY_TO, NIGHT_FLOOR } from './shading.ts'
 import type { Vec3 } from './cube.ts'
 import { MAX_SITES } from './sites.ts'
-
-function painted(geometry: BufferGeometry, hex: string): BufferGeometry {
-  const flat = geometry.index ? geometry.toNonIndexed() : geometry
-  if (flat !== geometry) geometry.dispose()
-  flat.deleteAttribute('uv')
-  const [r, g, b] = hexToRgb(hex)
-  const count = flat.getAttribute('position').count
-  const colors = new Float32Array(count * 3)
-  for (let i = 0; i < count; i++) colors.set([r, g, b], i * 3)
-  flat.setAttribute('color', new BufferAttribute(colors, 3))
-  return flat
-}
-
-function merged(parts: BufferGeometry[]): BufferGeometry {
-  const geometry = mergeGeometries(parts)
-  for (const part of parts) part.dispose()
-  if (!geometry) throw new Error('could not merge model parts')
-  return geometry
-}
 
 const MODELS: Readonly<Record<ObjectKind, () => BufferGeometry>> = {
   trees: () =>
@@ -126,9 +105,7 @@ varying vec3 vSurface;
 
 const vertexBody = `
 vec3 up = normalize(aPlace.xyz);
-vec3 ref = abs(up.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-vec3 east = normalize(cross(ref, up));
-vec3 north = cross(up, east);
+${TANGENT_FRAME}
 float spin = aPlace.w;
 float t = uLife3.z;
 vec3 side = east * cos(spin) + north * sin(spin);

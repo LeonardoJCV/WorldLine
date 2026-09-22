@@ -1,4 +1,12 @@
-import { chunkCorner, cubeDir, keyOf, tileOf, type ChunkKey, type Vec3 } from './cube.ts'
+import {
+  chunkCorner,
+  cubeDir,
+  keyOf,
+  tangentFrame,
+  tileOf,
+  type ChunkKey,
+  type Vec3,
+} from './cube.ts'
 import { BUILT_MAX, INFLUENCE, type Site } from './sites.ts'
 import { surfaceRadius, type Terrain } from './terrain.ts'
 
@@ -53,21 +61,6 @@ function nearestSite(sites: readonly Site[], dir: Vec3): { index: number; ring: 
   }
   const angle = Math.sqrt(Math.max(0, 2 - 2 * bestDot))
   return { index: best, ring: Math.min(4, angle / INFLUENCE) }
-}
-
-function frame(dir: Vec3): [Vec3, Vec3] {
-  const ref: Vec3 = Math.abs(dir[1]) > 0.99 ? [1, 0, 0] : [0, 1, 0]
-  const ex = ref[1] * dir[2] - ref[2] * dir[1]
-  const ey = ref[2] * dir[0] - ref[0] * dir[2]
-  const ez = ref[0] * dir[1] - ref[1] * dir[0]
-  const el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1
-  const east: Vec3 = [ex / el, ey / el, ez / el]
-  const north: Vec3 = [
-    dir[1] * east[2] - dir[2] * east[1],
-    dir[2] * east[0] - dir[0] * east[2],
-    dir[0] * east[1] - dir[1] * east[0],
-  ]
-  return [east, north]
 }
 
 export function objectTile(
@@ -145,7 +138,7 @@ export function objectTile(
     const dot =
       site.dir[0] * tileCenter[0] + site.dir[1] * tileCenter[1] + site.dir[2] * tileCenter[2]
     if (dot < cosReach) continue
-    const [east, north] = frame(site.dir)
+    const [east, north] = tangentFrame(site.dir)
     for (const kind of ['buildings', 'fields', 'boats', 'factories', 'mines'] as const) {
       const [inner, outer] = RING[kind]
       const count = Math.round(PER_SITE[kind] * density)
