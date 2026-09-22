@@ -1,4 +1,5 @@
 import { TerrainClient, workerTerrainPort, type TerrainMap } from './terrainClient.ts'
+import type { Site } from './sites.ts'
 
 export const MAP_WIDTH = 512
 export const MAP_HEIGHT = 256
@@ -6,6 +7,7 @@ const MAP_CACHE = 6
 
 let shared: TerrainClient | null = null
 const maps = new Map<number, Promise<TerrainMap>>()
+const siteCache = new Map<number, Promise<readonly Site[]>>()
 
 export function terrainClient(): TerrainClient {
   shared ??= new TerrainClient(
@@ -27,6 +29,21 @@ export function terrainMap(seed: number): Promise<TerrainMap> {
   }
   next.catch(() => {
     if (maps.get(seed) === next) maps.delete(seed)
+  })
+  return next
+}
+
+export function terrainSites(seed: number): Promise<readonly Site[]> {
+  const known = siteCache.get(seed)
+  if (known) return known
+  const next = terrainClient().sites(seed)
+  siteCache.set(seed, next)
+  if (siteCache.size > MAP_CACHE) {
+    const oldest = siteCache.keys().next().value
+    if (oldest !== undefined) siteCache.delete(oldest)
+  }
+  next.catch(() => {
+    if (siteCache.get(seed) === next) siteCache.delete(seed)
   })
   return next
 }

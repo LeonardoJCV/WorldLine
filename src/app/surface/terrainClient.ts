@@ -1,5 +1,7 @@
 import type { ChunkMesh } from './chunk.ts'
+import { unpackSites, type Site } from './sites.ts'
 import { createTerrainHandler, type TerrainReply, type TerrainRequest } from './terrainWorker.ts'
+import type { ObjectSet } from './objects.ts'
 
 export interface TerrainMap {
   readonly width: number
@@ -91,5 +93,17 @@ export class TerrainClient {
     const reply = await this.#request((id) => ({ type: 'map', id, seed, width, height }))
     if (reply.type !== 'map') throw new Error(`unexpected ${reply.type} reply`)
     return { width: reply.width, height: reply.height, data: reply.data }
+  }
+
+  async sites(seed: number): Promise<Site[]> {
+    const reply = await this.#request((id) => ({ type: 'sites', id, seed }))
+    if (reply.type !== 'sites') throw new Error(`unexpected ${reply.type} reply`)
+    return unpackSites(reply.data)
+  }
+
+  async objects(seed: number, key: string, density: number): Promise<ObjectSet> {
+    const reply = await this.#request((id) => ({ type: 'objects', id, seed, key, density }))
+    if (reply.type !== 'objects') throw new Error(`unexpected ${reply.type} reply`)
+    return reply.set
   }
 }

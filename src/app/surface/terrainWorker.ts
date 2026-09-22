@@ -1,7 +1,10 @@
 import { planetPalette } from '../planet/uniforms.ts'
 import { buildChunk } from './chunk.ts'
+import { OBJECT_KINDS, objectTile, type ObjectSet } from './objects.ts'
 import { parseKey } from './cube.ts'
+import { findSites, packSites, type Site } from './sites.ts'
 import { bakeMap, createTerrain, type Terrain } from './terrain.ts'
+import { OBJECT_LEVEL } from './objects.ts'
 
 export type TerrainRequest =
   | {
@@ -17,6 +20,18 @@ export type TerrainRequest =
       readonly seed: number
       readonly width: number
       readonly height: number
+    }
+  | {
+      readonly type: 'sites'
+      readonly id: number
+      readonly seed: number
+    }
+  | {
+      readonly type: 'objects'
+      readonly id: number
+      readonly seed: number
+      readonly key: string
+      readonly density: number
     }
 
 export type TerrainReply =
@@ -35,6 +50,17 @@ export type TerrainReply =
       readonly height: number
       readonly data: Float32Array
     }
+  | {
+      readonly type: 'sites'
+      readonly id: number
+      readonly data: Float32Array
+    }
+  | {
+      readonly type: 'objects'
+      readonly id: number
+      readonly key: string
+      readonly set: ObjectSet
+    }
   | { readonly type: 'error'; readonly id: number; readonly message: string }
 
 export interface Handled {
@@ -47,6 +73,11 @@ export function createTerrainHandler(): (request: TerrainRequest) => Handled {
   const terrainFor = (seed: number): Terrain => {
     if (cached?.seed !== seed) cached = createTerrain(seed, planetPalette(seed))
     return cached
+  }
+  const sites = new Map<number, readonly Site[]>()
+  const sitesFor = (seed: number): readonly Site[] => {
+    if (!sites.has(seed)) sites.set(seed, findSites(terrainFor(seed)))
+    return sites.get(seed) ?? []
   }
   const validateKey = (text: string): void => {
     const parts = text.split('/')
@@ -92,6 +123,29 @@ export function createTerrainHandler(): (request: TerrainRequest) => Handled {
             data,
           },
           transfer: [data.buffer as ArrayBuffer],
+        }
+      }
+      if (request.type === 'sites') {
+        const data = packSites(sitesFor(request.seed))
+        return {
+          reply: { type: 'sites', id: request.id, data },
+          transfer: [data.buffer as ArrayBuffer],
+        }
+      }
+      if (request.type === 'objects') {
+        validateKey(request.key)
+        const key = parseKey(request.key)
+        if (key.level !== OBJECT_LEVEL) throw new RangeError('object tiles live at a fixed level')
+        if (!(request.density > 0 && request.density <= 4)) throw new RangeError('invalid density')
+        const set = objectTile(
+          terrainFor(request.seed),
+          sitesFor(request.seed),
+          key,
+          request.density,
+        )
+        return {
+          reply: { type: 'objects', id: request.id, key: request.key, set },
+          transfer: OBJECT_KINDS.map((kind) => set[kind].buffer as ArrayBuffer),
         }
       }
       throw new RangeError(

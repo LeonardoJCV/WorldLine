@@ -46,4 +46,23 @@ describe('terrain handler', () => {
       expect(reply.type).toBe('error')
     }
   })
+
+  it('finds sites and builds object tiles', () => {
+    const handle = createTerrainHandler()
+    const sites = handle({ type: 'sites', id: 5, seed: 482913 })
+    expect(sites.reply.type).toBe('sites')
+    if (sites.reply.type !== 'sites') return
+    expect(sites.reply.data.length % 6).toBe(0)
+    expect(sites.transfer).toHaveLength(1)
+    const objects = handle({ type: 'objects', id: 6, seed: 482913, key: '4/6/40/12', density: 1 })
+    expect(objects.reply.type).toBe('objects')
+    if (objects.reply.type !== 'objects') return
+    expect(objects.transfer.length).toBe(7)
+  })
+
+  it('rejects object tiles at the wrong level', () => {
+    const handle = createTerrainHandler()
+    const { reply } = handle({ type: 'objects', id: 7, seed: 1, key: '4/3/0/0', density: 1 })
+    expect(reply).toMatchObject({ type: 'error', id: 7 })
+  })
 })

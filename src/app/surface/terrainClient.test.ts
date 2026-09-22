@@ -34,4 +34,20 @@ describe('TerrainClient', () => {
     await expect(p2).rejects.toThrow('worker crashed')
     await expect(client.chunk(1, '0/0/0/0', 4)).rejects.toThrow('worker crashed')
   })
+
+  it('resolves sites and object tiles', async () => {
+    const client = new TerrainClient(inProcessTerrainPort())
+    const sites = await client.sites(482913)
+    expect(sites.length).toBeGreaterThan(10)
+    const set = await client.objects(482913, '4/6/40/12', 1)
+    expect(Object.keys(set).sort()).toEqual([
+      'animals',
+      'boats',
+      'buildings',
+      'factories',
+      'fields',
+      'mines',
+      'trees',
+    ])
+  })
 })
