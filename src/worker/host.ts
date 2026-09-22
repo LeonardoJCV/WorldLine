@@ -1,3 +1,14 @@
+import {
+  CROSSING_KINDS,
+  DOSES,
+  credit,
+  crossingAmounts,
+  crossingCost,
+  validateCrossings,
+  type Crossing,
+  type CrossingKind,
+  type Dose,
+} from '../engine/crossing.ts'
 import { causalDistance } from '../engine/distance.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
@@ -67,7 +78,13 @@ export class SimulationHost {
     try {
       switch (message.type) {
         case 'open':
-          this.#open(message.seed, message.tick, message.root, message.branches)
+          this.#open(
+            message.seed,
+            message.tick,
+            message.root,
+            message.branches,
+            message.crossings ?? [],
+          )
           break
         case 'play':
           this.#play(message.speed)
@@ -83,6 +100,15 @@ export class SimulationHost {
           break
         case 'branch':
           this.#branch(message.requestId, message.parent, message.tick, message.allocation)
+          break
+        case 'cross':
+          this.#cross(
+            message.requestId,
+            message.origin,
+            message.destination,
+            message.kind,
+            message.dose,
+          )
           break
         case 'remove':
           this.#remove(message.world)
@@ -148,15 +174,19 @@ export class SimulationHost {
     fork: number,
     own: readonly Decision[],
     target: number,
+    ownCrossings: readonly Crossing[] = [],
   ): Worldline {
     if (!Number.isInteger(fork) || fork < 0 || fork > parent.worldline.present.tick) {
       throw new RangeError('fork outside the parent history')
     }
     const inherited = parent.worldline.decisions.filter((decision) => decision.tick < fork)
-    const line = new Worldline(seed, [...inherited, ...own], {
-      parent: parent.worldline,
-      tick: fork,
-    })
+    const crossed = parent.worldline.crossings.filter((crossing) => crossing.tick < fork)
+    const line = new Worldline(
+      seed,
+      [...inherited, ...own],
+      { parent: parent.worldline, tick: fork },
+      [...crossed, ...ownCrossings],
+    )
     line.advance(target)
     return line
   }
@@ -186,17 +216,18 @@ export class SimulationHost {
     tick: number,
     root: readonly Decision[],
     branches: readonly BranchSpec[],
+    crossings: readonly Crossing[],
   ): void {
     this.#stop()
     if (branches.length >= MAX_WORLDLINES) throw new RangeError('worldline limit reached')
-    const origin = new Worldline(seed, root)
+    const origin = new Worldline(seed, root, null, crossings)
     origin.advance(tick)
     let generation = this.#generation
     const entries: Entry[] = [this.#make(++generation, 'A', null, 0, origin)]
     for (const spec of branches) {
       const parent = entries[spec.parent]
       if (!parent) throw new RangeError('unknown parent worldline')
-      const line = this.#grow(seed, parent, spec.fork, spec.decisions, tick)
+      const line = this.#grow(seed, parent, spec.fork, spec.decisions, tick, spec.crossings ?? [])
       const id = this.#freeId(entries)
       entries.push(this.#make(++generation, id, parent.info.id, spec.fork, line))
     }
@@ -247,6 +278,92 @@ export class SimulationHost {
     this.#add(id, parentId, tick, line)
     this.#report()
     this.#send({ type: 'branched', requestId, world: id })
+  }
+
+  #spent(entry: Entry): number {
+    return entry.worldline.crossings.reduce((total, crossing) => total + crossing.cost, 0)
+  }
+
+  #credit(): number {
+    return credit(
+      this.#entries.map((entry) => ({
+        tick: entry.worldline.present.tick,
+        ended: entry.worldline.ended,
+        spent: this.#spent(entry),
+      })),
+    )
+  }
+
+  #living(entry: Entry, role: string): void {
+    if (entry.worldline.ended) {
+      const state = entry.worldline.present.status === 'extinct' ? 'extinct' : 'past the horizon'
+      throw new RangeError(`the ${role} worldline ${entry.info.id} is ${state}`)
+    }
+  }
+
+  // FEAT: confere antes de gravar, para as duas pontas nunca ficarem fora de passo
+  #ensureCrossable(entry: Entry, crossing: Crossing, role: string): void {
+    const line = entry.worldline
+    this.#living(entry, role)
+    if (crossing.tick !== line.present.tick) {
+      throw new RangeError(
+        `crossing for year ${crossing.tick} applied at year ${line.present.tick}`,
+      )
+    }
+    const last = line.crossings.at(-1)
+    if (last && last.tick > crossing.tick) {
+      throw new RangeError(`worldline ${entry.info.id} still has a later crossing pending`)
+    }
+    validateCrossings([...line.crossings, crossing])
+  }
+
+  #cross(
+    requestId: number,
+    originId: WorldlineId,
+    destinationId: WorldlineId,
+    kind: CrossingKind,
+    dose: Dose,
+  ): void {
+    if (!CROSSING_KINDS.includes(kind)) throw new RangeError(`unknown crossing kind ${kind}`)
+    if (!DOSES.includes(dose)) throw new RangeError('a crossing carries a dose of 1, 2 or 3')
+    const origin = this.#entry(originId)
+    const destination = this.#entry(destinationId)
+    if (originId === destinationId) {
+      throw new RangeError('origin and destination are the same worldline')
+    }
+    this.#living(origin, 'origin')
+    this.#living(destination, 'destination')
+
+    const originState = origin.worldline.stateAt(this.#now)
+    const destinationState = destination.worldline.stateAt(this.#now)
+    const cost = crossingCost(kind, dose, causalDistance(originState, destinationState))
+    const available = this.#credit()
+    if (cost > available) {
+      throw new RangeError(
+        `not enough credit: this crossing costs ${cost} and ${cost - available} is missing`,
+      )
+    }
+
+    const crossing: Crossing = {
+      tick: this.#now,
+      kind,
+      dose,
+      amounts: crossingAmounts(kind, dose, originState),
+      origin: { world: originId, tick: this.#now },
+      cost,
+      direction: 'in',
+      ...(kind === 'doctrine' ? { allocation: originState.allocation } : {}),
+    }
+    // FEAT: o custo é cobrado uma vez só, na chegada
+    const departure: Crossing | null =
+      kind === 'people' ? { ...crossing, direction: 'out', cost: 0 } : null
+    this.#ensureCrossable(destination, crossing, 'destination')
+    if (departure) this.#ensureCrossable(origin, departure, 'origin')
+    const recorded = destination.worldline.cross(crossing)
+    if (departure) origin.worldline.cross(departure)
+
+    this.#report()
+    this.#send({ type: 'crossed', requestId, world: destinationId, crossing: recorded })
   }
 
   #remove(id: WorldlineId): void {
@@ -394,6 +511,12 @@ export class SimulationHost {
         tick: d.tick,
         allocation: { ...d.allocation },
       })),
+      crossings: worldline.crossings.map((c) => ({
+        ...c,
+        amounts: [...c.amounts],
+        origin: { ...c.origin },
+        ...(c.allocation ? { allocation: { ...c.allocation } } : {}),
+      })),
     }
   }
 
@@ -408,6 +531,7 @@ export class SimulationHost {
     this.#send({
       type: 'progress',
       now: this.#now,
+      credit: this.#credit(),
       playing: this.#playing,
       ended,
       worlds: this.#entries.map((entry) => this.#progressOf(entry)),

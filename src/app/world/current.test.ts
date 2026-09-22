@@ -18,18 +18,21 @@ const worlds: WorldView[] = [
     info: { id: 'A', parent: null, fork: 0, generation: 1 },
     present,
     events: [],
+    crossings: [],
     decisions: [early],
   },
   {
     info: { id: 'C', parent: 'A', fork: 40, generation: 3 },
     present,
     events: [],
+    crossings: [],
     decisions: [early, late],
   },
   {
     info: { id: 'B', parent: 'C', fork: 60, generation: 4 },
     present,
     events: [],
+    crossings: [],
     decisions: [early, late],
   },
 ]

@@ -1,4 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
+import type { Crossing } from '../../engine/crossing.ts'
 import type { EventRecord } from '../../engine/events.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
@@ -25,11 +26,13 @@ export interface WorldView {
   readonly present: Snapshot
   readonly events: readonly EventRecord[]
   readonly decisions: readonly Decision[]
+  readonly crossings: readonly Crossing[]
 }
 
 export interface SimulationState {
   readonly seed: number | null
   readonly now: number
+  readonly credit: number
   readonly worlds: readonly WorldView[]
   readonly focus: WorldlineId
   readonly present: Snapshot | null
@@ -90,6 +93,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
   const store = createStore<SimulationState>()((set, get) => ({
     seed: null,
     now: 0,
+    credit: 0,
     worlds: [],
     focus: 'A',
     present: null,
@@ -114,6 +118,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       set({
         seed: link.seed,
         now: 0,
+        credit: 0,
         worlds: [],
         focus: 'A',
         present: null,
@@ -238,12 +243,14 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
             present: update.present,
             events: upsert(old?.events ?? [], update.events),
             decisions: update.decisions,
+            crossings: update.crossings,
           }
         })
         const current = store.getState().focus
         const focus = worlds.some((world) => world.info.id === current) ? current : 'A'
         store.setState({
           now: message.now,
+          credit: message.credit,
           playing: message.playing,
           ended: message.ended,
           worlds,

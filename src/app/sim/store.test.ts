@@ -223,4 +223,26 @@ describe('simulation store', () => {
     expect(store.getState().focus).toBe('A')
     expect(store.getState().worlds).toHaveLength(1)
   })
+  it('keeps the credit and the crossings of each world', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const store = createSimulationStore(client)
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    const before = store.getState().credit
+    expect(before).toBeGreaterThan(0)
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    const crossing = await client.cross('A', id, 'knowledge', 1)
+    await flush()
+    const state = store.getState()
+    expect(state.worlds.find((w) => w.info.id === id)?.crossings).toEqual([crossing])
+    expect(state.worlds.find((w) => w.info.id === 'A')?.crossings).toEqual([])
+    expect(state.credit).toBe(before + 4 - crossing.cost)
+  })
 })

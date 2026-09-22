@@ -1,3 +1,4 @@
+import type { Crossing, CrossingKind, Dose } from '../engine/crossing.ts'
 import { EVENTS, type EventId, type EventRecord } from '../engine/events.ts'
 import {
   VARIABLES,
@@ -34,6 +35,7 @@ export interface BranchSpec {
   readonly parent: number
   readonly fork: number
   readonly decisions: readonly Decision[]
+  readonly crossings?: readonly Crossing[]
 }
 
 export interface WorldlineInfo {
@@ -48,6 +50,7 @@ export interface WorldProgress {
   readonly present: Snapshot
   readonly events: readonly EventUpdate[]
   readonly decisions: readonly Decision[]
+  readonly crossings: readonly Crossing[]
 }
 
 export type Series = Readonly<Record<Variable, Float32Array>>
@@ -61,6 +64,7 @@ export type ToWorker =
       readonly tick: number
       readonly root: readonly Decision[]
       readonly branches: readonly BranchSpec[]
+      readonly crossings?: readonly Crossing[]
     }
   | { readonly type: 'play'; readonly speed: Speed }
   | { readonly type: 'pause' }
@@ -72,6 +76,14 @@ export type ToWorker =
       readonly parent: WorldlineId
       readonly tick: number
       readonly allocation: Allocation
+    }
+  | {
+      readonly type: 'cross'
+      readonly requestId: number
+      readonly origin: WorldlineId
+      readonly destination: WorldlineId
+      readonly kind: CrossingKind
+      readonly dose: Dose
     }
   | { readonly type: 'remove'; readonly world: WorldlineId }
   | {
@@ -102,6 +114,7 @@ export type FromWorker =
   | {
       readonly type: 'progress'
       readonly now: number
+      readonly credit: number
       readonly playing: boolean
       readonly ended: EndReason | null
       readonly worlds: readonly WorldProgress[]
@@ -115,6 +128,12 @@ export type FromWorker =
     }
   | { readonly type: 'inspect'; readonly requestId: number; readonly snapshot: Snapshot }
   | { readonly type: 'branched'; readonly requestId: number; readonly world: WorldlineId }
+  | {
+      readonly type: 'crossed'
+      readonly requestId: number
+      readonly world: WorldlineId
+      readonly crossing: Crossing
+    }
   | {
       readonly type: 'distance'
       readonly requestId: number

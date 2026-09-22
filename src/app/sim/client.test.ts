@@ -73,4 +73,31 @@ describe('SimulationClient', () => {
     const distance = await client.distance('B', 'A', 0, 60, 6)
     expect(distance.values).toHaveLength(6)
   })
+
+  it('resolves a crossing request', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const received: FromWorker[] = []
+    client.subscribe((message) => received.push(message))
+    client.open(482913, 0, [], [])
+    client.step(2000)
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    const crossing = await client.cross('A', id, 'knowledge', 1)
+    expect(crossing).toMatchObject({ kind: 'knowledge', dose: 1, direction: 'in' })
+    expect(crossing.amounts[0]).toBeGreaterThan(0)
+    expect(received.every((m) => m.type === 'progress')).toBe(true)
+  })
+
+  it('rejects a crossing the worker refuses', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    client.open(482913, 0, [], [])
+    client.step(10)
+    await expect(client.cross('A', 'A', 'doctrine', 1)).rejects.toThrow(/same worldline/)
+  })
 })

@@ -1,3 +1,4 @@
+import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
   BranchSpec,
@@ -96,6 +97,25 @@ export class SimulationClient {
     return reply.world
   }
 
+  async cross(
+    origin: WorldlineId,
+    destination: WorldlineId,
+    kind: CrossingKind,
+    dose: Dose,
+  ): Promise<Crossing> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, {
+      type: 'cross',
+      requestId,
+      origin,
+      destination,
+      kind,
+      dose,
+    })
+    if (reply.type !== 'crossed') throw new Error(`unexpected ${reply.type} reply`)
+    return reply.crossing
+  }
+
   remove(world: WorldlineId): void {
     this.#port.send({ type: 'remove', world })
   }
@@ -167,6 +187,7 @@ export class SimulationClient {
       (message.type === 'range' ||
         message.type === 'inspect' ||
         message.type === 'branched' ||
+        message.type === 'crossed' ||
         message.type === 'distance' ||
         message.type === 'error') &&
       message.requestId !== undefined

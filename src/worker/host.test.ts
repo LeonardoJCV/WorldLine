@@ -387,3 +387,202 @@ describe('SimulationHost: the multiverse', () => {
     expect(last(sent, 'progress')?.ended).toBeNull()
   })
 })
+
+describe('SimulationHost: crossings', () => {
+  function pair() {
+    const context = setup()
+    context.open()
+    context.host.handle({ type: 'step', years: 2000 })
+    context.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    return context
+  }
+
+  it('moves knowledge from one worldline into another', () => {
+    const { host, sent } = pair()
+    const before = last(sent, 'progress')?.credit ?? 0
+    expect(before).toBeGreaterThan(0)
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    const reply = last(sent, 'crossed')
+    expect(reply).toMatchObject({ requestId: 2, world: 'B' })
+    expect(reply?.crossing).toMatchObject({
+      tick: 2000,
+      kind: 'knowledge',
+      dose: 1,
+      direction: 'in',
+      origin: { world: 'A', tick: 2000 },
+    })
+    expect(reply?.crossing.amounts[0]).toBeGreaterThan(0)
+    expect(reply?.crossing.cost).toBeGreaterThan(0)
+    expect(world(sent, 'B')?.crossings).toHaveLength(1)
+    expect(world(sent, 'A')?.crossings).toHaveLength(0)
+    expect(last(sent, 'progress')?.credit).toBe(before - (reply?.crossing.cost ?? 0))
+    host.handle({ type: 'step', years: 1 })
+    const a = world(sent, 'A')?.present.values.technology ?? 0
+    expect(world(sent, 'B')?.present.values.technology).toBeGreaterThan(a)
+  })
+
+  it('refuses a crossing without credit', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 0, allocation: balanced })
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 3,
+    })
+    const error = last(sent, 'error')
+    expect(error?.requestId).toBe(2)
+    expect(error?.message).toMatch(/credit/)
+    expect(error?.message).toMatch(/5/)
+    expect(world(sent, 'B')?.crossings).toEqual([])
+  })
+
+  it('refuses a crossing into the same worldline and from an extinct one', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 10 })
+    host.handle({
+      type: 'cross',
+      requestId: 1,
+      origin: 'A',
+      destination: 'A',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 1 })
+    expect(last(sent, 'error')?.message).toMatch(/same worldline/)
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'F',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    expect(last(sent, 'error')?.message).toBe('unknown worldline F')
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 2000 })
+    expect(world(sent, 'B')?.present.status).toBe('extinct')
+    host.handle({
+      type: 'cross',
+      requestId: 4,
+      origin: 'B',
+      destination: 'A',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
+    expect(last(sent, 'error')?.message).toMatch(/extinct/)
+    host.handle({
+      type: 'cross',
+      requestId: 5,
+      origin: 'A',
+      destination: 'B',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 5 })
+    expect(last(sent, 'error')?.message).toMatch(/extinct/)
+    expect(world(sent, 'A')?.crossings).toEqual([])
+  })
+
+  it('records the departure in the origin when people cross', () => {
+    const { host, sent } = pair()
+    const before = last(sent, 'progress')?.credit ?? 0
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'B',
+      kind: 'people',
+      dose: 1,
+    })
+    const crossing = last(sent, 'crossed')?.crossing
+    const departure = world(sent, 'A')?.crossings[0]
+    const arrival = world(sent, 'B')?.crossings[0]
+    expect(arrival).toMatchObject({ direction: 'in', kind: 'people', cost: crossing?.cost })
+    expect(departure).toMatchObject({ direction: 'out', kind: 'people', cost: 0 })
+    expect(departure?.amounts).toEqual(arrival?.amounts)
+    expect(last(sent, 'progress')?.credit).toBe(before - (crossing?.cost ?? 0))
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'B')?.present.values.population).toBeGreaterThan(
+      world(sent, 'A')?.present.values.population ?? Infinity,
+    )
+  })
+
+  it('carries the origin allocation when doctrine crosses', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'decide', world: 'A', allocation: starved })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'B',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    expect(last(sent, 'crossed')?.crossing.allocation).toEqual(starved)
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'B')?.present.allocation).toEqual(starved)
+  })
+
+  it('rebuilds a multiverse with crossings from open', () => {
+    const { host, sent } = setup()
+    const arrival = {
+      tick: 150,
+      kind: 'knowledge' as const,
+      dose: 1 as const,
+      amounts: [5],
+      origin: { world: 'A', tick: 150 },
+      cost: 3,
+      direction: 'in' as const,
+    }
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      branches: [{ parent: 0, fork: 100, decisions: [], crossings: [arrival] }],
+    })
+    expect(world(sent, 'B')?.crossings).toEqual([arrival])
+    expect(world(sent, 'A')?.crossings).toEqual([])
+    expect(world(sent, 'B')?.present.values.technology).toBeGreaterThan(
+      world(sent, 'A')?.present.values.technology ?? Infinity,
+    )
+  })
+
+  it('gives a new branch the crossings from before its fork', () => {
+    const { host, sent } = pair()
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'B',
+      destination: 'A',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 2000, allocation: starved })
+    expect(world(sent, 'C')?.crossings).toEqual([])
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'branch', requestId: 4, parent: 'A', tick: 2005, allocation: starved })
+    expect(world(sent, 'D')?.crossings).toEqual(world(sent, 'A')?.crossings)
+  })
+})
