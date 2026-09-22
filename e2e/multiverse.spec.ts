@@ -124,3 +124,18 @@ test('stops branching at six worldlines', async ({ page }) => {
   await history.press('Home')
   await expect(page.getByText('Six worldlines is the limit; remove one to branch.')).toBeVisible()
 })
+
+test('keeps the keyboard and the choices when a crossing origin is picked', async ({ page }) => {
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  const supplies = page.getByRole('button', { name: 'Supplies' })
+  await supplies.click()
+  const origin = page.getByRole('button', { name: 'From worldline A' })
+  await origin.focus()
+  await page.keyboard.press('Enter')
+  await expect(origin).toHaveAttribute('aria-pressed', 'true')
+  await expect(origin).toBeFocused()
+  await expect(supplies).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
+})

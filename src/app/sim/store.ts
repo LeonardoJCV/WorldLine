@@ -278,6 +278,9 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         })
         const current = store.getState().focus
         const focus = worlds.some((world) => world.info.id === current) ? current : 'A'
+        // FIX: remover uma realidade leva junto as que nasceram dela, e a origem escolhida pode ser uma delas
+        const chosen = store.getState().crossOrigin
+        const kept = chosen !== null && worlds.some((world) => world.info.id === chosen)
         store.setState({
           now: message.now,
           credit: message.credit,
@@ -286,6 +289,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
           worlds,
           focus,
           ...focused(worlds, focus),
+          ...(kept ? {} : { crossOrigin: null }),
           ...(focus === current
             ? {}
             : { selected: null, cursor: null, inspected: null, inspectedOrigin: null }),

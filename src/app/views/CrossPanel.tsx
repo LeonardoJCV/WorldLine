@@ -1,22 +1,22 @@
 import { useEffect, useState } from 'react'
 import { CROSSING_KINDS, type CrossingKind, type Dose } from '../../engine/crossing.ts'
-import { HORIZON } from '../../engine/params.ts'
 import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
 import { formatCompact, formatDecimal, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
-import { crossBlock, crossQuote, DOSES_FOR } from './cross.ts'
+import { crossBlock, crossOrigins, crossQuote, DOSES_FOR, worldEnded } from './cross.ts'
 
 interface Done {
   readonly kind: CrossingKind
   readonly id: WorldlineId
 }
 
-const CONFIRMATION = 6000
-
-function ended(snapshot: Snapshot): boolean {
-  return snapshot.status === 'extinct' || snapshot.tick >= HORIZON
+interface Observed {
+  readonly id: WorldlineId
+  readonly snapshot: Snapshot
 }
+
+const CONFIRMATION = 6000
 
 export function CrossPanel() {
   const t = useT()
@@ -29,9 +29,10 @@ export function CrossPanel() {
   const present = useSimulation((s) => s.present)
   const inspected = useSimulation((s) => s.inspected)
   const branching = useSimulation((s) => s.branching)
+  const playing = useSimulation((s) => s.playing)
   const [kind, setKind] = useState<CrossingKind>('knowledge')
   const [dose, setDose] = useState<Dose>(1)
-  const [observed, setObserved] = useState<Snapshot | null>(null)
+  const [observed, setObserved] = useState<Observed | null>(null)
   const [done, setDone] = useState<Done | null>(null)
   const { cross, setCrossOrigin, setCursor } = simulation.getState()
   const inPast = cursor !== null
@@ -42,7 +43,7 @@ export function CrossPanel() {
     const frameId = requestAnimationFrame(() => {
       client.inspect(origin, cursor).then(
         (snapshot) => {
-          if (!cancelled) setObserved(snapshot)
+          if (!cancelled) setObserved({ id: origin, snapshot })
         },
         (error: unknown) => {
           if (!cancelled) {
@@ -63,26 +64,32 @@ export function CrossPanel() {
     return () => clearTimeout(timer)
   }, [done])
 
+  const usable = crossOrigins(worlds, focus)
   const world = worlds.find((candidate) => candidate.info.id === origin) ?? null
-  const originEnded = world !== null && ended(world.present)
-  // FIX: no passado só serve o estado do próprio ano observado, nunca o que sobrou do ano anterior
-  const source = inPast ? (observed?.tick === cursor ? observed : null) : (world?.present ?? null)
+  const originEnded = world !== null && worldEnded(world.present)
+  // FIX: no passado só serve o estado da própria origem no ano observado, nunca o que sobrou de antes
+  const source = inPast
+    ? observed !== null && observed.id === origin && observed.snapshot.tick === cursor
+      ? observed.snapshot
+      : null
+    : (world?.present ?? null)
   const destination = inPast ? (inspected?.tick === cursor ? inspected : null) : present
   const doses = DOSES_FOR(kind)
   const carried = doses.includes(dose) ? dose : 1
   const year = formatYear(cursor ?? present?.tick ?? 0)
   const awaiting =
-    inPast && origin !== null && !originEnded && (source === null || destination === null)
+    inPast && world !== null && !originEnded && (source === null || destination === null)
   const blocked = crossBlock({
     kind,
     dose: carried,
     cursor,
     credit,
-    worlds: worlds.length,
-    origin: source ?? world?.present ?? null,
+    // FIX: origem morta não conta, senão o painel pede uma escolha que não existe na tela
+    worlds: usable.length + 1,
+    origin: source,
     destination,
     originEnded,
-    destinationEnded: !inPast && present !== null && ended(present),
+    destinationEnded: !inPast && present !== null && worldEnded(present),
   })
   const quote =
     source !== null && destination !== null
@@ -101,24 +108,22 @@ export function CrossPanel() {
         {t('cross.title', { id: focus })}
       </h2>
       <div className="cross__groups">
-        {worlds.length > 1 && (
+        {usable.length > 0 && (
           <div className="cross__row">
             <span className="cross__label" id="cross-origin-label">
               {t('cross.originLabel')}
             </span>
             <div className="cross__group" role="group" aria-labelledby="cross-origin-label">
-              {worlds
-                .filter((candidate) => candidate.info.id !== focus && !ended(candidate.present))
-                .map((candidate) => (
-                  <button
-                    key={candidate.info.id}
-                    type="button"
-                    aria-pressed={candidate.info.id === origin}
-                    onClick={() => setCrossOrigin(candidate.info.id)}
-                  >
-                    {t('cross.origin', { id: candidate.info.id })}
-                  </button>
-                ))}
+              {usable.map((candidate) => (
+                <button
+                  key={candidate.info.id}
+                  type="button"
+                  aria-pressed={candidate.info.id === origin}
+                  onClick={() => setCrossOrigin(candidate.info.id)}
+                >
+                  {t('cross.origin', { id: candidate.info.id })}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -190,9 +195,13 @@ export function CrossPanel() {
       )}
       <div className="cross__footer">
         <p className="panel__empty" id="cross-reason">
-          {blocked === null
-            ? t(inPast ? 'cross.hintPast' : 'cross.hint', { year })
-            : t(blocked.key, { id: origin ?? focus, ...blocked.params })}
+          {awaiting
+            ? t('cross.loading')
+            : blocked !== null
+              ? t(blocked.key, { id: origin ?? focus, ...blocked.params })
+              : playing
+                ? t('cross.playing')
+                : t(inPast ? 'cross.hintPast' : 'cross.hint', { year })}
           {inPast && (
             <>
               {' '}
@@ -207,7 +216,7 @@ export function CrossPanel() {
             type="button"
             className="cross__open"
             aria-describedby="cross-reason"
-            disabled={blocked !== null || awaiting || branching || quote === null}
+            disabled={blocked !== null || awaiting || branching || playing || quote === null}
             onClick={open}
           >
             {awaiting

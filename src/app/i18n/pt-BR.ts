@@ -201,6 +201,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'cross.openFromYear': 'Cruzar no ano {year}',
   'cross.done': 'Chegou de {id}: {kind}.',
   'cross.loading': 'Lendo a outra realidade…',
+  'cross.playing': 'Pause os anos antes: o preço muda enquanto a simulação corre.',
   'cross.needsWorlds':
     'Ramifique uma segunda worldline antes: uma travessia precisa de uma origem.',
   'cross.pickOrigin': 'Escolha a worldline de onde ela vem.',

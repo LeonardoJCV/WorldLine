@@ -1,16 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { causalDistance } from '../../engine/distance.ts'
 import { crossingAmounts, crossingCost, DOSES } from '../../engine/crossing.ts'
+import { HORIZON } from '../../engine/params.ts'
 import type { Status, Variable } from '../../engine/state.ts'
-import { MAX_WORLDLINES, type Snapshot } from '../../worker/protocol.ts'
-import { crossBlock, crossQuote, DOSES_FOR, type CrossBlockInput } from './cross.ts'
+import { MAX_WORLDLINES, type Snapshot, type WorldlineId } from '../../worker/protocol.ts'
+import {
+  crossBlock,
+  crossOrigins,
+  crossQuote,
+  DOSES_FOR,
+  worldEnded,
+  type CrossBlockInput,
+} from './cross.ts'
 
 function snapshot(
   values: Partial<Record<Variable, number>> = {},
   status: Status = 'running',
+  tick = 100,
 ): Snapshot {
   return {
-    tick: 100,
+    tick,
     values: {
       population: 1_000,
       food: 500,
@@ -56,6 +65,47 @@ describe('DOSES_FOR', () => {
     expect(DOSES_FOR('knowledge')).toEqual(DOSES)
     expect(DOSES_FOR('resource')).toEqual(DOSES)
     expect(DOSES_FOR('people')).toEqual(DOSES)
+  })
+})
+
+function world(id: WorldlineId, present: Snapshot) {
+  return { info: { id }, present }
+}
+
+describe('worldEnded', () => {
+  it('counts an extinct worldline as ended', () => {
+    expect(worldEnded(snapshot({}, 'extinct'))).toBe(true)
+  })
+
+  it('counts a worldline that reached the horizon as ended', () => {
+    expect(worldEnded(snapshot({}, 'running', HORIZON))).toBe(true)
+  })
+
+  it('counts a living worldline short of the horizon as alive', () => {
+    expect(worldEnded(snapshot({}, 'running', HORIZON - 1))).toBe(false)
+  })
+})
+
+describe('crossOrigins', () => {
+  const alive = snapshot()
+  const dead = snapshot({}, 'extinct')
+
+  it('drops the destination itself and every worldline that has ended', () => {
+    const worlds = [world('A', alive), world('B', dead), world('C', alive)]
+    expect(crossOrigins(worlds, 'C').map((candidate) => candidate.info.id)).toEqual(['A'])
+  })
+
+  it('leaves nothing to choose when the only other worldline is extinct', () => {
+    expect(crossOrigins([world('A', alive), world('B', dead)], 'A')).toEqual([])
+  })
+
+  it('refuses the crossing for want of a worldline, not for want of a choice', () => {
+    const worlds = [world('A', alive), world('B', dead)]
+    const usable = crossOrigins(worlds, 'A')
+    expect(crossBlock(baseInput({ worlds: usable.length + 1, origin: null }))).toEqual({
+      key: 'cross.needsWorlds',
+      params: {},
+    })
   })
 })
 

@@ -203,6 +203,7 @@ export const en = {
   'cross.openFromYear': 'Cross in year {year}',
   'cross.done': '{kind} arrived from {id}.',
   'cross.loading': 'Reading the other world…',
+  'cross.playing': 'Pause the years first: the price moves while the simulation runs.',
   'cross.needsWorlds': 'Branch a second worldline first: a crossing needs somewhere to come from.',
   'cross.pickOrigin': 'Choose the worldline it comes from.',
   'cross.originExtinct': 'Worldline {id} is extinct and has nothing left to send.',

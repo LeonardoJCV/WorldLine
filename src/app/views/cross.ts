@@ -6,13 +6,32 @@ import {
   type CrossingKind,
   type Dose,
 } from '../../engine/crossing.ts'
-import { MAX_WORLDLINES, type Snapshot } from '../../worker/protocol.ts'
+import { HORIZON } from '../../engine/params.ts'
+import { MAX_WORLDLINES, type Snapshot, type WorldlineId } from '../../worker/protocol.ts'
 import type { MessageKey } from '../i18n/en.ts'
 import type { Params } from '../i18n/index.ts'
 
 // FEAT: doutrina só tem sentido em dose 1, o efeito não escala com a dose
 export function DOSES_FOR(kind: CrossingKind): readonly Dose[] {
   return kind === 'doctrine' ? [1] : DOSES
+}
+
+// FEAT: uma realidade acabou quando se extinguiu ou quando chegou ao horizonte
+export function worldEnded(present: Snapshot): boolean {
+  return present.status === 'extinct' || present.tick >= HORIZON
+}
+
+export interface OriginCandidate {
+  readonly info: { readonly id: WorldlineId }
+  readonly present: Snapshot
+}
+
+// FIX: só realidade viva que não é o destino pode ser origem, e é essa conta que diz se há travessia possível
+export function crossOrigins<T extends OriginCandidate>(
+  worlds: readonly T[],
+  focus: WorldlineId,
+): readonly T[] {
+  return worlds.filter((world) => world.info.id !== focus && !worldEnded(world.present))
 }
 
 export interface CrossQuoteInput {

@@ -57,7 +57,6 @@ export function Observatory({
   const worldFocus = useSimulation((s) => s.focus)
   const cursor = useSimulation((s) => s.cursor)
   const inspectedTick = useSimulation((s) => s.inspected?.tick ?? null)
-  const crossOrigin = useSimulation((s) => s.crossOrigin)
   const observed = useSimulation((s) => s.inspected ?? s.present)
   const linkVersion = useSimulation((s) => s.linkVersion)
   const remount = `${seed}:${worldFocus}:${cursor === null ? 'now' : (inspectedTick ?? 'pending')}`
@@ -122,7 +121,7 @@ export function Observatory({
           {mode === 'intervene' ? (
             <AllocationPanel key={remount} />
           ) : mode === 'cross' ? (
-            <CrossPanel key={`${remount}:${crossOrigin ?? 'none'}`} />
+            <CrossPanel key={remount} />
           ) : (
             <>
               <EventsPanel />
