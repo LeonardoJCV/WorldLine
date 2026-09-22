@@ -70,7 +70,8 @@ const crossScript = (maxTick: number) =>
 
 describe('golden hashes', () => {
   it.each(GOLDEN_CASES)('seed $seed, $script, year $year', ({ seed, script, year, hash }) => {
-    const w = new Worldline(seed, GOLDEN_SCRIPTS[script])
+    const plan = GOLDEN_SCRIPTS[script]
+    const w = new Worldline(seed, plan.decisions, null, plan.crossings)
     w.advance(year)
     expect(w.hashAt(year)).toBe(hash)
   })

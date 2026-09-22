@@ -12,7 +12,8 @@ export function runGoldenChecks(): GoldenResult[] {
     const key = `${golden.seed}/${golden.script}`
     let world = worlds.get(key)
     if (!world) {
-      world = new Worldline(golden.seed, GOLDEN_SCRIPTS[golden.script])
+      const plan = GOLDEN_SCRIPTS[golden.script]
+      world = new Worldline(golden.seed, plan.decisions, null, plan.crossings)
       worlds.set(key, world)
     }
     if (world.present.tick < golden.year) world.advance(golden.year - world.present.tick)
