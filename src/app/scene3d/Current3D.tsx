@@ -17,6 +17,8 @@ import { planetPalette, planetState } from '../planet/uniforms.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import type { View } from '../sim/store.ts'
+import { terrainMap } from '../surface/runtime.ts'
+import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import {
@@ -90,6 +92,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   const seed = useSimulation((s) => s.seed ?? 0)
   const { from, to } = resolveView(view, present)
   const palette = useMemo(() => planetPalette(seed), [seed])
+  const [map, setMap] = useState<TerrainMap | null>(null)
 
   const measure = setting === 'auto' && measured === null
   const measureRef = useRef(measure)
@@ -100,8 +103,23 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   }, [measure])
 
   useEffect(() => {
+    let live = true
+    terrainMap(seed).then(
+      (m) => {
+        if (live) setMap(m)
+      },
+      () => {
+        if (live) graphicsStore.getState().setWebglFailed()
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [seed])
+
+  useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !map) return
     let disposed = false
     let unsubscribeFrame: (() => void) | null = null
     void import('./scene.ts')
@@ -112,6 +130,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           tier,
           still: reducedMotion,
           seed,
+          map,
           onMeasured: (ms: number, software: boolean) => {
             if (measureRef.current) graphicsStore.getState().setMeasured(chooseTier(ms, software))
           },
@@ -166,7 +185,7 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
       sceneRef.current?.dispose(!canvas.isConnected)
       sceneRef.current = null
     }
-  }, [tier, palette, reducedMotion, seed])
+  }, [tier, palette, reducedMotion, seed, map])
 
   useEffect(() => {
     sceneRef.current?.resize(width, height, window.devicePixelRatio || 1)

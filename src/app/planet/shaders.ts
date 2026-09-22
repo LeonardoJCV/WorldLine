@@ -47,6 +47,7 @@ void main() {
 export const planetFragment = `
 uniform vec3 uOffset;
 uniform float uSea;
+uniform sampler2D uTerrain;
 uniform vec3 uOceanDeep;
 uniform vec3 uOceanShallow;
 uniform vec3 uVegetationColor;
@@ -74,20 +75,26 @@ uniform mat4 modelMatrix;
 #endif
 ${noise}
 
+vec4 terrainAt(vec3 p) {
+  vec2 uv = vec2(atan(p.z, p.x) * 0.15915494 + 0.5, asin(clamp(p.y, -1.0, 1.0)) * 0.31830989 + 0.5);
+  return texture2D(uTerrain, uv);
+}
+
 float heightAt(vec3 p) {
-  return fbm(p * 2.2 + uOffset, DETAIL >= 2 ? 7 : 5);
+  return terrainAt(p).a;
 }
 
 void main() {
   vec3 p = normalize(vPosition);
-  float height = heightAt(p);
+  vec4 terrainSample = terrainAt(p);
+  float height = terrainSample.a;
   float land = smoothstep(uSea, uSea + 0.015, height);
   float moisture = fbm(p * 4.0 + uOffset.zxy, 5);
   vec3 normal = normalize(vNormal);
 
 #if DETAIL >= 2
   // FEAT: relevo com normais derivadas do ruído
-  float e = 0.004;
+  float e = 0.006;
   vec3 tangent = normalize(cross(p, vec3(0.0, 1.0, 0.0)) + vec3(1e-4));
   vec3 bitangent = cross(p, tangent);
   float hx = heightAt(normalize(p + tangent * e));
@@ -98,10 +105,9 @@ void main() {
 
   float depth = smoothstep(uSea - 0.12, uSea, height);
   vec3 ocean = mix(uOceanDeep, uOceanShallow, depth);
-  float green = clamp(uVegetation * (0.6 + 0.8 * moisture) - uBlight * fbm(p * 9.0 + uOffset, 5) * 0.9, 0.0, 1.0);
-  vec3 ground = mix(uArid, uVegetationColor, green);
+  float green = clamp(uVegetation * 1.25 - uBlight * fbm(p * 9.0 + uOffset, 5) * 0.9, 0.0, 1.0);
+  vec3 ground = mix(uArid, terrainSample.rgb, green);
   ground = mix(ground, ground * 0.45, uFamine * smoothstep(0.4, 0.7, moisture));
-  ground = mix(ground, uSnow, smoothstep(0.78, 0.92, abs(p.y) + (height - uSea) * 0.6));
 
   vec3 surface = mix(ocean, ground, land);
   float gray = dot(surface, vec3(0.3, 0.59, 0.11));

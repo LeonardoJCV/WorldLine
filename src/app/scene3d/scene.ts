@@ -37,7 +37,9 @@ import {
   type Tier,
 } from '../graphics/settings.ts'
 import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
+import { terrainTexture } from '../planet/terrainTexture.ts'
 import { PLANET_LIGHT, type PlanetPalette, type PlanetState } from '../planet/uniforms.ts'
+import type { TerrainMap } from '../surface/terrainClient.ts'
 import {
   approach,
   FOCUS_RADIUS,
@@ -75,6 +77,7 @@ export interface CurrentSceneOptions {
   readonly tier: Tier
   readonly still: boolean
   readonly seed: number
+  readonly map: TerrainMap
   readonly onMeasured?: (frameMs: number, software: boolean) => void
 }
 
@@ -148,6 +151,7 @@ export function createCurrentScene(
   controls.mouseButtons = { LEFT: null, MIDDLE: null, RIGHT: MOUSE.ROTATE }
   controls.touches = { ONE: null, TWO: TOUCH.DOLLY_ROTATE }
 
+  const terrain = terrainTexture(options.map)
   const light = new Vector3(...PLANET_LIGHT).normalize()
   const initial = railPose([12, 0, 0])
   let target: Vec3 = initial.target
@@ -215,7 +219,7 @@ export function createCurrentScene(
         const stream = createStream(count, options.seed + world.key.charCodeAt(0))
         stream.setPixelRatio(dpr)
         const guide = new Line(new BufferGeometry(), guideMaterial)
-        const body = createPlanetBody(options.palette, detail)
+        const body = createPlanetBody(options.palette, detail, terrain)
         scene.add(stream.points, guide, body.group)
         entry = { stream, guide, body, detail }
         entries.set(world.key, entry)
@@ -431,6 +435,7 @@ export function createCurrentScene(
       bloom?.dispose()
       outputPass?.dispose()
       composer?.dispose()
+      terrain.dispose()
       // FIX: libera o contexto só quando o canvas sai de cena; trocar de nível reaproveita o canvas
       if (release) renderer.forceContextLoss()
       renderer.dispose()

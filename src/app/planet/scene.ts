@@ -1,6 +1,8 @@
 import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three'
 import type { PlanetDetail } from '../graphics/settings.ts'
+import type { TerrainMap } from '../surface/terrainClient.ts'
 import { createPlanetBody } from './body.ts'
+import { terrainTexture } from './terrainTexture.ts'
 import {
   CAMERA_DISTANCE,
   CAMERA_FOV,
@@ -21,13 +23,15 @@ export function createPlanetScene(
   detail: PlanetDetail,
   maxDpr: number,
   reducedMotion: boolean,
+  map: TerrainMap,
 ): PlanetScene {
   const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setClearColor(0x000000, 0)
   const scene = new Scene()
   const camera = new PerspectiveCamera(CAMERA_FOV, 1, 0.1, 20)
   camera.position.set(0, 0, CAMERA_DISTANCE)
-  const body = createPlanetBody(palette, detail)
+  const terrain = terrainTexture(map)
+  const body = createPlanetBody(palette, detail, terrain)
   scene.add(body.group)
   const light = new Vector3(...PLANET_LIGHT).normalize()
 
@@ -57,6 +61,7 @@ export function createPlanetScene(
     dispose() {
       renderer.setAnimationLoop(null)
       body.dispose()
+      terrain.dispose()
       renderer.dispose()
     },
   }

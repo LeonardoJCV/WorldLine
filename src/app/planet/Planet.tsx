@@ -4,6 +4,8 @@ import { TIERS } from '../graphics/settings.ts'
 import { useGraphics, useTier } from '../graphics/store.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
+import { terrainMap } from '../surface/runtime.ts'
+import type { TerrainMap } from '../surface/terrainClient.ts'
 import { drawFallbackPlanet } from './fallback.ts'
 import type { PlanetScene } from './scene.ts'
 import { planetPalette, planetState, type PlanetState } from './uniforms.ts'
@@ -24,6 +26,7 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
   const webgl = useGraphics((s) => s.webgl)
   const tier = useTier()
   const [renderer, setRenderer] = useState(() => (webgl ? 'webgl' : 'fallback'))
+  const [map, setMap] = useState<TerrainMap | null>(null)
   const palette = useMemo(() => planetPalette(seed), [seed])
   const state = useMemo(() => (snapshot ? planetState(snapshot) : null), [snapshot])
 
@@ -32,7 +35,22 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
   }, [size, state])
 
   useEffect(() => {
-    if (renderer !== 'webgl') return
+    let live = true
+    terrainMap(seed).then(
+      (m) => {
+        if (live) setMap(m)
+      },
+      () => {
+        if (live) setRenderer('fallback')
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [seed])
+
+  useEffect(() => {
+    if (renderer !== 'webgl' || !map) return
     const canvas = canvasRef.current
     if (!canvas) return
     let disposed = false
@@ -40,7 +58,14 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
     void import('./scene.ts')
       .then(({ createPlanetScene }) => {
         if (disposed) return
-        const scene = createPlanetScene(canvas, palette, detail, TIERS[tier].dpr, reducedMotion)
+        const scene = createPlanetScene(
+          canvas,
+          palette,
+          detail,
+          TIERS[tier].dpr,
+          reducedMotion,
+          map,
+        )
         sceneRef.current = scene
         scene.resize(latest.current.size, window.devicePixelRatio || 1)
         if (latest.current.state) scene.update(latest.current.state)
@@ -53,7 +78,7 @@ export function Planet({ size, seed, snapshot, detail }: PlanetProps) {
       sceneRef.current?.dispose()
       sceneRef.current = null
     }
-  }, [renderer, palette, detail, tier])
+  }, [renderer, palette, detail, tier, map])
 
   useEffect(() => {
     sceneRef.current?.resize(size, window.devicePixelRatio || 1)

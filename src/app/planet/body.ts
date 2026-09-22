@@ -12,8 +12,10 @@ import {
   SphereGeometry,
   Vector3,
   type Material,
+  type Texture,
 } from 'three'
 import type { PlanetDetail } from '../graphics/settings.ts'
+import { SEA } from '../surface/terrain.ts'
 import { mixRgb } from '../theme/color.ts'
 import {
   atmosphereFragment,
@@ -44,7 +46,11 @@ const SEGMENTS: Readonly<Record<PlanetDetail, readonly [number, number]>> = {
   max: [192, 144],
 }
 
-export function createPlanetBody(palette: PlanetPalette, detail: PlanetDetail): PlanetBody {
+export function createPlanetBody(
+  palette: PlanetPalette,
+  detail: PlanetDetail,
+  terrain: Texture,
+): PlanetBody {
   const level = LEVEL[detail]
   const group = new Group()
   const system = new Group()
@@ -109,7 +115,8 @@ export function createPlanetBody(palette: PlanetPalette, detail: PlanetDetail): 
     defines,
     uniforms: {
       uOffset: { value: new Vector3(...palette.offset) },
-      uSea: { value: palette.seaLevel },
+      uSea: { value: SEA },
+      uTerrain: { value: terrain },
       uOceanDeep: { value: new Vector3(...palette.oceanDeep) },
       uOceanShallow: { value: new Vector3(...palette.oceanShallow) },
       uVegetationColor: { value: new Vector3(...palette.vegetation) },
