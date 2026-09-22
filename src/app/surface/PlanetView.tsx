@@ -1,22 +1,47 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react'
 import { useGraphics, useTier } from '../graphics/store.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import { planetPalette } from '../planet/uniforms.ts'
 import { client, useSimulation } from '../sim/runtime.ts'
 import { LEVELS, type Level } from './camera.ts'
+import { CityCard, type Card } from './CityCard.tsx'
 import { surfaceModel, type SurfaceModel } from './civilization.ts'
+import type { Vec3 } from './cube.ts'
+import { anchorOf, cityEvents, foundedYear, recentEvents } from './labels.ts'
 import { TILE_BUDGET } from './lifeTiles.ts'
+import { microevents, type MicroEvent, type YearSeries } from './micro.ts'
+import { cityNames } from './names.ts'
 import { DENSITY } from './objects.ts'
 import { terrainClient, terrainSites } from './runtime.ts'
 import type { SurfaceScene } from './scene.ts'
-import type { Site } from './sites.ts'
+import { MAX_SITES, type Site } from './sites.ts'
 import './surface.css'
 
 const LEAVE_MS = 300
 const WHEEL_STEP = 1.15
 const HOUR_POLL_MS = 250
 const HISTORY_BUCKETS = 256
+const YEARLY_SPAN = 100
+const MARKER_GAP = 14
+
+type Chosen =
+  | { readonly kind: 'city'; readonly site: number }
+  | { readonly kind: 'micro'; readonly event: MicroEvent }
+
+interface Anchor {
+  readonly point: Vec3
+  readonly dx: number
+  readonly city: boolean
+}
 
 export function PlanetView({
   width,
@@ -39,6 +64,9 @@ export function PlanetView({
   const [hour, setHour] = useState<number | null>(null)
   const [liveHour, setLiveHour] = useState(0.5)
   const [leaving, setLeaving] = useState(false)
+  const [chosen, setChosen] = useState<Chosen | null>(null)
+  const anchorsRef = useRef<ReadonlyMap<string, Anchor>>(new Map())
+  const elsRef = useRef(new Map<string, HTMLElement>())
   const tier = useTier()
   const still = useGraphics((s) => s.reducedMotion)
   const seed = useSimulation((s) => s.seed ?? 0)
@@ -75,6 +103,59 @@ export function PlanetView({
   if (fresh && fresh !== kept?.model) setKept({ seed, model: fresh })
   const model = fresh ?? (kept?.seed === seed ? kept.model : null)
   const modelRef = useRef<SurfaceModel | null>(model)
+  const names = useMemo(() => cityNames(seed, MAX_SITES), [seed])
+  const [yearly, setYearly] = useState<(YearSeries & { focus: string; tick: number }) | null>(null)
+  const events = useMemo(
+    () =>
+      yearly && sites?.seed === seed && yearly.focus === focus && yearly.tick === tick
+        ? microevents({ seed, sites: sites.sites, series: yearly })
+        : [],
+    [yearly, sites, seed, focus, tick],
+  )
+  const recent = useMemo(() => (tick === null ? [] : recentEvents(events, tick)), [events, tick])
+  const cities = useMemo(
+    () =>
+      model && sites?.seed === seed
+        ? model.cities.flatMap((city) => {
+            const site = sites.sites[city.site]
+            return site ? [{ city, site }] : []
+          })
+        : [],
+    [model, sites, seed],
+  )
+  const anchors = useMemo(() => {
+    const map = new Map<string, Anchor>()
+    for (const { city, site } of cities) {
+      map.set(`city:${city.site}`, { point: anchorOf(site), dx: 0, city: true })
+    }
+    const slots = new Map<number, number>()
+    for (const e of recent) {
+      const site = sites?.sites[e.site]
+      if (!site) continue
+      const slot = slots.get(e.site) ?? 0
+      slots.set(e.site, slot + 1)
+      map.set(`micro:${e.year}:${e.kind}:${e.site}`, {
+        point: anchorOf(site),
+        dx: slot * MARKER_GAP,
+        city: false,
+      })
+    }
+    return map
+  }, [cities, recent, sites])
+  const card = useMemo<Card | null>(() => {
+    if (!chosen) return null
+    if (chosen.kind === 'micro') {
+      return { kind: 'micro', event: chosen.event, name: names[chosen.event.site] ?? '' }
+    }
+    const found = cities.find((c) => c.city.site === chosen.site)
+    if (!found) return null
+    return {
+      kind: 'city',
+      city: { ...found.city, founded: foundedYear(events, found.city) },
+      name: names[chosen.site] ?? '',
+      events: cityEvents(events, chosen.site),
+    }
+  }, [chosen, cities, events, names])
 
   useEffect(() => {
     exitRef.current = onExit
@@ -122,6 +203,31 @@ export function PlanetView({
   }, [focus, tick])
 
   useEffect(() => {
+    if (tick === null) return
+    let cancelled = false
+    const from = Math.max(0, tick - YEARLY_SPAN)
+    const frameId = requestAnimationFrame(() => {
+      client.range(focus, from, tick, tick - from + 1).then(
+        (result) => {
+          if (cancelled || result.to !== tick) return
+          setYearly({ focus, tick, from: result.from, to: result.to, values: result.series })
+        },
+        () => {
+          if (!cancelled) setYearly(null)
+        },
+      )
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frameId)
+    }
+  }, [focus, tick])
+
+  useEffect(() => {
+    anchorsRef.current = anchors
+  }, [anchors])
+
+  useEffect(() => {
     modelRef.current = model
     sceneRef.current?.setModel(model)
   }, [model])
@@ -135,6 +241,7 @@ export function PlanetView({
     const canvas = canvasRef.current
     if (!canvas) return
     let disposed = false
+    let unsubscribe: (() => void) | null = null
     void Promise.all([import('./scene.ts'), terrainSites(seed).catch((): readonly Site[] => [])])
       .then(([{ createSurfaceScene }, list]) => {
         if (disposed) return
@@ -153,6 +260,18 @@ export function PlanetView({
         sceneRef.current = scene
         scene.setModel(modelRef.current)
         scene.resize(sizeRef.current.width, sizeRef.current.height, window.devicePixelRatio || 1)
+        unsubscribe = scene.onFrame(() => {
+          for (const [key, anchor] of anchorsRef.current) {
+            const el = elsRef.current.get(key)
+            if (!el) continue
+            const p = scene.project(anchor.point)
+            el.style.visibility = p.visible ? 'visible' : 'hidden'
+            if (!p.visible) continue
+            el.style.transform = anchor.city
+              ? `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`
+              : `translate(${p.x + anchor.dx}px, ${p.y}px) translate(-50%, 25%)`
+          }
+        })
         canvas.focus()
       })
       .catch(() => {
@@ -160,6 +279,7 @@ export function PlanetView({
       })
     return () => {
       disposed = true
+      unsubscribe?.()
       sceneRef.current?.dispose(!canvas.isConnected)
       sceneRef.current = null
     }
@@ -193,6 +313,16 @@ export function PlanetView({
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [])
 
+  const bind = (key: string) => (el: HTMLElement | null) => {
+    if (el) elsRef.current.set(key, el)
+    else elsRef.current.delete(key)
+  }
+
+  const closeCard = () => {
+    setChosen(null)
+    canvasRef.current?.focus()
+  }
+
   const leave = () => (still ? exitRef.current() : setLeaving(true))
 
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
@@ -224,13 +354,14 @@ export function PlanetView({
 
   return (
     <div
-      className={`surface${leaving ? ' surface--leaving' : ''}`}
+      className={`surface${leaving ? ' surface--leaving' : ''}${still ? ' surface--still' : ''}`}
       style={{ width, height }}
       data-level={level}
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return
         event.preventDefault()
-        leave()
+        if (card) closeCard()
+        else leave()
       }}
     >
       <canvas
@@ -279,6 +410,45 @@ export function PlanetView({
           drag.current = null
         }}
       />
+      <div className="surface__labels">
+        {cities.map(({ city }) => {
+          const name = names[city.site] ?? ''
+          return (
+            <button
+              key={`city:${city.site}`}
+              ref={bind(`city:${city.site}`)}
+              type="button"
+              className="surface__city"
+              data-state={city.state}
+              aria-label={t('city.label', {
+                name,
+                state: t(city.state === 'alive' ? 'card.alive' : 'card.ruin'),
+              })}
+              style={{ '--size': city.size } as CSSProperties}
+              onClick={() => setChosen({ kind: 'city', site: city.site })}
+            >
+              {name}
+            </button>
+          )
+        })}
+        {recent.map((e) => {
+          const key = `micro:${e.year}:${e.kind}:${e.site}`
+          const text = t(`micro.${e.kind}`, { city: names[e.site] ?? '' })
+          return (
+            <button
+              key={key}
+              ref={bind(key)}
+              type="button"
+              className={`surface__micro${e.year === tick ? ' surface__micro--now' : ''}`}
+              data-kind={e.kind}
+              aria-label={text}
+              title={text}
+              onClick={() => setChosen({ kind: 'micro', event: e })}
+            />
+          )
+        })}
+      </div>
+      {card && <CityCard card={card} names={names} onClose={closeCard} />}
       <p id="surface-hint" className="surface__hint">
         {t('surface.hint')}
       </p>

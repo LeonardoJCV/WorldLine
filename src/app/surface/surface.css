@@ -97,3 +97,207 @@
   top: 12px;
   right: var(--gutter);
 }
+
+.surface__labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.surface[data-level='orbit'] .surface__labels {
+  display: none;
+}
+
+.surface__city,
+.surface__micro {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.surface__city {
+  padding: 0 2px 4px;
+  background: transparent;
+  border: 0;
+  color: var(--starlight);
+  font-size: calc(11px + 7px * var(--size, 0));
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px var(--void),
+    0 0 8px var(--void),
+    0 1px 2px var(--void);
+}
+
+.surface__city[data-state='ruin'] {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.surface__city:hover,
+.surface__city:focus-visible {
+  text-decoration: underline;
+}
+
+.surface__micro {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1.5px solid var(--starlight);
+  border-radius: 50%;
+  background: #b8b2cc;
+  box-shadow: 0 0 4px var(--void);
+}
+
+.surface__micro[data-kind='founding'] {
+  background: #f4efe2;
+}
+
+.surface__micro[data-kind='harvest'] {
+  background: #d9b97a;
+}
+
+.surface__micro[data-kind='outbreak'] {
+  background: #8f8a7d;
+}
+
+.surface__micro[data-kind='fire'] {
+  background: #e0875a;
+}
+
+.surface__micro[data-kind='invention'] {
+  background: #ece6d0;
+}
+
+.surface__micro[data-kind='harbour'] {
+  background: #a9a9b5;
+}
+
+.surface__micro[data-kind='revolt'] {
+  background: #b5695a;
+}
+
+.surface__micro--now::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px solid var(--starlight);
+  border-radius: 50%;
+  animation: surface-pulse 1.6s ease-out infinite;
+}
+
+@keyframes surface-pulse {
+  from {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.surface--still .surface__micro--now::after {
+  animation: none;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface__micro--now::after {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+.surface__card {
+  position: absolute;
+  top: 56px;
+  right: var(--gutter);
+  width: min(320px, 90%);
+  max-height: calc(100% - 128px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--nebula);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--starlight);
+  font-size: var(--text-sm);
+}
+
+.surface__card h2 {
+  margin: 0 28px 10px 0;
+  font-size: var(--text-lg);
+}
+
+.surface__card h3 {
+  margin: 14px 0 6px;
+  color: var(--dim);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.surface__card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.surface__card dt {
+  color: var(--dim);
+}
+
+.surface__card dd {
+  margin: 0;
+}
+
+.surface__card p {
+  margin: 0;
+}
+
+.surface__card ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.surface__card li + li {
+  margin-top: 4px;
+}
+
+.surface__card-year {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.surface__card-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .surface__card {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 45%;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+}

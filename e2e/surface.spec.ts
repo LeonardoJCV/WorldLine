@@ -82,6 +82,27 @@ test('runs the planet without console errors', async ({ page }) => {
   expect(errors).toEqual([])
 })
 
+test('names the cities and opens a city card', async ({ page }) => {
+  test.slow()
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await page.getByRole('button', { name: 'Continent' }).click()
+  const city = page.locator('.surface__city').first()
+  await expect(city).toBeVisible({ timeout: 15_000 })
+  const name = (await city.textContent()) ?? ''
+  await city.click()
+  const card = page.getByRole('dialog')
+  await expect(card.getByRole('heading', { name })).toBeVisible()
+  await expect(card.getByText('Founded')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card).toHaveCount(0)
+  await expect(page.locator('main.stage')).toHaveAttribute('data-lens', 'planet')
+})
+
 async function planetPoint(page: import('@playwright/test').Page) {
   const canvas = page.locator('.scene3d__canvas')
   const label = page.locator('.scene3d__letter').first()

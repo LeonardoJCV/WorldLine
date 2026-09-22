@@ -458,3 +458,19 @@ test('surface life unrest', async ({ page }) => {
   })
   await page.screenshot({ path: 'screens/surface-life-unrest.png' })
 })
+
+test('surface names continent', async ({ page }) => {
+  await enterLife(page, { level: 'Continent' })
+  await expect(page.locator('.surface__city').first()).toBeVisible({ timeout: 15_000 })
+  await page.screenshot({ path: 'screens/surface-names-continent.png' })
+})
+
+test('surface card', async ({ page }) => {
+  await enterLife(page, { level: 'Continent' })
+  const city = page.locator('.surface__city').first()
+  await expect(city).toBeVisible({ timeout: 15_000 })
+  await city.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: 'screens/surface-card.png' })
+})

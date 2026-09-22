@@ -78,7 +78,16 @@ export interface SurfaceSceneOptions {
   readonly onLevel: (level: Level) => void
 }
 
+export interface Projected {
+  readonly x: number
+  readonly y: number
+  readonly visible: boolean
+}
+
 export interface SurfaceScene {
+  project(point: Vec3): Projected
+  onFrame(callback: () => void): () => void
+  goTo(dir: Vec3, level: Level): void
   resize(width: number, height: number, dpr: number): void
   zoom(factor: number): void
   setLevel(level: Level): void
@@ -203,7 +212,10 @@ export function createSurfaceScene(
   let level: Level = levelOf(altitude)
   let hour: number | null = null
   let clock = 0.58
+  let width = 1
   let height = 1
+  const scratch = new Vector3()
+  const listeners = new Set<() => void>()
   options.onLevel(level)
 
   const groundAt = (x: number, y: number, z: number) =>
@@ -436,11 +448,36 @@ export function createSurfaceScene(
       if (canvas.dataset.people !== walking) canvas.dataset.people = walking
     }
     renderer.render(scene, camera)
+    for (const listener of listeners) listener()
   })
 
   return {
+    project(point) {
+      scratch.set(point[0], point[1], point[2])
+      const facing = scratch.dot(camera.position) > scratch.lengthSq()
+      scratch.project(camera)
+      return {
+        x: ((scratch.x + 1) / 2) * width,
+        y: ((1 - scratch.y) / 2) * height,
+        visible:
+          facing &&
+          scratch.z > -1 &&
+          scratch.z < 1 &&
+          Math.abs(scratch.x) <= 1.05 &&
+          Math.abs(scratch.y) <= 1.05,
+      }
+    },
+    onFrame(callback) {
+      listeners.add(callback)
+      return () => listeners.delete(callback)
+    },
+    goTo(dir, next) {
+      lat = Math.asin(Math.max(-1, Math.min(1, dir[1])))
+      lon = Math.atan2(dir[2], dir[0])
+      goal = next === 'region' ? lod.regionAltitude : LEVEL_ALTITUDE[next]
+    },
     resize(nextWidth, nextHeight, dpr) {
-      const width = Math.max(1, nextWidth)
+      width = Math.max(1, nextWidth)
       height = Math.max(1, nextHeight)
       renderer.setPixelRatio(Math.min(dpr, spec.dpr))
       renderer.setSize(width, height, false)
@@ -469,6 +506,7 @@ export function createSurfaceScene(
     },
     dispose(release = false) {
       disposed = true
+      listeners.clear()
       renderer.setAnimationLoop(null)
       for (const cached of meshes.values()) cached.mesh.geometry.dispose()
       meshes.clear()
