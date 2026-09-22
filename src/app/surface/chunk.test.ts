@@ -58,6 +58,25 @@ describe('buildChunk', () => {
     expect([...a].sort()).toEqual([...b].sort())
   })
 
+  it('shares identical edge vertices with the chunk on the next face', () => {
+    const res = 8
+    const front = buildChunk(terrain, { face: 4, level: 1, x: 1, y: 0 }, res)
+    const side = buildChunk(terrain, { face: 0, level: 1, x: 0, y: 0 }, res)
+    const seam = (mesh: typeof front) => {
+      const points = new Set<string>()
+      for (let i = 0; i < res * res * 2 * 9; i += 3) {
+        const x = mesh.positions[i] ?? 0
+        const y = mesh.positions[i + 1] ?? 0
+        const z = mesh.positions[i + 2] ?? 0
+        if (x === z) points.add(`${x},${y},${z}`)
+      }
+      return points
+    }
+    const a = seam(front)
+    expect(a.size).toBe(res + 1)
+    expect([...a].sort()).toEqual([...seam(side)].sort())
+  })
+
   it('drops every skirt vertex to exactly its edge radius minus skirtDrop', () => {
     const res = 6
     const key: ChunkKey = { face: 4, level: 2, x: 1, y: 1 }

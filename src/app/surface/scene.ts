@@ -4,8 +4,10 @@ import {
   BufferGeometry,
   Color,
   DirectionalLight,
+  Frustum,
   Group,
   HemisphereLight,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshPhongMaterial,
@@ -13,6 +15,7 @@ import {
   PerspectiveCamera,
   PointsMaterial,
   Scene,
+  Sphere,
   SphereGeometry,
   WebGLRenderer,
 } from 'three'
@@ -28,17 +31,13 @@ import {
   surfacePose,
   type Level,
 } from './camera.ts'
-import { surfaceVertexCount } from './chunk.ts'
-import { chunkCenter, displaySet, keyOf, parseKey, rootKeys, selectChunks } from './cube.ts'
+import { displaySet, keyOf, rootKeys, selectChunks, type Vec3 } from './cube.ts'
+import { focalPixels, lodOf } from './lod.ts'
 import { createTerrain, surfaceRadius } from './terrain.ts'
 import type { TerrainClient } from './terrainClient.ts'
 
-export const MAX_DEPTH: Readonly<Record<Tier, number>> = { low: 5, high: 7, ultra: 9 }
-export const RESOLUTION: Readonly<Record<Tier, number>> = { low: 16, high: 24, ultra: 32 }
-// FIX: refina mais perto da câmera para não deixar blocos grosseiros no litoral
-export const SPLIT: Readonly<Record<Tier, number>> = { low: 6, high: 8, ultra: 8 }
+const FOV = 45
 const MAX_IN_FLIGHT = 4
-const MAX_CACHED = 420
 const SELECT_MS = 120
 const DAY_SPEED = 0.012
 const VOID = 0x0a0b1e
@@ -76,7 +75,7 @@ export function createSurfaceScene(
   renderer.setClearColor(VOID, 1)
   const scene = new Scene()
   scene.background = new Color(VOID)
-  const camera = new PerspectiveCamera(45, 1, 0.0005, 60)
+  const camera = new PerspectiveCamera(FOV, 1, 0.0005, 60)
   const stars = starField(options.seed)
   scene.add(stars)
 
@@ -84,14 +83,8 @@ export function createSurfaceScene(
   scene.add(sun, sun.target)
   scene.add(new HemisphereLight(0x7f9cff, 0x1a1030, 0.07))
 
+  // FIX: normais por face já vêm do bloco; um só material mantém uma chamada de desenho por bloco
   const terrainMaterial = new MeshStandardMaterial({
-    vertexColors: true,
-    flatShading: true,
-    roughness: 0.95,
-  })
-  // FIX: flatShading ignora o atributo normal (usa dFdx/dFdy da posição); o skirt precisa de um
-  // material à parte, sem flatShading, para de fato usar a normal calculada a partir do chão vizinho
-  const skirtMaterial = new MeshStandardMaterial({
     vertexColors: true,
     flatShading: false,
     roughness: 0.95,
@@ -124,13 +117,17 @@ export function createSurfaceScene(
   scene.add(new Mesh(atmosphereGeometry, atmosphereMaterial))
 
   const sampler = createTerrain(options.seed, options.palette)
-  const maxDepth = MAX_DEPTH[options.tier]
-  const resolution = RESOLUTION[options.tier]
-  const split = SPLIT[options.tier]
+  const lod = lodOf(options.tier)
   const roots = rootKeys().map(keyOf)
   const meshes = new Map<string, Cached>()
   const pending = new Set<string>()
+  const displayed = new Set<string>()
+  const frustum = new Frustum()
+  const bounds = new Sphere()
+  const projection = new Matrix4()
   let wanted: string[] = [...roots]
+  let priority = new Map<string, number>()
+  let dirty = true
   let disposed = false
 
   let lat = 0.35
@@ -146,30 +143,31 @@ export function createSurfaceScene(
   const groundAt = (x: number, y: number, z: number) =>
     Math.max(surfaceRadius(sampler.sample(x, y, z).height), 1)
 
-  const priority = (text: string) => {
-    const key = parseKey(text)
-    if (key.level === 0) return -1
-    const c = chunkCenter(key)
-    const p = camera.position
-    return Math.hypot(p.x - c[0], p.y - c[1], p.z - c[2])
-  }
-
   function refresh(): void {
+    dirty = false
     const now = performance.now()
-    const shown = displaySet(wanted, new Set(meshes.keys()))
-    terrainGroup.clear()
+    const shown = new Set(displaySet(wanted, new Set(meshes.keys())))
+    for (const key of displayed) {
+      if (shown.has(key)) continue
+      const cached = meshes.get(key)
+      if (cached) terrainGroup.remove(cached.mesh)
+      displayed.delete(key)
+    }
     for (const key of shown) {
       const cached = meshes.get(key)
       if (!cached) continue
       cached.used = now
+      if (displayed.has(key)) continue
       terrainGroup.add(cached.mesh)
+      displayed.add(key)
     }
-    if (meshes.size <= MAX_CACHED) return
+    canvas.dataset.chunks = String(displayed.size)
+    if (meshes.size <= lod.cached) return
     const keep = new Set([...shown, ...wanted, ...roots])
     const stale = [...meshes.entries()]
       .filter(([key]) => !keep.has(key))
       .sort((a, b) => a[1].used - b[1].used)
-    for (const [key, cached] of stale.slice(0, meshes.size - Math.floor(MAX_CACHED * 0.8))) {
+    for (const [key, cached] of stale.slice(0, meshes.size - Math.floor(lod.cached * 0.8))) {
       cached.mesh.geometry.dispose()
       meshes.delete(key)
     }
@@ -178,11 +176,14 @@ export function createSurfaceScene(
   function request(): void {
     const free = MAX_IN_FLIGHT - pending.size
     if (free <= 0) return
-    const missing = [...roots, ...wanted].filter((key) => !meshes.has(key) && !pending.has(key))
-    const unique = [...new Set(missing)].sort((a, b) => priority(a) - priority(b))
-    for (const key of unique.slice(0, free)) {
+    const missing = [...new Set([...roots, ...wanted])].filter(
+      (key) => !meshes.has(key) && !pending.has(key),
+    )
+    const rank = (key: string) => priority.get(key) ?? -1
+    missing.sort((a, b) => rank(a) - rank(b))
+    for (const key of missing.slice(0, free)) {
       pending.add(key)
-      options.terrain.chunk(options.seed, key, resolution).then(
+      options.terrain.chunk(options.seed, key, lod.resolution).then(
         (chunk) => {
           pending.delete(key)
           if (disposed) return
@@ -191,15 +192,8 @@ export function createSurfaceScene(
           geometry.setAttribute('normal', new BufferAttribute(chunk.normals, 3))
           geometry.setAttribute('color', new BufferAttribute(chunk.colors, 3))
           geometry.computeBoundingSphere()
-          const surface = surfaceVertexCount(resolution)
-          const total = chunk.positions.length / 3
-          geometry.addGroup(0, surface, 0)
-          geometry.addGroup(surface, total - surface, 1)
-          meshes.set(key, {
-            mesh: new Mesh(geometry, [terrainMaterial, skirtMaterial]),
-            used: performance.now(),
-          })
-          refresh()
+          meshes.set(key, { mesh: new Mesh(geometry, terrainMaterial), used: performance.now() })
+          dirty = true
           request()
         },
         () => {
@@ -209,13 +203,31 @@ export function createSurfaceScene(
     }
   }
 
+  const inView = (center: Vec3, radius: number) => {
+    bounds.center.set(center[0], center[1], center[2])
+    bounds.radius = radius
+    return frustum.intersectsSphere(bounds)
+  }
+
   let lastSelect = -Infinity
   function select(now: number): void {
     if (now - lastSelect < SELECT_MS) return
     lastSelect = now
+    camera.updateMatrixWorld()
+    projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    frustum.setFromProjectionMatrix(projection)
     const p = camera.position
-    wanted = selectChunks({ camera: [p.x, p.y, p.z], maxLevel: maxDepth, split }).map(keyOf)
-    refresh()
+    const chosen = selectChunks({
+      camera: [p.x, p.y, p.z],
+      maxLevel: lod.maxDepth,
+      focal: focalPixels(height, FOV),
+      error: lod.error,
+      budget: lod.budget,
+      inView,
+    })
+    wanted = chosen.map((item) => keyOf(item.key))
+    priority = new Map(chosen.map((item) => [keyOf(item.key), item.distance]))
+    dirty = true
     request()
   }
 
@@ -230,7 +242,7 @@ export function createSurfaceScene(
     camera.lookAt(...pose.target)
     const r = camera.position.length()
     const floor = groundAt(camera.position.x / r, camera.position.y / r, camera.position.z / r)
-    if (r < floor + ALTITUDE.min * 0.5) camera.position.setLength(floor + ALTITUDE.min * 0.5)
+    if (r < floor + lod.minAltitude * 0.5) camera.position.setLength(floor + lod.minAltitude * 0.5)
     const next = levelOf(altitude)
     if (next !== level) {
       level = next
@@ -251,6 +263,7 @@ export function createSurfaceScene(
     moveSun(dt)
     place(dt)
     select(now)
+    if (dirty) refresh()
     renderer.render(scene, camera)
   })
 
@@ -264,10 +277,10 @@ export function createSurfaceScene(
       camera.updateProjectionMatrix()
     },
     zoom(factor) {
-      goal = Math.min(ALTITUDE.max, Math.max(ALTITUDE.min, goal * factor))
+      goal = Math.min(ALTITUDE.max, Math.max(lod.minAltitude, goal * factor))
     },
     setLevel(next) {
-      goal = LEVEL_ALTITUDE[next]
+      goal = next === 'region' ? lod.regionAltitude : LEVEL_ALTITUDE[next]
     },
     pan(dx, dy) {
       ;[lat, lon] = panBy(lat, lon, altitude, dx, dy, height)
@@ -284,7 +297,6 @@ export function createSurfaceScene(
       for (const cached of meshes.values()) cached.mesh.geometry.dispose()
       meshes.clear()
       terrainMaterial.dispose()
-      skirtMaterial.dispose()
       oceanGeometry.dispose()
       oceanMaterial.dispose()
       atmosphereGeometry.dispose()

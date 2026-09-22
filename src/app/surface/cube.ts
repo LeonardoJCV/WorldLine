@@ -60,7 +60,7 @@ function facePoint(face: number, u: number, v: number): Vec3 {
 
 export function cubeDir(face: number, u: number, v: number): [number, number, number] {
   const [x, y, z] = facePoint(face, u, v)
-  const length = Math.hypot(x, y, z)
+  const length = Math.sqrt(x * x + y * y + z * z)
   return [x / length, y / length, z / length]
 }
 
@@ -77,29 +77,78 @@ export function chunkCenter(key: ChunkKey): [number, number, number] {
 export interface Selection {
   readonly camera: Vec3
   readonly maxLevel: number
-  readonly split: number
+  readonly focal: number
+  readonly error: number
+  readonly budget: number
+  readonly inView?: (center: Vec3, radius: number) => boolean
 }
 
-export function selectChunks({ camera, maxLevel, split }: Selection): ChunkKey[] {
+export interface Selected {
+  readonly key: ChunkKey
+  readonly distance: number
+}
+
+interface Leaf extends Selected {
+  readonly pixels: number
+  readonly final: boolean
+}
+
+export function chunkExtent(key: ChunkKey): number {
+  return chunkSize(key) * 0.8
+}
+
+export function chunkRadius(key: ChunkKey): number {
+  return chunkExtent(key) * 0.75 + 0.05
+}
+
+export function selectChunks({
+  camera,
+  maxLevel,
+  focal,
+  error,
+  budget,
+  inView,
+}: Selection): Selected[] {
   const distance = Math.max(Math.hypot(...camera), 1e-6)
   const toCamera: Vec3 = [camera[0] / distance, camera[1] / distance, camera[2] / distance]
   const horizon = Math.acos(Math.min(1, 1 / Math.max(distance, 1.0001)))
-  const out: ChunkKey[] = []
-  const visit = (key: ChunkKey) => {
+  const visible = (key: ChunkKey): Leaf | null => {
     const center = chunkCenter(key)
-    const size = chunkSize(key)
-    const angle = size * 0.8
     const facing = center[0] * toCamera[0] + center[1] * toCamera[1] + center[2] * toCamera[2]
-    if (facing < Math.cos(Math.min(Math.PI, horizon + angle + 0.05))) return
-    const gap = Math.hypot(camera[0] - center[0], camera[1] - center[1], camera[2] - center[2])
-    if (key.level < maxLevel && gap < split * size * 0.78) {
-      for (const child of childrenOf(key)) visit(child)
-      return
-    }
-    out.push(key)
+    if (facing < Math.cos(Math.min(Math.PI, horizon + chunkExtent(key) + 0.05))) return null
+    const gap = Math.max(
+      Math.hypot(camera[0] - center[0], camera[1] - center[1], camera[2] - center[2]),
+      1e-6,
+    )
+    const splittable = key.level < maxLevel && (inView ? inView(center, chunkRadius(key)) : true)
+    return { key, distance: gap, pixels: (chunkExtent(key) / gap) * focal, final: !splittable }
   }
-  for (const root of rootKeys()) visit(root)
-  return out
+  const leaves: Leaf[] = []
+  for (const root of rootKeys()) {
+    const leaf = visible(root)
+    if (leaf) leaves.push(leaf)
+  }
+  // FEAT: refina primeiro o bloco com maior erro na tela; o orçamento corta os mais distantes
+  for (;;) {
+    let best = -1
+    for (let i = 0; i < leaves.length; i++) {
+      const leaf = leaves[i]
+      if (!leaf || leaf.final || leaf.pixels <= error) continue
+      if (best < 0 || leaf.pixels > (leaves[best]?.pixels ?? 0)) best = i
+    }
+    const parent = leaves[best]
+    if (!parent) break
+    const children = childrenOf(parent.key)
+      .map(visible)
+      .filter((leaf): leaf is Leaf => leaf !== null)
+    if (children.length === 0) {
+      leaves[best] = { ...parent, final: true }
+      continue
+    }
+    if (leaves.length - 1 + children.length > budget) break
+    leaves.splice(best, 1, ...children)
+  }
+  return leaves.map(({ key, distance: gap }) => ({ key, distance: gap }))
 }
 
 export function displaySet(wanted: readonly string[], loaded: ReadonlySet<string>): string[] {
