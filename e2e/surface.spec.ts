@@ -234,3 +234,44 @@ test('starts a new world on the currents after leaving from the planet', async (
   await expect(stage(page)).toHaveAttribute('data-lens', 'current')
   await expect(page).not.toHaveURL(/\/planet$/)
 })
+
+test('shows the living surface without console errors', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await page.getByRole('button', { name: 'Region' }).click()
+  await expect(page.locator('.surface')).toHaveAttribute('data-level', 'region', {
+    timeout: 10_000,
+  })
+  await page.waitForTimeout(3000)
+  expect(errors).toEqual([])
+})
+
+test('keeps the planet open while switching worlds', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  const step = page.getByRole('button', { name: 'Advance one year' })
+  for (let i = 0; i < 5; i++) await step.click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  await expect(page.getByRole('button', { name: /Branch from year/ })).toBeEnabled()
+  const industry = page.getByRole('slider', { name: /Industry/ })
+  await industry.focus()
+  for (let i = 0; i < 10; i++) await industry.press('ArrowRight')
+  await page.getByRole('button', { name: /Branch from year/ }).click()
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await page.getByRole('button', { name: 'Focus on worldline A' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet')
+  await expect(page.getByRole('button', { name: 'Focus on worldline A' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
