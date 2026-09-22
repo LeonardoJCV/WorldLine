@@ -77,7 +77,8 @@ export function microTarget(key: string, sites: readonly Site[]): LensTarget | n
   const [tag, year, kind, site] = key.split(':')
   const index = Number(site)
   const place = sites[index]
-  if (tag !== 'micro' || !place || !(MICRO_KINDS as readonly string[]).includes(kind ?? ''))
-    return null
-  return { dir: place.dir, year: Number(year), site: index, kind: kind as MicroKind }
+  const when = year ? Number(year) : NaN
+  if (tag !== 'micro' || !place || !Number.isInteger(when)) return null
+  if (!(MICRO_KINDS as readonly string[]).includes(kind ?? '')) return null
+  return { dir: place.dir, year: when, site: index, kind: kind as MicroKind }
 }

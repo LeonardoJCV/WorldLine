@@ -246,7 +246,7 @@ export function createCurrentScene(
     event: new SphereGeometry(0.07, 12, 8),
     decision: new OctahedronGeometry(0.08),
     fork: new SphereGeometry(0.09, 16, 12),
-    micro: new OctahedronGeometry(0.05),
+    micro: new OctahedronGeometry(0.12),
   }
   const markerMaterial = {
     event: new MeshBasicMaterial({ color: 0xe6e4f5 }),

@@ -83,6 +83,9 @@ describe('microTarget', () => {
     expect(microTarget('event:12', sites)).toBeNull()
     expect(microTarget('micro:1724:fire:9', sites)).toBeNull()
     expect(microTarget('micro:1724:flood:3', sites)).toBeNull()
+    expect(microTarget('micro:abc:fire:3', sites)).toBeNull()
+    expect(microTarget('micro:17.5:fire:3', sites)).toBeNull()
+    expect(microTarget('micro::fire:3', sites)).toBeNull()
   })
 
   it('turns visible micro markers into pick targets', () => {
