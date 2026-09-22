@@ -106,6 +106,16 @@ describe('validateCrossings', () => {
     expect(validateCrossings([one, { ...one, kind: 'people', amounts: [10] }])).toHaveLength(2)
   })
 
+  it('refuses a cost that is not a finite number of credits', () => {
+    expect(() => validateCrossings([{ ...one, cost: NaN }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, cost: Infinity }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, cost: -1 }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, cost: undefined as unknown as number }])).toThrow(
+      RangeError,
+    )
+    expect(validateCrossings([{ ...one, cost: 0 }])).toHaveLength(1)
+  })
+
   it('refuses a doctrine crossing without a valid allocation', () => {
     const doctrine: Crossing = { ...one, kind: 'doctrine', amounts: [] }
     expect(() => validateCrossings([doctrine])).toThrow(RangeError)

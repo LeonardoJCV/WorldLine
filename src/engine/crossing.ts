@@ -97,6 +97,9 @@ export function validateCrossings(crossings: readonly Crossing[]): Crossing[] {
       if (!Number.isFinite(amount) || amount < 0)
         throw new RangeError('crossing amounts must be finite and positive')
     }
+    if (!Number.isFinite(crossing.cost) || crossing.cost < 0) {
+      throw new RangeError('a crossing costs a finite number of credits')
+    }
     if (crossing.direction === 'out' && crossing.kind !== 'people') {
       throw new RangeError('only people leave a worldline')
     }

@@ -280,8 +280,15 @@ export class SimulationHost {
     this.#send({ type: 'branched', requestId, world: id })
   }
 
+  // FIX: só as travessias próprias do mundo pesam; as herdadas já foram pagas no mundo de origem
   #spent(entry: Entry): number {
-    return entry.worldline.crossings.reduce((total, crossing) => total + crossing.cost, 0)
+    return entry.worldline.crossings
+      .filter((crossing) => crossing.tick >= entry.info.fork)
+      .reduce(
+        (total, crossing) =>
+          total + (Number.isFinite(crossing.cost) ? Math.max(0, crossing.cost) : 0),
+        0,
+      )
   }
 
   #credit(): number {
@@ -307,7 +314,7 @@ export class SimulationHost {
     this.#living(entry, role)
     if (crossing.tick !== line.present.tick) {
       throw new RangeError(
-        `crossing for year ${crossing.tick} applied at year ${line.present.tick}`,
+        `crossing for year ${crossing.tick} applied to the ${role} worldline ${entry.info.id} at year ${line.present.tick}`,
       )
     }
     const last = line.crossings.at(-1)
@@ -355,8 +362,16 @@ export class SimulationHost {
       ...(kind === 'doctrine' ? { allocation: originState.allocation } : {}),
     }
     // FEAT: o custo é cobrado uma vez só, na chegada
+    // FIX: na partida, origin é a outra ponta da travessia, ou seja, para onde a gente foi
     const departure: Crossing | null =
-      kind === 'people' ? { ...crossing, direction: 'out', cost: 0 } : null
+      kind === 'people'
+        ? {
+            ...crossing,
+            direction: 'out',
+            cost: 0,
+            origin: { world: destinationId, tick: this.#now },
+          }
+        : null
     this.#ensureCrossable(destination, crossing, 'destination')
     if (departure) this.#ensureCrossable(origin, departure, 'origin')
     const recorded = destination.worldline.cross(crossing)

@@ -449,8 +449,7 @@ describe('SimulationHost: crossings', () => {
     })
     const error = last(sent, 'error')
     expect(error?.requestId).toBe(2)
-    expect(error?.message).toMatch(/credit/)
-    expect(error?.message).toMatch(/5/)
+    expect(error?.message).toBe('not enough credit: this crossing costs 9 and 5 is missing')
     expect(world(sent, 'B')?.crossings).toEqual([])
   })
 
@@ -518,7 +517,12 @@ describe('SimulationHost: crossings', () => {
     const departure = world(sent, 'A')?.crossings[0]
     const arrival = world(sent, 'B')?.crossings[0]
     expect(arrival).toMatchObject({ direction: 'in', kind: 'people', cost: crossing?.cost })
-    expect(departure).toMatchObject({ direction: 'out', kind: 'people', cost: 0 })
+    expect(departure).toMatchObject({
+      direction: 'out',
+      kind: 'people',
+      cost: 0,
+      origin: { world: 'B', tick: 2000 },
+    })
     expect(departure?.amounts).toEqual(arrival?.amounts)
     expect(last(sent, 'progress')?.credit).toBe(before - (crossing?.cost ?? 0))
     host.handle({ type: 'step', years: 1 })
@@ -583,6 +587,29 @@ describe('SimulationHost: crossings', () => {
     expect(world(sent, 'C')?.crossings).toEqual([])
     host.handle({ type: 'step', years: 10 })
     host.handle({ type: 'branch', requestId: 4, parent: 'A', tick: 2005, allocation: starved })
+    expect(world(sent, 'A')?.crossings).toHaveLength(1)
     expect(world(sent, 'D')?.crossings).toEqual(world(sent, 'A')?.crossings)
+  })
+
+  it('charges a crossing once, however many branches inherit it', () => {
+    const { host, sent } = pair()
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    const spent = last(sent, 'progress')?.credit ?? 0
+    const cost = last(sent, 'crossed')?.crossing.cost ?? 0
+    expect(cost).toBeGreaterThan(0)
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'branch', requestId: 3, parent: 'B', tick: 2005, allocation: balanced })
+    expect(world(sent, 'C')?.crossings).toHaveLength(1)
+    expect(last(sent, 'progress')?.credit).toBe(spent + 4)
+    host.handle({ type: 'branch', requestId: 4, parent: 'C', tick: 2005, allocation: balanced })
+    expect(world(sent, 'D')?.crossings).toHaveLength(1)
+    expect(last(sent, 'progress')?.credit).toBe(spent + 8)
   })
 })
