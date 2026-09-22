@@ -12,6 +12,7 @@ import { HORIZON } from '../../engine/params.ts'
 import { MAX_WORLDLINES, type Snapshot, type WorldlineId } from '../../worker/protocol.ts'
 import type { MessageKey } from '../i18n/en.ts'
 import type { Params } from '../i18n/index.ts'
+import type { Mode } from '../sim/store.ts'
 
 // FEAT: doutrina só tem sentido em dose 1, o efeito não escala com a dose
 export function DOSES_FOR(kind: CrossingKind): readonly Dose[] {
@@ -36,6 +37,17 @@ export function crossOrigins<T extends OriginCandidate>(
   return worlds.filter((world) => world.info.id !== focus && !worldEnded(world.present))
 }
 
+// FEAT: a cena decide igual à tira e ao painel; clicar uma corrente inutilizável só troca o foco
+export function streamClick<T extends OriginCandidate>(
+  mode: Mode,
+  id: WorldlineId,
+  focus: WorldlineId,
+  worlds: readonly T[],
+): 'origin' | 'focus' {
+  if (mode !== 'cross') return 'focus'
+  return crossOrigins(worlds, focus).some((world) => world.info.id === id) ? 'origin' : 'focus'
+}
+
 export type HistoryRow =
   | {
       readonly kind: 'event'
@@ -52,7 +64,9 @@ export function historyRows(
   limit: number,
 ): readonly HistoryRow[] {
   const rows: HistoryRow[] = []
-  for (let i = events.length - 1; i >= 0; i--) {
+  // FIX: eventos já vêm em ordem crescente; só os últimos `limit` podem estar entre os mais recentes
+  const start = Math.max(0, events.length - limit)
+  for (let i = events.length - 1; i >= start; i--) {
     const record = events[i]
     if (record) rows.push({ kind: 'event', year: record.start, index: i, record })
   }

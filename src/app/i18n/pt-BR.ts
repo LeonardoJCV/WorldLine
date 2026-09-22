@@ -135,6 +135,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'worlds.distance': 'Distância {value}',
   'worlds.extinct': 'Extinta em {year}',
   'worlds.focus': 'Focar a realidade {id}',
+  'worlds.origin': 'Usar a realidade {id} como origem',
   'worlds.remove': 'Remover a realidade {id}',
   'worlds.confirm': 'Remover {id} e todas as realidades que nasceram dela?',
   'worlds.confirmYes': 'Remover',

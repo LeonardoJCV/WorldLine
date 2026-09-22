@@ -29,7 +29,7 @@ export function EventsPanel() {
         <p className="panel__empty">{t('events.empty')}</p>
       ) : (
         <ol className="events__list">
-          {recent.map((row, position) =>
+          {recent.map((row) =>
             row.kind === 'event' ? (
               <li key={`e${row.index}`}>
                 <button
@@ -50,17 +50,24 @@ export function EventsPanel() {
                 </button>
               </li>
             ) : (
-              <li key={`c${position}-${row.year}`}>
+              // FIX: tick + direção + mundo de origem identificam a travessia, não a posição na lista mesclada
+              <li
+                key={`c${row.crossing.tick}-${row.crossing.direction}-${row.crossing.origin.world}`}
+              >
                 <button
                   type="button"
                   className="events__item"
                   data-kind="crossing"
-                  onClick={() => setCursor(row.year)}
+                  onClick={() => {
+                    select(null)
+                    setCursor(row.year)
+                  }}
                 >
                   <span className="events__year">{formatYear(row.year)}</span>
                   <span>
                     {row.crossing.direction === 'out'
-                      ? t('cross.sent', { id: row.crossing.origin.world })
+                      ? // FEAT: só travessia de pessoas sai de uma realidade (validateCrossings garante)
+                        t('cross.sent', { id: row.crossing.origin.world })
                       : t('cross.received', {
                           kind: t(`cross.kind.${row.crossing.kind}`),
                           id: row.crossing.origin.world,

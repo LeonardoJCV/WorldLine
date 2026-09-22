@@ -25,6 +25,7 @@ import { MAX_SITES, type Site } from '../surface/sites.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
+import { streamClick } from '../views/cross.ts'
 import {
   eraOffsets,
   FOCUS_RADIUS,
@@ -681,8 +682,9 @@ export function Current3D({
           if (hit?.kind === 'world') {
             const state = simulation.getState()
             const id = hit.key as WorldlineId
-            // FEAT: no modo Cruzar, clicar outra corrente escolhe a origem em vez do foco
-            if (state.mode === 'cross' && id !== state.focus) state.setCrossOrigin(id)
+            // FEAT: a mesma regra da tira e do painel decide entre origem e foco
+            if (streamClick(state.mode, id, state.focus, state.worlds) === 'origin')
+              state.setCrossOrigin(id)
             else state.setFocus(id)
             return
           }
@@ -728,12 +730,16 @@ export function Current3D({
           }
           const hover = pickTarget(targets(), x, y)
           event.currentTarget.style.cursor = hover ? 'pointer' : ''
-          // FEAT: sob o ponteiro, a dica diz o que o clique fará no modo Cruzar
+          const state = simulation.getState()
+          // FEAT: sob o ponteiro, a dica diz o que o clique fará no modo Cruzar — origem ou foco
           event.currentTarget.title =
             hover?.kind === 'micro'
               ? microTitle(hover.key)
-              : hover?.kind === 'world' && simulation.getState().mode === 'cross'
-                ? t('cross.origin', { id: hover.key })
+              : hover?.kind === 'world' && state.mode === 'cross'
+                ? streamClick(state.mode, hover.key as WorldlineId, state.focus, state.worlds) ===
+                  'origin'
+                  ? t('cross.origin', { id: hover.key })
+                  : t('worlds.focus', { id: hover.key })
                 : ''
         }}
         onPointerUp={(event: PointerEvent<HTMLCanvasElement>) => {

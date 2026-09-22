@@ -137,6 +137,7 @@ export const en = {
   'worlds.distance': 'Distance {value}',
   'worlds.extinct': 'Extinct in {year}',
   'worlds.focus': 'Focus on worldline {id}',
+  'worlds.origin': 'Use worldline {id} as the crossing origin',
   'worlds.remove': 'Remove worldline {id}',
   'worlds.confirm': 'Remove {id} and every worldline that branched from it?',
   'worlds.confirmYes': 'Remove',

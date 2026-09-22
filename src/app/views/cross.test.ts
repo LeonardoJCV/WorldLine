@@ -11,6 +11,7 @@ import {
   crossQuote,
   DOSES_FOR,
   historyRows,
+  streamClick,
   worldEnded,
   type CrossBlockInput,
 } from './cross.ts'
@@ -108,6 +109,27 @@ describe('crossOrigins', () => {
       key: 'cross.needsWorlds',
       params: {},
     })
+  })
+})
+
+describe('streamClick', () => {
+  const alive = snapshot()
+  const dead = snapshot({}, 'extinct')
+
+  it('sets the origin when the stream clicked is a living worldline in cross mode', () => {
+    const worlds = [world('A', alive), world('B', alive)]
+    expect(streamClick('cross', 'A', 'B', worlds)).toBe('origin')
+  })
+
+  it('falls back to focus when the stream clicked has ended, so it stays reachable', () => {
+    const worlds = [world('A', dead), world('B', alive)]
+    expect(streamClick('cross', 'A', 'B', worlds)).toBe('focus')
+  })
+
+  it('always focuses outside cross mode, even for a living worldline', () => {
+    const worlds = [world('A', alive), world('B', alive)]
+    expect(streamClick('observe', 'A', 'B', worlds)).toBe('focus')
+    expect(streamClick('intervene', 'A', 'B', worlds)).toBe('focus')
   })
 })
 

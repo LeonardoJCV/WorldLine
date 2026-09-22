@@ -71,6 +71,7 @@ export function WorldsStrip() {
                   type="button"
                   className="worlds__origin"
                   aria-pressed={isOrigin}
+                  aria-label={t('worlds.origin', { id })}
                   onClick={() => setCrossOrigin(id)}
                 >
                   {t('cross.origin', { id })}
