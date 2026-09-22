@@ -50,6 +50,9 @@ const FOV = 45
 const MAX_IN_FLIGHT = 4
 const LIFE_IN_FLIGHT = 2
 const SELECT_MS = 120
+const REBUILD_MS = 250
+const REBUILD_WAIT_MS = 750
+const REBUILD_BATCH = 16
 const DAY_SPEED = 0.012
 const VOID = 0x0a0b1e
 const GROW_FROM = 0.03
@@ -182,6 +185,9 @@ export function createSurfaceScene(
   let lifeReach = 0
   let lifeFrom = ''
   let lifeDirty = false
+  let lifeArrived = 0
+  let lifeBuilt = -Infinity
+  let lifeShown = ''
   let lifeClock = 0
   let model: SurfaceModel | null = null
   let modelDirty = false
@@ -274,7 +280,10 @@ export function createSurfaceScene(
           lifePending.delete(key)
           if (disposed) return
           lifeTiles.set(key, set)
-          if (lifeWanted.includes(key)) lifeDirty = true
+          if (lifeWanted.includes(key)) {
+            lifeDirty = true
+            lifeArrived++
+          }
           requestLife()
         },
         () => {
@@ -303,14 +312,37 @@ export function createSurfaceScene(
     requestLife()
   }
 
-  function refreshLife(): void {
+  let rebuilds = 0
+  let rebuildMs = 0
+  let rebuildMax = 0
+  // FIX: reconstrói em lotes (fila vazia, lote cheio ou espera longa) e só se o conjunto mudou
+  function refreshLife(now: number): void {
+    const since = now - lifeBuilt
+    if (since < REBUILD_MS) return
+    const settled =
+      lifePending.size === 0 || lifeArrived >= REBUILD_BATCH || since >= REBUILD_WAIT_MS
+    if (!settled) return
     lifeDirty = false
-    const sets = lifeWanted.flatMap((key) => {
+    lifeArrived = 0
+    const keys = lifeWanted.filter((key) => lifeTiles.has(key))
+    const shown = [...keys].sort().join()
+    if (shown === lifeShown) return
+    lifeShown = shown
+    lifeBuilt = now
+    const began = performance.now()
+    const sets = keys.flatMap((key) => {
       const set = lifeTiles.get(key)
       return set ? [set] : []
     })
     life.setTiles(sets)
     night.setTiles(sets)
+    if (import.meta.env.DEV) {
+      const spent = performance.now() - began
+      rebuilds++
+      rebuildMs += spent
+      rebuildMax = Math.max(rebuildMax, spent)
+      canvas.dataset.rebuilds = `${rebuilds}/${rebuildMs.toFixed(1)}/${rebuildMax.toFixed(1)}`
+    }
   }
 
   const inView = (center: Vec3, radius: number) => {
@@ -378,7 +410,7 @@ export function createSurfaceScene(
     place(dt)
     select(now)
     if (dirty) refresh()
-    if (lifeDirty) refreshLife()
+    if (lifeDirty) refreshLife(now)
     life.setView(lifeCenter, lifeReach, growAt(altitude))
     if (import.meta.env.DEV) {
       const shown = `${life.drawn()}/${life.count()}`
