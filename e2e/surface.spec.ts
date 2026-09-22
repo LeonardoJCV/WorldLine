@@ -12,6 +12,19 @@ test('opens the planet from the currents and returns', async ({ page }) => {
   await expect(stage(page)).toHaveAttribute('data-lens', 'current')
 })
 
+test('survives a rapid double-click into the planet', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  await page.goto('/?seed=482913')
+  const enter = page.getByRole('button', { name: 'View planet' })
+  // FIX: dois cliques quase simultâneos reaproveitam a mesma promise do mergulho, sem travar a entrada
+  await Promise.all([enter.click(), enter.click()])
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet', { timeout: 5_000 })
+  expect(errors).toEqual([])
+})
+
 test('zooms to the region and back to orbit', async ({ page }) => {
   await page.goto('/?seed=482913')
   await page.getByRole('button', { name: 'View planet' }).click()

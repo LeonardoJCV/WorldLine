@@ -323,6 +323,7 @@ export function createCurrentScene(
   const DIVE_MS = 900
   let dive: { from: Vector3; to: Vector3; look: Vec3; start: number; done: () => void } | null =
     null
+  let divePromise: Promise<void> | null = null
   let back: { from: Vector3; to: Vector3; start: number } | null = null
   let saved: Vector3 | null = null
   let focusHead: Vec3 | null = null
@@ -440,7 +441,9 @@ export function createCurrentScene(
       return () => listeners.delete(callback)
     },
     dive() {
-      return new Promise<void>((resolve) => {
+      // FIX: um mergulho já em andamento devolve a mesma promise, sem órfãos
+      if (divePromise) return divePromise
+      const promise = new Promise<void>((resolve) => {
         if (!focusHead) {
           resolve()
           return
@@ -460,6 +463,11 @@ export function createCurrentScene(
           done: resolve,
         }
       })
+      divePromise = promise
+      void promise.finally(() => {
+        if (divePromise === promise) divePromise = null
+      })
+      return promise
     },
     pause(paused) {
       if (paused) {
@@ -476,6 +484,12 @@ export function createCurrentScene(
     },
     dispose(release = false) {
       renderer.setAnimationLoop(null)
+      // FIX: descarte no meio do mergulho não pode deixar a promise pendente para sempre
+      if (dive) {
+        const done = dive.done
+        dive = null
+        done()
+      }
       controls.dispose()
       for (const key of [...entries.keys()]) remove(key)
       guideMaterial.dispose()

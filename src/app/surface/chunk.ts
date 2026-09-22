@@ -13,6 +13,11 @@ export function skirtDrop(key: ChunkKey): number {
   return Math.min(0.02, chunkSize(key) * 0.25)
 }
 
+// FIX: quantos vértices da malha são a superfície (o resto é o skirt), para separar os materiais
+export function surfaceVertexCount(resolution: number): number {
+  return resolution * resolution * 2 * 3
+}
+
 export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number): ChunkMesh {
   const { u0, v0, size } = chunkCorner(key)
   const side = resolution + 1

@@ -28,6 +28,7 @@ import {
   surfacePose,
   type Level,
 } from './camera.ts'
+import { surfaceVertexCount } from './chunk.ts'
 import { chunkCenter, displaySet, keyOf, parseKey, rootKeys, selectChunks } from './cube.ts'
 import { createTerrain, surfaceRadius } from './terrain.ts'
 import type { TerrainClient } from './terrainClient.ts'
@@ -86,6 +87,13 @@ export function createSurfaceScene(
   const terrainMaterial = new MeshStandardMaterial({
     vertexColors: true,
     flatShading: true,
+    roughness: 0.95,
+  })
+  // FIX: flatShading ignora o atributo normal (usa dFdx/dFdy da posição); o skirt precisa de um
+  // material à parte, sem flatShading, para de fato usar a normal calculada a partir do chão vizinho
+  const skirtMaterial = new MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: false,
     roughness: 0.95,
   })
   const terrainGroup = new Group()
@@ -183,7 +191,14 @@ export function createSurfaceScene(
           geometry.setAttribute('normal', new BufferAttribute(chunk.normals, 3))
           geometry.setAttribute('color', new BufferAttribute(chunk.colors, 3))
           geometry.computeBoundingSphere()
-          meshes.set(key, { mesh: new Mesh(geometry, terrainMaterial), used: performance.now() })
+          const surface = surfaceVertexCount(resolution)
+          const total = chunk.positions.length / 3
+          geometry.addGroup(0, surface, 0)
+          geometry.addGroup(surface, total - surface, 1)
+          meshes.set(key, {
+            mesh: new Mesh(geometry, [terrainMaterial, skirtMaterial]),
+            used: performance.now(),
+          })
           refresh()
           request()
         },
@@ -269,6 +284,7 @@ export function createSurfaceScene(
       for (const cached of meshes.values()) cached.mesh.geometry.dispose()
       meshes.clear()
       terrainMaterial.dispose()
+      skirtMaterial.dispose()
       oceanGeometry.dispose()
       oceanMaterial.dispose()
       atmosphereGeometry.dispose()
