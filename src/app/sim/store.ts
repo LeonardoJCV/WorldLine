@@ -221,15 +221,16 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       const { focus, crossOrigin, cursor } = get()
       if (crossOrigin === null) return
       if (cursor === null) {
-        client.cross(crossOrigin, focus, kind, dose).catch((error: unknown) => {
-          set({ error: messageOf(error) })
-        })
+        client.cross(crossOrigin, focus, kind, dose).then(
+          () => set({ error: null }),
+          (error: unknown) => set({ error: messageOf(error) }),
+        )
         return
       }
       set({ branching: true })
       client.crossBranch(focus, cursor, crossOrigin, kind, dose).then(
         (id) => {
-          set({ branching: false })
+          set({ branching: false, error: null })
           get().setCursor(null)
           get().setFocus(id)
         },
@@ -237,6 +238,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       )
     },
     remove(id) {
+      if (get().crossOrigin === id) set({ crossOrigin: null })
       client.remove(id)
     },
     setFocus(id) {
