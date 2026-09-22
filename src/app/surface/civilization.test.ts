@@ -133,6 +133,34 @@ describe('surfaceModel', () => {
     expect(model.livestock).toBe(0)
     expect(model.fauna).toBe(1)
   })
+
+  it('survives NaN population with history peak', () => {
+    const model = surfaceModel(
+      input(
+        {
+          history: {
+            from: 0,
+            to: 500,
+            population: Float32Array.from([1_000_000, 6_000_000, 900_000]),
+          },
+        },
+        { population: NaN },
+      ),
+    )
+    expect(model.cities.length).toBeGreaterThan(0)
+    expect(model.cities.some((c) => c.state === 'ruin')).toBe(true)
+  })
+
+  it('handles zero population with running status', () => {
+    const model = surfaceModel(
+      input(
+        { history: { from: 0, to: 500, population: Float32Array.from([1_000_000, 6_000_000, 0]) } },
+        { population: 0 },
+      ),
+    )
+    expect(model.cities.length).toBeGreaterThan(0)
+    expect(model.cities.every((c) => c.state === 'ruin')).toBe(true)
+  })
 })
 
 describe('packLife', () => {
@@ -144,5 +172,20 @@ describe('packLife', () => {
     if (!first) throw new Error('no city')
     expect(packed.city[first.site * 4 + 1]).toBe(1)
     expect(packed.life3[2]).toBe(3)
+  })
+
+  it('scales electric light by city size', () => {
+    const model = surfaceModel(input({ eras: Era.agricultural | Era.industrial }, { energy: 9 }))
+    const packed = packLife(model, 0)
+    const cities = model.cities.filter((c) => c.state === 'alive').slice(0, 2)
+    const c0 = cities[0]
+    const c1 = cities[1]
+    if (!c0 || !c1) throw new Error('need at least 2 cities')
+    const light0 = packed.city[c0.site * 4 + 3] ?? 0
+    const light1 = packed.city[c1.site * 4 + 3] ?? 0
+    expect(light0).toBeGreaterThan(0)
+    expect(light1).toBeGreaterThan(0)
+    if (c0.size > c1.size) expect(light0).toBeGreaterThan(light1)
+    else if (c1.size > c0.size) expect(light1).toBeGreaterThan(light0)
   })
 })

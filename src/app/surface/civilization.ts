@@ -79,11 +79,12 @@ function eraOf(eras: number, technology: number): CityEra {
 }
 
 function foundedAt(history: CivilizationInput['history'], threshold: number): number {
+  const range = Math.max(0, history.to - history.from)
   const data = history.population
   const last = Math.max(1, data.length - 1)
   for (let i = 0; i < data.length; i++) {
     if ((data[i] ?? 0) >= threshold) {
-      return Math.round(history.from + ((history.to - history.from) * i) / last)
+      return Math.floor(history.from + (range * i) / last + 0.5)
     }
   }
   return history.to
@@ -92,10 +93,16 @@ function foundedAt(history: CivilizationInput['history'], threshold: number): nu
 export function surfaceModel(input: CivilizationInput): SurfaceModel {
   const { values, allocation, sites } = input
   const extinct = input.status === 'extinct'
-  const population = extinct ? 0 : Math.max(0, values.population)
+  const population = extinct
+    ? 0
+    : Number.isFinite(values.population)
+      ? Math.max(0, values.population)
+      : 0
   const limits = thresholds(Math.min(sites.length, MAX_SITES))
   let peak = population
-  for (const p of input.history.population) peak = Math.max(peak, p)
+  for (const p of input.history.population) {
+    if (Number.isFinite(p)) peak = Math.max(peak, p)
+  }
   const alive = limits.filter((t) => t <= population).length
   const existed = limits.filter((t) => t <= peak).length
   let harmonic = 0
@@ -116,7 +123,7 @@ export function surfaceModel(input: CivilizationInput): SurfaceModel {
     cities.push({
       site: site.index,
       state: living ? 'alive' : 'ruin',
-      population: Math.round(share),
+      population: Math.floor(share + 0.5),
       size: living ? Math.min(1, Math.max(0.08, Math.sqrt(share / METROPOLIS))) : RUIN_SIZE,
       founded: foundedAt(input.history, limits[k] ?? CITY_BASE),
       activity,
@@ -171,7 +178,12 @@ export function packLife(model: SurfaceModel, time: number): LifeUniforms {
     const farmOuter = Math.min(1, built + model.farm * (1 - BUILT_MAX) * Math.sqrt(c.size))
     const alive = c.state === 'alive'
     city.set(
-      [built, alive ? 1 : 2, alive ? HEIGHT[model.era] : 0.35, alive ? model.electric : 0],
+      [
+        built,
+        alive ? 1 : 2,
+        alive ? HEIGHT[model.era] : 0.35,
+        alive ? model.electric * (0.4 + 0.6 * c.size) : 0,
+      ],
       c.site * 4,
     )
     city2.set(
