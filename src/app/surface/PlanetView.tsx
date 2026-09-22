@@ -3,15 +3,20 @@ import { useGraphics, useTier } from '../graphics/store.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import { planetPalette } from '../planet/uniforms.ts'
-import { useSimulation } from '../sim/runtime.ts'
+import { client, useSimulation } from '../sim/runtime.ts'
 import { LEVELS, type Level } from './camera.ts'
-import { terrainClient } from './runtime.ts'
+import { surfaceModel, type SurfaceModel } from './civilization.ts'
+import { TILE_BUDGET } from './lifeTiles.ts'
+import { DENSITY } from './objects.ts'
+import { terrainClient, terrainSites } from './runtime.ts'
 import type { SurfaceScene } from './scene.ts'
+import type { Site } from './sites.ts'
 import './surface.css'
 
 const LEAVE_MS = 300
 const WHEEL_STEP = 1.15
 const HOUR_POLL_MS = 250
+const HISTORY_BUCKETS = 256
 
 export function PlanetView({
   width,
@@ -39,10 +44,83 @@ export function PlanetView({
   const seed = useSimulation((s) => s.seed ?? 0)
   const year = useSimulation((s) => s.cursor ?? s.present?.tick ?? 0)
   const palette = useMemo(() => planetPalette(seed), [seed])
+  const focus = useSimulation((s) => s.focus)
+  const observed = useSimulation((s) => s.inspected ?? s.present)
+  const tick = observed?.tick ?? null
+  const [sites, setSites] = useState<{ seed: number; sites: readonly Site[] } | null>(null)
+  const [history, setHistory] = useState<{
+    focus: string
+    tick: number
+    from: number
+    to: number
+    population: Float32Array
+  } | null>(null)
+  const model = useMemo(
+    () =>
+      sites?.seed === seed && observed && history?.focus === focus
+        ? surfaceModel({
+            sites: sites.sites,
+            values: observed.values,
+            eras: observed.eras,
+            active: observed.active,
+            allocation: observed.allocation,
+            status: observed.status,
+            history,
+          })
+        : null,
+    [sites, seed, observed, history, focus],
+  )
+  const modelRef = useRef<SurfaceModel | null>(model)
 
   useEffect(() => {
     exitRef.current = onExit
   }, [onExit])
+
+  useEffect(() => {
+    let live = true
+    terrainSites(seed).then(
+      (list) => {
+        if (live) setSites({ seed, sites: list })
+      },
+      () => {
+        if (live) setSites(null)
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [seed])
+
+  useEffect(() => {
+    if (tick === null) return
+    let cancelled = false
+    const frameId = requestAnimationFrame(() => {
+      client.range(focus, 0, tick, HISTORY_BUCKETS).then(
+        (result) => {
+          if (cancelled) return
+          setHistory({
+            focus,
+            tick,
+            from: result.from,
+            to: result.to,
+            population: result.series.population,
+          })
+        },
+        () => {
+          if (!cancelled) setHistory(null)
+        },
+      )
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frameId)
+    }
+  }, [focus, tick])
+
+  useEffect(() => {
+    modelRef.current = model
+    sceneRef.current?.setModel(model)
+  }, [model])
 
   useEffect(() => {
     sizeRef.current = { width, height }
@@ -62,9 +140,12 @@ export function PlanetView({
           tier,
           still,
           terrain: terrainClient(),
+          density: DENSITY[tier],
+          tileBudget: TILE_BUDGET[tier],
           onLevel: setLevel,
         })
         sceneRef.current = scene
+        scene.setModel(modelRef.current)
         scene.resize(sizeRef.current.width, sizeRef.current.height, window.devicePixelRatio || 1)
         canvas.focus()
       })

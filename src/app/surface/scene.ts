@@ -33,14 +33,19 @@ import {
   surfacePose,
   type Level,
 } from './camera.ts'
+import { packLife, type SurfaceModel } from './civilization.ts'
 import { displaySet, keyOf, rootKeys, selectChunks, type Vec3 } from './cube.ts'
+import { createLife } from './life.ts'
+import { wantedTiles } from './lifeTiles.ts'
 import { focalPixels, lodOf } from './lod.ts'
+import type { ObjectSet } from './objects.ts'
 import { shadeByDaySide, skyFragment, skyVertex } from './shading.ts'
 import { createTerrain, surfaceRadius } from './terrain.ts'
 import type { TerrainClient } from './terrainClient.ts'
 
 const FOV = 45
 const MAX_IN_FLIGHT = 4
+const LIFE_IN_FLIGHT = 2
 const SELECT_MS = 120
 const DAY_SPEED = 0.012
 const VOID = 0x0a0b1e
@@ -51,6 +56,8 @@ export interface SurfaceSceneOptions {
   readonly tier: Tier
   readonly still: boolean
   readonly terrain: TerrainClient
+  readonly density: number
+  readonly tileBudget: number
   readonly onLevel: (level: Level) => void
 }
 
@@ -60,6 +67,7 @@ export interface SurfaceScene {
   setLevel(level: Level): void
   pan(dx: number, dy: number): void
   setHour(hour: number | null): void
+  setModel(model: SurfaceModel | null): void
   readonly hour: number
   dispose(release?: boolean): void
 }
@@ -127,6 +135,10 @@ export function createSurfaceScene(
   })
   scene.add(new Mesh(atmosphereGeometry, atmosphereMaterial))
 
+  const life = createLife({ sun: sunDir })
+  life.group.visible = false
+  scene.add(life.group)
+
   const sampler = createTerrain(options.seed, options.palette)
   const lod = lodOf(options.tier)
   const roots = rootKeys().map(keyOf)
@@ -140,6 +152,14 @@ export function createSurfaceScene(
   let priority = new Map<string, number>()
   let dirty = true
   let disposed = false
+  const lifeTiles = new Map<string, ObjectSet>()
+  const lifePending = new Set<string>()
+  let lifeWanted: string[] = []
+  let lifeDirty = false
+  let lifeClock = 0
+  let model: SurfaceModel | null = null
+  let modelDirty = false
+  const animated = options.tier !== 'low' && !options.still
 
   let lat = 0.35
   let lon = 0
@@ -214,6 +234,51 @@ export function createSurfaceScene(
     }
   }
 
+  function requestLife(): void {
+    const free = LIFE_IN_FLIGHT - lifePending.size
+    if (free <= 0) return
+    const missing = lifeWanted.filter((key) => !lifeTiles.has(key) && !lifePending.has(key))
+    for (const key of missing.slice(0, free)) {
+      lifePending.add(key)
+      options.terrain.objects(options.seed, key, options.density).then(
+        (set) => {
+          lifePending.delete(key)
+          if (disposed) return
+          lifeTiles.set(key, set)
+          if (lifeWanted.includes(key)) lifeDirty = true
+          requestLife()
+        },
+        () => {
+          lifePending.delete(key)
+        },
+      )
+    }
+  }
+
+  function selectLife(): void {
+    const next = wantedTiles(dirOf(lat, lon), altitude, options.tileBudget)
+    if (next.join() !== lifeWanted.join()) {
+      lifeWanted = next
+      lifeDirty = true
+    }
+    if (lifeTiles.size > options.tileBudget * 2) {
+      const keep = new Set(lifeWanted)
+      for (const key of [...lifeTiles.keys()]) if (!keep.has(key)) lifeTiles.delete(key)
+    }
+    requestLife()
+  }
+
+  function refreshLife(): void {
+    lifeDirty = false
+    life.setTiles(
+      lifeWanted.flatMap((key) => {
+        const set = lifeTiles.get(key)
+        return set ? [set] : []
+      }),
+    )
+    if (import.meta.env.DEV) canvas.dataset.life = String(life.count())
+  }
+
   const inView = (center: Vec3, radius: number) => {
     bounds.center.set(center[0], center[1], center[2])
     bounds.radius = radius
@@ -242,6 +307,7 @@ export function createSurfaceScene(
     priority = new Map(chosen.map((item) => [keyOf(item.key), item.distance]))
     dirty = true
     request()
+    selectLife()
   }
 
   function place(dt: number): void {
@@ -278,6 +344,15 @@ export function createSurfaceScene(
     place(dt)
     select(now)
     if (dirty) refresh()
+    if (lifeDirty) refreshLife()
+    if (animated) lifeClock += dt
+    if (modelDirty) {
+      modelDirty = false
+      life.group.visible = model !== null
+      if (model) life.setUniforms(packLife(model, lifeClock))
+    } else if (animated) {
+      life.setTime(lifeClock)
+    }
     renderer.render(scene, camera)
   })
 
@@ -302,6 +377,10 @@ export function createSurfaceScene(
     setHour(next) {
       hour = next
     },
+    setModel(next) {
+      model = next
+      modelDirty = true
+    },
     get hour() {
       return hour ?? clock
     },
@@ -311,6 +390,8 @@ export function createSurfaceScene(
       for (const cached of meshes.values()) cached.mesh.geometry.dispose()
       meshes.clear()
       terrainMaterial.dispose()
+      life.dispose()
+      lifeTiles.clear()
       oceanGeometry.dispose()
       oceanMaterial.dispose()
       coreGeometry.dispose()

@@ -1,5 +1,4 @@
 import { chunkCorner, cubeDir, keyOf, tileOf, type ChunkKey, type Vec3 } from './cube.ts'
-import { hash3 } from './noise.ts'
 import { BUILT_MAX, INFLUENCE, type Site } from './sites.ts'
 import { surfaceRadius, type Terrain } from './terrain.ts'
 
@@ -29,6 +28,18 @@ const RING = {
 } as const
 const SINK = 0.0002
 const TAU = 6.283185307179586
+
+// FIX: hash3 correlaciona coordenadas vizinhas (fileiras e centro vazio); mistura mais forte para espalhar
+export function scatter(seed: number, a: number, b: number, c: number): number {
+  let h = Math.imul(seed ^ 0x27d4eb2f, 0x9e3779b1)
+  h = Math.imul(h ^ (a | 0) ^ (h >>> 15), 0x85ebca6b)
+  h = Math.imul(h ^ (b | 0) ^ (h >>> 13), 0xc2b2ae35)
+  h = Math.imul(h ^ (c | 0) ^ (h >>> 16), 0x85ebca6b)
+  h ^= h >>> 13
+  h = Math.imul(h, 0xc2b2ae35)
+  h ^= h >>> 16
+  return (h >>> 0) / 4294967296
+}
 
 function nearestSite(sites: readonly Site[], dir: Vec3): { index: number; ring: number } {
   let best = -1
@@ -83,14 +94,14 @@ export function objectTile(
   for (let i = 0; i < naturalCount(PER_TILE.trees); i++) {
     const dir = cubeDir(
       key.face,
-      u0 + size * hash3(salt, tileSeed, i, 1),
-      v0 + size * hash3(salt, tileSeed, i, 2),
+      u0 + size * scatter(salt, tileSeed, i, 1),
+      v0 + size * scatter(salt, tileSeed, i, 2),
     )
     const s = terrain.sample(dir[0], dir[1], dir[2])
     const keep =
       s.biome === 'forest' ||
-      (s.biome === 'grassland' && hash3(salt, tileSeed, i, 3) < 0.22) ||
-      (s.biome === 'tundra' && hash3(salt, tileSeed, i, 3) < 0.08)
+      (s.biome === 'grassland' && scatter(salt, tileSeed, i, 3) < 0.22) ||
+      (s.biome === 'tundra' && scatter(salt, tileSeed, i, 3) < 0.08)
     if (!keep) continue
     const r = surfaceRadius(s.height) - SINK
     const near = nearestSite(sites, dir)
@@ -98,9 +109,9 @@ export function objectTile(
       dir[0] * r,
       dir[1] * r,
       dir[2] * r,
-      hash3(salt, tileSeed, i, 4) * TAU,
-      0.8 + hash3(salt, tileSeed, i, 5) * 0.5,
-      hash3(salt, tileSeed, i, 6),
+      scatter(salt, tileSeed, i, 4) * TAU,
+      0.8 + scatter(salt, tileSeed, i, 5) * 0.5,
+      scatter(salt, tileSeed, i, 6),
       near.index,
       near.ring,
     )
@@ -108,8 +119,8 @@ export function objectTile(
   for (let i = 0; i < naturalCount(PER_TILE.animals); i++) {
     const dir = cubeDir(
       key.face,
-      u0 + size * hash3(salt, tileSeed, i, 11),
-      v0 + size * hash3(salt, tileSeed, i, 12),
+      u0 + size * scatter(salt, tileSeed, i, 11),
+      v0 + size * scatter(salt, tileSeed, i, 12),
     )
     const s = terrain.sample(dir[0], dir[1], dir[2])
     if (s.biome !== 'grassland' && s.biome !== 'tundra' && s.biome !== 'forest') continue
@@ -119,9 +130,9 @@ export function objectTile(
       dir[0] * r,
       dir[1] * r,
       dir[2] * r,
-      hash3(salt, tileSeed, i, 13) * TAU,
-      0.9 + hash3(salt, tileSeed, i, 14) * 0.3,
-      hash3(salt, tileSeed, i, 15),
+      scatter(salt, tileSeed, i, 13) * TAU,
+      0.9 + scatter(salt, tileSeed, i, 14) * 0.3,
+      scatter(salt, tileSeed, i, 15),
       near.index,
       near.ring,
     )
@@ -140,10 +151,16 @@ export function objectTile(
       const count = Math.round(PER_SITE[kind] * density)
       const kindSalt = OBJECT_KINDS.indexOf(kind) * 7919
       for (let i = 0; i < count; i++) {
-        const dx = hash3(salt, site.index, kindSalt + i, 21) * 2 - 1
-        const dy = hash3(salt, site.index, kindSalt + i, 22) * 2 - 1
-        const ring = Math.sqrt(dx * dx + dy * dy)
-        if (ring > 1 || ring * outer < inner) continue
+        const sx = scatter(salt, site.index, kindSalt + i, 21) * 2 - 1
+        const sy = scatter(salt, site.index, kindSalt + i, 22) * 2 - 1
+        const spread = Math.sqrt(sx * sx + sy * sy)
+        if (spread > 1) continue
+        // FEAT: adensa os candidatos perto do centro, onde cidades pequenas e lavouras aparecem
+        const pull = Math.sqrt(spread)
+        const dx = sx * pull
+        const dy = sy * pull
+        const ring = spread * pull
+        if (ring * outer < inner) continue
         const reachOut = INFLUENCE * outer
         const px = site.dir[0] + (east[0] * dx + north[0] * dy) * reachOut
         const py = site.dir[1] + (east[1] * dx + north[1] * dy) * reachOut
@@ -159,7 +176,7 @@ export function objectTile(
           kind === 'mines' &&
           s.biome !== 'rock' &&
           s.biome !== 'tundra' &&
-          hash3(salt, site.index, kindSalt + i, 23) > 0.3
+          scatter(salt, site.index, kindSalt + i, 23) > 0.3
         )
           continue
         const r = kind === 'boats' ? 1 : surfaceRadius(s.height) - SINK
@@ -167,9 +184,9 @@ export function objectTile(
           dir[0] * r,
           dir[1] * r,
           dir[2] * r,
-          hash3(salt, site.index, kindSalt + i, 24) * TAU,
-          kind === 'fields' ? 0.8 + hash3(salt, site.index, kindSalt + i, 25) * 0.5 : 1,
-          hash3(salt, site.index, kindSalt + i, 26),
+          scatter(salt, site.index, kindSalt + i, 24) * TAU,
+          kind === 'fields' ? 0.8 + scatter(salt, site.index, kindSalt + i, 25) * 0.5 : 1,
+          scatter(salt, site.index, kindSalt + i, 26),
           site.index,
           ring * outer,
         )

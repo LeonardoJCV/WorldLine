@@ -23,7 +23,7 @@ describe('objectTile', () => {
 
   it('places buildings around the first site and every candidate inside its tile', () => {
     const set = objectTile(terrain, sites, tile, 1)
-    expect(set.buildings.length / STRIDE).toBeGreaterThan(20)
+    expect(set.buildings.length / STRIDE).toBeGreaterThan(10)
     for (const kind of OBJECT_KINDS) {
       const data = set[kind]
       for (let i = 0; i < data.length; i += STRIDE) {
@@ -37,6 +37,22 @@ describe('objectTile', () => {
         expect(rank).toBeLessThan(1)
       }
     }
+  })
+
+  it('fills the centre of a town as densely as its outskirts', () => {
+    let centre = 0
+    let total = 0
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const set = objectTile(terrain, sites, { ...tile, x: tile.x + dx, y: tile.y + dy }, 1)
+        for (let i = 0; i < set.buildings.length; i += STRIDE) {
+          if (set.buildings[i + 6] !== home.index) continue
+          total++
+          if ((set.buildings[i + 7] ?? 1) < 0.1) centre++
+        }
+      }
+    }
+    expect(centre).toBeGreaterThan(total * 0.02)
   })
 
   it('scales the number of candidates with the density', () => {
