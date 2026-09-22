@@ -3,7 +3,7 @@ import { smoothstep } from './math.ts'
 import { CAUSAL_WINDOW, EXTINCTION_THRESHOLD } from './params.ts'
 import { Channel, uniform } from './rng.ts'
 import { NEUTRAL_MODIFIERS, type Derived, type Modifiers } from './rules.ts'
-import { Era, type ActiveEvent, type Sector, type WorldState } from './state.ts'
+import { Era, SECTORS, type ActiveEvent, type Sector, type WorldState } from './state.ts'
 
 export const EVENT_IDS = [
   'agricultural_revolution',
@@ -209,6 +209,14 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
   conservation: ['environment'],
 }
 
+// FEAT: doutrina mexe no que qualquer setor mexe
+const CROSSING_INFLUENCES: Readonly<Record<CrossingKind, readonly Metric[]>> = {
+  knowledge: ['technology'],
+  resource: ['food', 'foodSecurity', 'energy', 'energyRatio'],
+  people: ['population', 'crowding', 'foodSecurity'],
+  doctrine: SECTORS.flatMap((sector) => SECTOR_INFLUENCES[sector]),
+}
+
 export function computeMetrics(s: WorldState, d: Derived): Metrics {
   return {
     population: s.population,
@@ -292,7 +300,11 @@ function causesOf(
   }
 
   const crossing = s.lastCrossing
-  if (crossing && s.tick - crossing.tick <= CAUSAL_WINDOW) {
+  if (
+    crossing &&
+    s.tick - crossing.tick <= CAUSAL_WINDOW &&
+    CROSSING_INFLUENCES[crossing.kind].some(involved)
+  ) {
     causes.push({ kind: 'crossing', tick: crossing.tick, crossing: crossing.kind })
   }
   return causes

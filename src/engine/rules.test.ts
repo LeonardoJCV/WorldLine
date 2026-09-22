@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
-import { Era } from './state.ts'
+import { Era, VARIABLES } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
 
 const neutral = NEUTRAL_MODIFIERS
@@ -117,6 +117,14 @@ describe('integrate', () => {
     const next = integrate(s, derive(s, TEST_WORLD, neutral, calm), neutral)
     expect(next.population).toBe(0)
     expect(next.stability).toBeGreaterThanOrEqual(0)
+  })
+
+  it('survives an emptied world with no food left', () => {
+    const s = makeState({ population: 0, food: 0 })
+    const derived = derive(s, TEST_WORLD, neutral, calm)
+    expect(Number.isNaN(derived.foodSecurity)).toBe(false)
+    const next = integrate(s, derived, neutral)
+    for (const variable of VARIABLES) expect(Number.isFinite(next[variable])).toBe(true)
   })
 
   it('reports the first non-finite variable', () => {

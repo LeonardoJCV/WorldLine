@@ -32,6 +32,12 @@ describe('hashState', () => {
     expect(a).not.toBe(hashState(state))
   })
 
+  it('does not confuse an echo with a last crossing', () => {
+    const a = hashState({ ...state, echoes: [{ target: 'technology', remaining: 0 }] })
+    const b = hashState({ ...state, lastCrossing: { tick: 0, kind: 'knowledge' } })
+    expect(a).not.toBe(b)
+  })
+
   it('separates two worlds by their last crossing', () => {
     const base = hashState(state)
     const a = hashState({ ...state, lastCrossing: { tick: 0, kind: 'knowledge' } })

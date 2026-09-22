@@ -28,9 +28,12 @@ export function hashState(s: WorldState): string {
   for (const sector of s.lastDecision?.sectors ?? []) h = feed(h, SECTORS.indexOf(sector))
   h = feed(h, s.status === 'running' ? 0 : 1)
   // FEAT: campos de travessia só entram quando existem, para não mover os fingerprints antigos
-  for (const echo of s.echoes) {
-    h = feed(h, ECHO_TARGETS.indexOf(echo.target))
-    h = feed(h, echo.remaining)
+  if (s.echoes.length > 0) {
+    h = feed(h, s.echoes.length)
+    for (const echo of s.echoes) {
+      h = feed(h, ECHO_TARGETS.indexOf(echo.target))
+      h = feed(h, echo.remaining)
+    }
   }
   if (s.lastCrossing) {
     h = feed(h, s.lastCrossing.tick)

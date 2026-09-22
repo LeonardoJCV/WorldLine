@@ -89,21 +89,31 @@ describe('crossings', () => {
     expect(result.state.population).toBeGreaterThanOrEqual(0)
   })
 
+  it('keeps an emptied world finite even with no food left', () => {
+    const empty = { ...state, food: 0 }
+    const result = step(empty, world, 0, undefined, [
+      at('people', [empty.population * 10], { direction: 'out' }),
+    ])
+    expect(result.state.population).toBe(0)
+    for (const variable of VARIABLES) expect(result.state[variable]).toBeTypeOf('number')
+    for (const variable of VARIABLES) expect(Number.isFinite(result.state[variable])).toBe(true)
+  })
+
   it('takes the allocation of a doctrine crossing', () => {
     const allocation = { agriculture: 10, industry: 10, research: 70, conservation: 10 }
     const result = step(state, world, 0, undefined, [at('doctrine', [], { allocation })])
     expect(result.state.allocation).toEqual(allocation)
   })
 
-  it('lands several crossings in the same year', () => {
+  it('lands several crossings in the same year and keeps the last one', () => {
     const result = step(state, world, 0, undefined, [
       at('knowledge', [50]),
-      at('people', [1000]),
       at('knowledge', [50]),
+      at('people', [1000]),
     ])
     expect(result.state.echoes).toHaveLength(1)
     expect(result.state.population).toBeGreaterThan(state.population)
-    expect(result.state.lastCrossing).toEqual({ tick: state.tick, kind: 'knowledge' })
+    expect(result.state.lastCrossing).toEqual({ tick: state.tick, kind: 'people' })
   })
 
   it('remembers the last crossing for the causal chain', () => {

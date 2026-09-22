@@ -72,7 +72,8 @@ export function derive(
   const foodProduction =
     ((capacity * labor) / (labor + capacity / K.y0)) * shock * stabilityYield * mods.production
   const foodAvailable = s.food * (1 - K.spoil) + foodProduction
-  const foodSecurity = foodAvailable / s.population
+  // FIX: sem ninguém para alimentar, a comida por pessoa não é uma divisão
+  const foodSecurity = s.population > 0 ? foodAvailable / s.population : Number.POSITIVE_INFINITY
   const energyTarget =
     (K.energyBase + K.energyWeight * industry) *
     (1 + (K.energyTech * s.technology) / 100) *

@@ -209,6 +209,25 @@ describe('evaluateEvents', () => {
     ])
   })
 
+  it('blames a crossing only for what it touched', () => {
+    const defs = [awakening, shortage]
+    const s = world(defs, { lastCrossing: { tick: 80, kind: 'knowledge' } })
+    const outcome = evaluateEvents(
+      s,
+      makeMetrics({ technology: 30, foodSecurity: 0.8 }),
+      1,
+      0,
+      defs,
+    )
+    const of = (event: string) => outcome.started.find((r) => r.event === event)?.causes
+    expect(of('agricultural_revolution')).toContainEqual({
+      kind: 'crossing',
+      tick: 80,
+      crossing: 'knowledge',
+    })
+    expect(of('famine')?.some((cause) => cause.kind === 'crossing')).toBe(false)
+  })
+
   it('does not link a cause that started in the same year', () => {
     const defs = [awakening, shortage]
     const outcome = evaluateEvents(
