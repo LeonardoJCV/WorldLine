@@ -153,6 +153,19 @@ describe('crossBlock', () => {
     })
   })
 
+  it('prioritises origin extinct over destination ended', () => {
+    expect(crossBlock(baseInput({ worlds: 2, originEnded: true, destinationEnded: true }))).toEqual(
+      { key: 'cross.originExtinct', params: {} },
+    )
+  })
+
+  it('prioritises pick-origin over origin extinct', () => {
+    expect(crossBlock(baseInput({ origin: null, originEnded: true }))).toEqual({
+      key: 'cross.pickOrigin',
+      params: {},
+    })
+  })
+
   it('prioritises no-worldline over every other reason', () => {
     expect(
       crossBlock(
