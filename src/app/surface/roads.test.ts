@@ -65,4 +65,20 @@ describe('buildRoads', () => {
     expect(aliveKey(model)).toBe(alive.join())
     expect(aliveKey(null)).toBe('')
   })
+
+  it('flags the samples that fall on the sea', () => {
+    const roads = buildRoads(model, sites, terrain)
+    for (const road of roads) {
+      expect(road.wet.length).toBe(ROAD_SAMPLES)
+      for (let k = 0; k < road.wet.length; k++) {
+        const x = road.points[k * 3] ?? 0
+        const y = road.points[k * 3 + 1] ?? 0
+        const z = road.points[k * 3 + 2] ?? 0
+        const r = Math.hypot(x, y, z)
+        const sea = terrain.sample(x / r, y / r, z / r).biome === 'ocean'
+        expect(road.wet[k]).toBe(sea ? 1 : 0)
+      }
+    }
+    expect(roads.some((road) => road.wet.includes(1))).toBe(true)
+  })
 })

@@ -10,6 +10,7 @@ export interface Road {
   readonly from: number
   readonly to: number
   readonly points: Float32Array
+  readonly wet: Uint8Array
 }
 
 export function aliveKey(model: SurfaceModel | null): string {
@@ -47,6 +48,7 @@ export function buildRoads(
     }
     if (!best) return
     const points = new Float32Array(steps * 3)
+    const wet = new Uint8Array(steps)
     for (let k = 0; k < steps; k++) {
       const t = k / (steps - 1)
       const x = site.dir[0] + (best.dir[0] - site.dir[0]) * t
@@ -54,12 +56,13 @@ export function buildRoads(
       const z = site.dir[2] + (best.dir[2] - site.dir[2]) * t
       const l = Math.sqrt(x * x + y * y + z * z)
       const s = terrain.sample(x / l, y / l, z / l)
+      wet[k] = s.biome === 'ocean' ? 1 : 0
       const r = Math.max(surfaceRadius(s.height), 1) + LIFT
       points[k * 3] = (x / l) * r
       points[k * 3 + 1] = (y / l) * r
       points[k * 3 + 2] = (z / l) * r
     }
-    roads.push({ from: site.index, to: best.index, points })
+    roads.push({ from: site.index, to: best.index, points, wet })
   })
   return roads
 }

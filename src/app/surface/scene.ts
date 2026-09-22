@@ -158,6 +158,7 @@ export function createSurfaceScene(
     density: options.density,
     still: options.still,
     animated: options.tier !== 'low',
+    ground: (x, y, z) => groundAt(x, y, z),
   })
   scene.add(night.group)
 
@@ -397,7 +398,7 @@ export function createSurfaceScene(
     } else if (animated) {
       life.setTime(lifeClock)
     }
-    night.tick(dt, altitude)
+    night.tick(dt, altitude, camera.position)
     if (import.meta.env.DEV) {
       const walking = String(night.people())
       if (canvas.dataset.people !== walking) canvas.dataset.people = walking

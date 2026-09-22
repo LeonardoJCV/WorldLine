@@ -312,12 +312,15 @@ interface LifeRun {
   readonly industry?: number
   readonly extinct?: boolean
   readonly seconds?: number
+  readonly seed?: number
+  readonly back?: number
+  readonly zoom?: number
 }
 
 async function enterLife(page: Page, run: LifeRun) {
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/?seed=482913')
+  await page.goto(`/?seed=${run.seed ?? 482913}`)
   if (run.industry !== undefined) {
     await page.getByRole('button', { name: 'Intervene' }).click()
     if (run.extinct) await page.getByRole('slider', { name: /Conservation/ }).fill('0')
@@ -329,6 +332,14 @@ async function enterLife(page: Page, run: LifeRun) {
     await page.getByRole('button', { name: 'Max' }).click()
     await page.getByRole('button', { name: 'Play' }).click()
     await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 120_000 })
+    if (run.back) {
+      const history = page.getByRole('slider', { name: /Worldline history from year 0/ })
+      await expect(history).not.toHaveAttribute('aria-valuemax', '0')
+      const present = Number(await history.getAttribute('aria-valuemax'))
+      for (let i = 0; i < Math.floor(run.back / 10); i++) await history.press('Shift+ArrowLeft')
+      for (let i = 0; i < run.back % 10; i++) await history.press('ArrowLeft')
+      await expect(history).toHaveAttribute('aria-valuenow', String(present - run.back))
+    }
   } else if (run.steps) {
     const step = page.getByRole('button', { name: 'Advance one year' })
     for (let i = 0; i < run.steps; i++) await step.click()
@@ -348,6 +359,11 @@ async function enterLife(page: Page, run: LifeRun) {
   await hour.focus()
   await hour.press('Home')
   for (let i = 0; i < (run.hour ?? 8); i++) await hour.press('ArrowRight')
+  if (run.zoom) {
+    const canvas = page.locator('.surface__canvas')
+    await canvas.focus()
+    for (let i = 0; i < run.zoom; i++) await canvas.press('+')
+  }
   await page.waitForTimeout(4000)
 }
 
@@ -397,4 +413,34 @@ test('surface life extinct', async ({ page }) => {
   test.setTimeout(180_000)
   await enterLife(page, { level: 'Region', industry: 60, extinct: true })
   await page.screenshot({ path: 'screens/surface-life-extinct.png' })
+})
+
+test('surface life fire', async ({ page }) => {
+  test.setTimeout(180_000)
+  await enterLife(page, {
+    level: 'Region',
+    industry: 60,
+    extinct: true,
+    back: 60,
+    hour: NIGHT_HOUR,
+  })
+  await page.screenshot({ path: 'screens/surface-life-fire.png' })
+})
+
+test('surface life walkers', async ({ page }) => {
+  await enterLife(page, { level: 'Region', seed: 192, zoom: 3 })
+  await page.screenshot({ path: 'screens/surface-life-walkers.png' })
+})
+
+test('surface life unrest', async ({ page }) => {
+  test.setTimeout(180_000)
+  await enterLife(page, {
+    level: 'Region',
+    industry: 60,
+    extinct: true,
+    back: 11,
+    hour: NIGHT_HOUR,
+    zoom: 3,
+  })
+  await page.screenshot({ path: 'screens/surface-life-unrest.png' })
 })

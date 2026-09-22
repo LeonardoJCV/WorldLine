@@ -38,6 +38,8 @@ const LAMP = 0.008
 const ROAD_LIFT = 0.0015
 const FADE_FROM = 0.55
 const SMOKE_PER_FACTORY = 6
+// FIX: 8% deixava cidades pequenas em agitação sem nenhum foco visível
+const UNREST_RANK = 0.2
 const MAX_SMOKE = 3600
 const MAX_FIRE = 6000
 const MAX_PEOPLE = 1500
@@ -50,7 +52,11 @@ const IMPOSTOR_MIN = 0.006
 const IMPOSTOR_FROM = 0.35
 const IMPOSTOR_TO = 2.2
 const IMPOSTOR_GROW = 3.5
-const SHORE = 1.00032
+const OCCLUDE_EVERY = 0.15
+const OCCLUDE_SAMPLES = 8
+const REVEAL = 0.2
+const RELIEF_TOP = 1.05
+const STRANDED = 0xffff
 const SKY_FILL = 0.12
 const ERA_HEIGHT: Readonly<Record<SurfaceModel['era'], number>> = {
   village: 0.6,
@@ -77,6 +83,7 @@ const haloVertex = `
 #include <common>
 #include <logdepthbuf_pars_vertex>
 attribute float aGlow;
+attribute float aSeen;
 uniform vec3 uSun;
 uniform float uFocal;
 uniform float uElectric;
@@ -90,7 +97,7 @@ void main() {
   float dist = max(-mv.z, 0.0001);
   float close = mix(0.35, 1.0, smoothstep(0.02, 0.15, dist));
   float facing = dot(normalize(position), normalize(cameraPosition - p));
-  vAlpha = nightOf(position) * close * smoothstep(-0.05, 0.08, facing) * min(1.0, 0.4 + aGlow);
+  vAlpha = nightOf(position) * close * smoothstep(-0.05, 0.08, facing) * aSeen * min(1.0, 0.4 + aGlow);
   gl_PointSize = vAlpha > 0.003 ? clamp(HALO * (0.5 + aGlow) * uFocal / dist, 6.0, uFocal * 0.6) : 0.0;
   #include <logdepthbuf_vertex>
 }
@@ -216,13 +223,13 @@ void main() {
 #else
   bool building = aPhase.y < 0.5;
   show = building
-    ? uLife3.x > 0.5 && alive && ring <= max(city.x, 0.02) && rank < 0.08
+    ? uLife3.x > 0.5 && alive && ring <= max(city.x, 0.02) && rank < UNREST_RANK
     : uLife2.w > 0.5 && rank < uLife.x * uThin && rank >= uLife.x * 0.7 && !(alive && ring < city2.z);
   float lift = alive ? city.z * (1.0 + 1.5 * (1.0 - ring / max(city.x, 0.001))) : 1.0;
   float top = building ? 0.0012 * lift + 0.0005 : 0.0018;
   float flicker = 0.6 + 0.4 * sin(t * 9.0 + aPhase.x * 6.2831);
   p = position + up * (top * s + flicker * 0.0003 * uGrow);
-  size = 0.0012 * uGrow * (0.8 + 0.4 * flicker);
+  size = 0.0009 * uGrow * (0.8 + 0.4 * flicker);
   alpha = flicker;
   vLight = 1.0;
 #endif
@@ -397,6 +404,7 @@ export interface NightOptions {
   readonly density: number
   readonly still: boolean
   readonly animated: boolean
+  readonly ground: (x: number, y: number, z: number) => number
 }
 
 export interface Night {
@@ -404,7 +412,7 @@ export interface Night {
   setModel(model: SurfaceModel | null, sites: readonly Site[], roads: readonly Road[]): void
   setTiles(sets: readonly ObjectSet[]): void
   setFocal(pixels: number): void
-  tick(dt: number, altitude: number): void
+  tick(dt: number, altitude: number, eye: Vector3): void
   people(): number
   dispose(): void
 }
@@ -423,6 +431,12 @@ export function createNight(options: NightOptions): Night {
   const haloGlow = new Float32Array(MAX_SITES)
   haloGeometry.setAttribute('position', new BufferAttribute(haloPositions, 3))
   haloGeometry.setAttribute('aGlow', new BufferAttribute(haloGlow, 1))
+  const haloSeen = new Float32Array(MAX_SITES).fill(1)
+  const haloHidden = new Uint8Array(MAX_SITES)
+  const seenAttribute = new BufferAttribute(haloSeen, 1)
+  haloGeometry.setAttribute('aSeen', seenAttribute)
+  let haloCount = 0
+  let sinceOcclusion = OCCLUDE_EVERY
   haloGeometry.setDrawRange(0, 0)
   const haloMaterial = new ShaderMaterial({
     vertexShader: haloVertex,
@@ -493,7 +507,7 @@ export function createNight(options: NightOptions): Night {
         uColor: { value: new Color(color) },
         uCore: { value: new Color(core) },
       },
-      defines: { ...defines, PARTICLE_KIND: kind },
+      defines: { ...defines, PARTICLE_KIND: kind, UNREST_RANK: UNREST_RANK.toFixed(2) },
       transparent: true,
       depthWrite: false,
       ...(additive ? { blending: AdditiveBlending } : {}),
@@ -544,9 +558,9 @@ export function createNight(options: NightOptions): Night {
 
   const walking = options.animated && !options.still
   const capacity = walking ? MAX_PEOPLE : 1
-  const personGeometry = new BoxGeometry(0.00018, 0.0004, 0.00018).translate(0, 0.0002, 0)
+  const personGeometry = new BoxGeometry(0.00022, 0.00052, 0.00022).translate(0, 0.00026, 0)
   const personMaterial = new MeshStandardMaterial({
-    color: '#f0e8d8',
+    color: '#ffffff',
     flatShading: true,
     roughness: 0.9,
   })
@@ -564,6 +578,14 @@ export function createNight(options: NightOptions): Night {
   const crowd = new InstancedMesh(personGeometry, personMaterial, capacity)
   crowd.count = 0
   crowd.frustumCulled = false
+  // FEAT: roupas de cores vivas para os pedestres se destacarem do chão
+  const clothes = ['#f0e8d8', '#e0473a', '#3a7be0', '#f2c230', '#9b4fd1'].map(
+    (hex) => new Color(hex),
+  )
+  for (let i = 0; i < capacity; i++) {
+    const cloth = clothes[Math.floor(scatter(0x51f7, i, 6, 0) * clothes.length)]
+    if (cloth) crowd.setColorAt(i, cloth)
+  }
   group.add(crowd)
   const walkRoad = new Uint16Array(capacity)
   const walkT = new Float32Array(capacity)
@@ -571,7 +593,6 @@ export function createNight(options: NightOptions): Night {
   const walkSide = new Float32Array(capacity)
   let crowdSize = 0
   let roadLengths = new Float32Array(0)
-  let roadWet: Uint8Array[] = []
   const at = new Vector3()
   const next = new Vector3()
   const up = new Vector3()
@@ -583,6 +604,51 @@ export function createNight(options: NightOptions): Night {
   const hidden = new Matrix4().makeScale(0, 0, 0)
 
   let roads: readonly Road[] = []
+  let burning = false
+
+  function showFire(): void {
+    fire.points.visible = burning && fire.points.geometry.drawRange.count > 0
+  }
+
+  function occlude(eye: Vector3): void {
+    for (let i = 0; i < haloCount; i++) {
+      const px = haloPositions[i * 3] ?? 0
+      const py = haloPositions[i * 3 + 1] ?? 0
+      const pz = haloPositions[i * 3 + 2] ?? 0
+      const pl = Math.sqrt(px * px + py * py + pz * pz) || 1
+      const dx = eye.x - px
+      const dy = eye.y - py
+      const dz = eye.z - pz
+      const rise = Math.sqrt(dx * dx + dy * dy + dz * dz) * HALO_RISE
+      const hx = px + (px / pl) * rise
+      const hy = py + (py / pl) * rise
+      const hz = pz + (pz / pl) * rise
+      let blocked = 0
+      for (let k = 1; k <= OCCLUDE_SAMPLES && blocked === 0; k++) {
+        const t = k / (OCCLUDE_SAMPLES + 1)
+        const qx = eye.x + (hx - eye.x) * t
+        const qy = eye.y + (hy - eye.y) * t
+        const qz = eye.z + (hz - eye.z) * t
+        const r = Math.sqrt(qx * qx + qy * qy + qz * qz)
+        if (r > RELIEF_TOP || r <= 0) continue
+        if (options.ground(qx / r, qy / r, qz / r) > r) blocked = 1
+      }
+      haloHidden[i] = blocked
+    }
+  }
+
+  function reveal(dt: number): void {
+    const stepBy = dt / REVEAL
+    let changed = false
+    for (let i = 0; i < haloCount; i++) {
+      const goal = haloHidden[i] === 1 ? 0 : 1
+      const now = haloSeen[i] ?? 1
+      if (now === goal) continue
+      haloSeen[i] = goal > now ? Math.min(goal, now + stepBy) : Math.max(goal, now - stepBy)
+      changed = true
+    }
+    if (changed) seenAttribute.needsUpdate = true
+  }
 
   function setRoads(list: readonly Road[]): void {
     roads = list
@@ -592,17 +658,6 @@ export function createNight(options: NightOptions): Night {
     let line = 0
     let lamp = 0
     roadLengths = new Float32Array(list.length)
-    roadWet = list.map((road) => {
-      const p = road.points
-      const wet = new Uint8Array(p.length / 3)
-      for (let k = 0; k < wet.length; k++) {
-        const x = p[k * 3] ?? 0
-        const y = p[k * 3 + 1] ?? 0
-        const z = p[k * 3 + 2] ?? 0
-        wet[k] = x * x + y * y + z * z < SHORE * SHORE ? 1 : 0
-      }
-      return wet
-    })
     list.forEach((road, r) => {
       const p = road.points
       lampPositions.set(p, lamp)
@@ -632,8 +687,21 @@ export function createNight(options: NightOptions): Night {
       ? Math.min(MAX_PEOPLE, Math.floor(list.length * PEOPLE_PER_ROAD * options.density))
       : 0
     for (let i = 0; i < crowdSize; i++) {
-      walkRoad[i] = i % Math.max(1, list.length)
-      walkT[i] = scatter(0x51f7, i, 1, 0)
+      const r = i % Math.max(1, list.length)
+      const wet = list[r]?.wet
+      const last = wet ? wet.length - 1 : 0
+      // FEAT: pedestres nascem perto das cidades, num trecho seco; estrada toda molhada fica vazia
+      const spread = scatter(0x51f7, i, 1, 0)
+      const near = spread * spread * 0.5
+      const t = scatter(0x51f7, i, 7, 0) < 0.5 ? near : 1 - near
+      let k = Math.min(last - 1, Math.floor(t * last))
+      let tries = 0
+      while (wet && tries < last && (wet[k] === 1 || wet[k + 1] === 1)) {
+        k = (k + 1) % Math.max(1, last)
+        tries++
+      }
+      walkRoad[i] = wet && tries < last ? r : STRANDED
+      walkT[i] = (k + scatter(0x51f7, i, 5, 0)) / Math.max(1, last)
       const pace = (0.02 + 0.03 * scatter(0x51f7, i, 2, 0)) * WALK
       walkSpeed[i] = scatter(0x51f7, i, 3, 0) < 0.5 ? -pace : pace
       walkSide[i] = (scatter(0x51f7, i, 4, 0) < 0.5 ? -1 : 1) * SIDE_STEP
@@ -675,6 +743,8 @@ export function createNight(options: NightOptions): Night {
         count++
       }
       haloGeometry.setDrawRange(0, count)
+      haloCount = count
+      sinceOcclusion = OCCLUDE_EVERY
       const position = haloGeometry.getAttribute('position')
       const glow = haloGeometry.getAttribute('aGlow')
       position.needsUpdate = true
@@ -684,15 +754,15 @@ export function createNight(options: NightOptions): Night {
       dataAttribute.needsUpdate = true
       impostorGeometry.instanceCount = count
       impostors.visible = count > 0
-      fire.points.visible =
-        (model.unrest || model.burnt) && fire.points.geometry.drawRange.count > 0
+      burning = model.unrest || model.burnt
+      showFire()
     },
     setTiles(sets) {
       let factories = 0
-      let burning = 0
+      let flammable = 0
       for (const set of sets) {
         factories += set.factories.length / STRIDE
-        burning += set.buildings.length / STRIDE + set.trees.length / STRIDE
+        flammable += set.buildings.length / STRIDE + set.trees.length / STRIDE
       }
       const smokeCount = Math.min(MAX_SMOKE, factories * SMOKE_PER_FACTORY)
       const smokeData = reserve(smoke, smokeCount)
@@ -710,7 +780,7 @@ export function createNight(options: NightOptions): Night {
         }
       }
       commit(smoke, n)
-      const fireData = reserve(fire, Math.min(MAX_FIRE, burning))
+      const fireData = reserve(fire, Math.min(MAX_FIRE, flammable))
       let f = 0
       for (const set of sets) {
         for (const [part, kind] of [
@@ -719,7 +789,7 @@ export function createNight(options: NightOptions): Night {
         ] as const) {
           for (let i = 0; i < part.length && f < MAX_FIRE; i += STRIDE) {
             const rank = part[i + 5] ?? 0
-            if (kind === 0 ? rank >= 0.08 : (rank * 7919) % 1 >= 0.25) continue
+            if (kind === 0 ? rank >= UNREST_RANK : (rank * 7919) % 1 >= 0.25) continue
             const o = f * PARTICLE
             for (let j = 0; j < STRIDE; j++) fireData[o + j] = part[i + j] ?? 0
             fireData[o + 8] = (rank * 104729) % 1
@@ -728,14 +798,20 @@ export function createNight(options: NightOptions): Night {
           }
         }
       }
-      const burningNow = shared.uLife3.value.x > 0.5 || shared.uLife2.value.w > 0.5
       commit(fire, f)
-      fire.points.visible = f > 0 && burningNow
+      showFire()
     },
     setFocal(pixels) {
       uFocal.value = pixels
     },
-    tick(dt, altitude) {
+    tick(dt, altitude, eye) {
+      sinceOcclusion += dt
+      // FIX: halo ignora a profundidade; um teste de relevo na CPU apaga o que está atrás de morros
+      if (sinceOcclusion >= OCCLUDE_EVERY && halos.visible) {
+        sinceOcclusion = 0
+        occlude(eye)
+      }
+      reveal(dt)
       const t = Math.min(1, Math.max(0, (altitude - IMPOSTOR_FROM) / (IMPOSTOR_TO - IMPOSTOR_FROM)))
       uImpostor.value = 1 + (IMPOSTOR_GROW - 1) * t * t * (3 - 2 * t)
       const walk = crowdSize > 0 && altitude < WALK_BELOW && roads.length > 0
@@ -744,26 +820,26 @@ export function createNight(options: NightOptions): Night {
         return
       }
       for (let i = 0; i < crowdSize; i++) {
-        const r = walkRoad[i] ?? 0
+        const r = walkRoad[i] ?? STRANDED
         const road = roads[r]
-        if (!road) continue
-        const p = road.points
-        let s = (walkT[i] ?? 0) + ((walkSpeed[i] ?? 0) * dt) / (roadLengths[r] ?? 1)
-        if (s > 1 || s < 0) {
-          s = s > 1 ? 2 - s : -s
-          walkSpeed[i] = -(walkSpeed[i] ?? 0)
-        }
-        walkT[i] = s
-        const last = p.length / 3 - 1
-        const f = s * last
-        const k = Math.min(last - 1, Math.floor(f))
-        const u = f - k
-        const wet = roadWet[r]
-        // FEAT: ninguém anda sobre o mar; o trecho molhado da estrada fica sem pedestres
-        if (wet && (wet[k] === 1 || wet[k + 1] === 1)) {
+        if (!road) {
           crowd.setMatrixAt(i, hidden)
           continue
         }
+        const p = road.points
+        const wet = road.wet
+        const last = p.length / 3 - 1
+        const from = walkT[i] ?? 0
+        let s = from + ((walkSpeed[i] ?? 0) * dt) / (roadLengths[r] ?? 1)
+        let k = Math.min(last - 1, Math.floor(Math.min(1, Math.max(0, s)) * last))
+        // FEAT: ninguém anda sobre o mar; o pedestre dá meia-volta na margem
+        if (s > 1 || s < 0 || wet[k] === 1 || wet[k + 1] === 1) {
+          s = from
+          walkSpeed[i] = -(walkSpeed[i] ?? 0)
+          k = Math.min(last - 1, Math.floor(s * last))
+        }
+        walkT[i] = s
+        const u = s * last - k
         at.set(p[k * 3] ?? 0, p[k * 3 + 1] ?? 0, p[k * 3 + 2] ?? 0)
         next.set(p[k * 3 + 3] ?? 0, p[k * 3 + 4] ?? 0, p[k * 3 + 5] ?? 0)
         next.sub(at)
