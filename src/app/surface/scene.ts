@@ -172,7 +172,7 @@ export function createSurfaceScene(
       terrainGroup.add(cached.mesh)
       displayed.add(key)
     }
-    canvas.dataset.chunks = String(displayed.size)
+    if (import.meta.env.DEV) canvas.dataset.chunks = String(displayed.size)
     if (meshes.size <= lod.cached) return
     const keep = new Set([...shown, ...wanted, ...roots])
     const stale = [...meshes.entries()]
@@ -234,6 +234,8 @@ export function createSurfaceScene(
       focal: focalPixels(height, FOV),
       error: lod.error,
       budget: lod.budget,
+      resolution: lod.resolution,
+      minTriangle: lod.minTriangle,
       inView,
     })
     wanted = chosen.map((item) => keyOf(item.key))

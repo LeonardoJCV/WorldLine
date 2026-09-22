@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { useGraphics } from './stage.ts'
 
-test.skip(!process.env.MEASURE, 'frame rates are measured on demand')
+test.skip(!process.env.MEASURE, 'measured on demand against the dev server (npx vite --port 4173)')
 
 for (const tier of ['low', 'high', 'ultra'] as const) {
   for (const level of ['Continent', 'Region'] as const) {
@@ -11,9 +11,12 @@ for (const tier of ['low', 'high', 'ultra'] as const) {
       await page.setViewportSize({ width: 1440, height: 900 })
       await page.goto('/?seed=482913')
       await page.getByRole('button', { name: 'View planet' }).click()
+      await expect(page.locator('.surface__canvas')).toHaveAttribute('data-chunks', /\d+/, {
+        timeout: 30_000,
+      })
       await page.getByRole('button', { name: level }).click()
       await expect(page.locator('.surface')).toHaveAttribute('data-level', level.toLowerCase(), {
-        timeout: 10_000,
+        timeout: 30_000,
       })
       await page.waitForTimeout(5000)
       const result = await page.evaluate(

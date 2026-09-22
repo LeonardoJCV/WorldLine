@@ -6,6 +6,7 @@ export interface Lod {
   readonly resolution: number
   readonly error: number
   readonly budget: number
+  readonly minTriangle: number
   readonly cached: number
   readonly minAltitude: number
   readonly regionAltitude: number
@@ -15,6 +16,7 @@ export const MAX_DEPTH: Readonly<Record<Tier, number>> = { low: 5, high: 7, ultr
 export const RESOLUTION: Readonly<Record<Tier, number>> = { low: 16, high: 24, ultra: 32 }
 export const PIXEL_ERROR: Readonly<Record<Tier, number>> = { low: 90, high: 60, ultra: 40 }
 export const BUDGET: Readonly<Record<Tier, number>> = { low: 160, high: 320, ultra: 520 }
+export const MIN_TRIANGLE = 8
 
 export function lodOf(tier: Tier): Lod {
   // FIX: o menor triângulo que o nível resolve limita o quanto a câmera desce
@@ -28,6 +30,7 @@ export function lodOf(tier: Tier): Lod {
     resolution: RESOLUTION[tier],
     error: PIXEL_ERROR[tier],
     budget: BUDGET[tier],
+    minTriangle: MIN_TRIANGLE,
     cached: Math.ceil(BUDGET[tier] * 1.5),
     minAltitude,
     regionAltitude: Math.max(LEVEL_ALTITUDE.region, minAltitude * 2),

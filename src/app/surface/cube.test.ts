@@ -36,7 +36,7 @@ describe('cubeDir', () => {
 })
 
 describe('selectChunks', () => {
-  const base = { maxLevel: 7, focal: 500, error: 60, budget: 320 }
+  const base = { maxLevel: 7, focal: 500, error: 60, budget: 320, resolution: 8, minTriangle: 0 }
 
   it('uses coarse chunks from far away', () => {
     const far = selectChunks({ ...base, camera: [0, 0, 6] })
@@ -74,6 +74,20 @@ describe('selectChunks', () => {
     const nearest = capped.reduce((a, b) => (a.distance < b.distance ? a : b))
     const farthest = capped.reduce((a, b) => (a.distance > b.distance ? a : b))
     expect(nearest.key.level).toBeGreaterThan(farthest.key.level)
+  })
+
+  it('keeps every triangle at least the minimum size on screen', () => {
+    const camera: Vec3 = [0, 0, 1.01]
+    const minTriangle = 8
+    const chosen = selectChunks({ ...base, maxLevel: 9, resolution: 32, minTriangle, camera })
+    const sharp = selectChunks({ ...base, maxLevel: 9, resolution: 32, camera })
+    expect(chosen.length).toBeLessThan(sharp.length)
+    for (const c of chosen) {
+      const parent = parentOf(c.key)
+      if (!parent) continue
+      const triangle = (chunkExtent(c.key) / 32 / c.distance) * base.focal
+      expect(triangle).toBeGreaterThan(minTriangle * 0.5)
+    }
   })
 
   it('does not refine chunks outside the view', () => {

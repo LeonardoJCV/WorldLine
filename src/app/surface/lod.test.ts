@@ -21,6 +21,14 @@ describe('lodOf', () => {
   })
 })
 
+describe('minTriangle', () => {
+  it('asks every tier for visibly faceted triangles', () => {
+    for (const tier of ['low', 'high', 'ultra'] as const) {
+      expect(lodOf(tier).minTriangle).toBeGreaterThanOrEqual(8)
+    }
+  })
+})
+
 describe('focalPixels', () => {
   it('turns the viewport height into pixels per unit at distance one', () => {
     expect(focalPixels(900, 90)).toBeCloseTo(450, 9)

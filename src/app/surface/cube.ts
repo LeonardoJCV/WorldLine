@@ -80,6 +80,8 @@ export interface Selection {
   readonly focal: number
   readonly error: number
   readonly budget: number
+  readonly resolution: number
+  readonly minTriangle: number
   readonly inView?: (center: Vec3, radius: number) => boolean
 }
 
@@ -107,8 +109,12 @@ export function selectChunks({
   focal,
   error,
   budget,
+  resolution,
+  minTriangle,
   inView,
 }: Selection): Selected[] {
+  // FIX: só divide se os triângulos dos filhos continuarem com pelo menos minTriangle px na tela
+  const limit = Math.max(error, 2 * resolution * minTriangle)
   const distance = Math.max(Math.hypot(...camera), 1e-6)
   const toCamera: Vec3 = [camera[0] / distance, camera[1] / distance, camera[2] / distance]
   const horizon = Math.acos(Math.min(1, 1 / Math.max(distance, 1.0001)))
@@ -133,7 +139,7 @@ export function selectChunks({
     let best = -1
     for (let i = 0; i < leaves.length; i++) {
       const leaf = leaves[i]
-      if (!leaf || leaf.final || leaf.pixels <= error) continue
+      if (!leaf || leaf.final || leaf.pixels <= limit) continue
       if (best < 0 || leaf.pixels > (leaves[best]?.pixels ?? 0)) best = i
     }
     const parent = leaves[best]
