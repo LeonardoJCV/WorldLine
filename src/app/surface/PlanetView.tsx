@@ -55,9 +55,9 @@ export function PlanetView({
     to: number
     population: Float32Array
   } | null>(null)
-  const model = useMemo(
+  const fresh = useMemo(
     () =>
-      sites?.seed === seed && observed && history?.focus === focus
+      sites?.seed === seed && observed && history?.focus === focus && history.tick === tick
         ? surfaceModel({
             sites: sites.sites,
             values: observed.values,
@@ -68,8 +68,12 @@ export function PlanetView({
             history,
           })
         : null,
-    [sites, seed, observed, history, focus],
+    [sites, seed, observed, history, focus, tick],
   )
+  // FIX: mantém o último modelo do mesmo planeta até a história do novo mundo ou ano chegar
+  const [kept, setKept] = useState<{ seed: number; model: SurfaceModel } | null>(null)
+  if (fresh && fresh !== kept?.model) setKept({ seed, model: fresh })
+  const model = fresh ?? (kept?.seed === seed ? kept.model : null)
   const modelRef = useRef<SurfaceModel | null>(model)
 
   useEffect(() => {
