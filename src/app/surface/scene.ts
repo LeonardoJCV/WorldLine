@@ -1,4 +1,5 @@
 import {
+  ACESFilmicToneMapping,
   BackSide,
   BufferAttribute,
   BufferGeometry,
@@ -71,6 +72,8 @@ export function createSurfaceScene(
   const spec = TIERS[options.tier]
   const renderer = new WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true })
   renderer.setClearColor(VOID, 1)
+  // FIX: tonemapping evita que o brilho especular do oceano estoure em um disco branco chapado
+  renderer.toneMapping = ACESFilmicToneMapping
   const scene = new Scene()
   scene.background = new Color(VOID)
   const camera = new PerspectiveCamera(45, 1, 0.0005, 60)
@@ -92,7 +95,7 @@ export function createSurfaceScene(
   const oceanGeometry = new SphereGeometry(1, 192, 128)
   const oceanMaterial = new MeshPhongMaterial({
     color: 0x1d5f8f,
-    specular: 0xcfe8ff,
+    specular: 0x28313a,
     shininess: 90,
     transparent: true,
     opacity: 0.72,

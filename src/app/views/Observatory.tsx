@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
@@ -11,6 +11,8 @@ import { useT } from '../i18n/index.ts'
 import { Planet } from '../planet/Planet.tsx'
 import { Current3D } from '../scene3d/Current3D.tsx'
 import { simulation, useSimulation } from '../sim/runtime.ts'
+import { lensStore, useLens, type Lens } from '../surface/lens.ts'
+import { PlanetView } from '../surface/PlanetView.tsx'
 import type { MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
@@ -25,18 +27,26 @@ import './observatory.css'
 
 export function Observatory({
   link,
+  lens,
   onLeave,
 }: {
   readonly link: MultiverseLink
+  readonly lens: Lens
   readonly onLeave: () => void
 }) {
   useEffect(() => {
     simulation.getState().open(link)
   }, [link])
+  useEffect(() => {
+    lensStore.getState().setLens(lens)
+  }, [lens])
   useLinkSync()
   const t = useT()
   const tier = useTier()
   const stage = useStage()
+  const currentLens = useLens()
+  const planetOpen = stage === '3d' && currentLens === 'planet'
+  const exitPlanet = useCallback(() => lensStore.getState().setLens('current'), [])
   const stageRef = useRef<HTMLElement>(null)
   const size = useElementSize(stageRef)
   const [focus, setFocus] = useState<Strand | null>(null)
@@ -64,11 +74,20 @@ export function Observatory({
   return (
     <div className="observatory">
       <TopBar onLeave={onLeave} />
-      <main className="stage" ref={stageRef} data-view={stage}>
+      <main
+        className="stage"
+        ref={stageRef}
+        data-view={stage}
+        data-lens={planetOpen ? 'planet' : 'current'}
+      >
         {size && stage === '3d' && fullFrame && (
           <>
-            <Current3D width={size.width} height={size.height} />
-            <ZoomControls />
+            <Current3D width={size.width} height={size.height} paused={planetOpen} />
+            {planetOpen ? (
+              <PlanetView width={size.width} height={size.height} onExit={exitPlanet} />
+            ) : (
+              <ZoomControls />
+            )}
             <Minimap frame={fullFrame} />
           </>
         )}

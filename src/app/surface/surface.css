@@ -1,0 +1,87 @@
+.surface {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--void);
+  animation: surface-in 400ms ease-out both;
+}
+
+.surface--leaving {
+  animation: surface-out 300ms ease-in both;
+}
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes surface-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface,
+  .surface--leaving {
+    animation: none;
+  }
+}
+
+.surface__canvas {
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.surface__levels,
+.surface__hour {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.surface__levels {
+  left: var(--gutter);
+  top: 12px;
+}
+
+.surface__hour {
+  left: var(--gutter);
+  bottom: 60px;
+  padding: 4px 10px;
+  background: rgba(10, 11, 30, 0.7);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.surface__hour label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.surface__levels button,
+.surface__exit {
+  padding: 4px 10px;
+  background: rgba(10, 11, 30, 0.7);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.surface__levels button[aria-pressed='true'] {
+  background: var(--nebula);
+  border-color: var(--starlight);
+}
+
+.surface__exit {
+  position: absolute;
+  top: 12px;
+  right: var(--gutter);
+}

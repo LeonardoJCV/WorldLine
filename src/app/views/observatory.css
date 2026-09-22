@@ -654,6 +654,7 @@ button.causal__node:hover {
 .minimap {
   position: absolute;
   bottom: 10px;
+  z-index: 3;
   display: block;
   border-radius: 4px;
   cursor: grab;

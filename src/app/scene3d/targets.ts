@@ -1,4 +1,4 @@
-import type { ScreenTarget, Vec3 } from './camera.ts'
+import { FOCUS_RADIUS, type ScreenTarget, type Vec3 } from './camera.ts'
 import { axisPoint, type PathData } from './path.ts'
 
 export const OTHER_PLANET_PICK = 32
@@ -31,8 +31,19 @@ export function screenTargets(
 ): ScreenTarget[] {
   const list: ScreenTarget[] = []
   for (const world of worlds) {
-    if (!world.path.visible || world.focused) continue
+    if (!world.path.visible) continue
     const id = world.key.split(':')[0] ?? ''
+    if (world.focused) {
+      if (world.head) {
+        const p = project(world.head)
+        if (p.visible) {
+          const edge = project([world.head[0], world.head[1] + FOCUS_RADIUS, world.head[2]])
+          const radius = Math.hypot(edge.x - p.x, edge.y - p.y)
+          list.push({ kind: 'enter', key: id, x: p.x, y: p.y, radius })
+        }
+      }
+      continue
+    }
     if (world.head) {
       const p = project(world.head)
       if (p.visible)

@@ -133,6 +133,7 @@ describe('parseRoute', () => {
     expect(parseRoute('#/w/AQAHXmEAAAAA', '')).toEqual({
       screen: 'observatory',
       link: { version: 1, seed: 482913, tick: 0, decisions: [], branches: [] },
+      lens: 'current',
     })
   })
 
@@ -140,12 +141,21 @@ describe('parseRoute', () => {
     expect(parseRoute('', '?seed=atlantis')).toEqual({
       screen: 'observatory',
       link: { version: MODEL_VERSION, seed: 3286682525, tick: 0, decisions: [], branches: [] },
+      lens: 'current',
     })
   })
 
   it('falls back to genesis', () => {
     expect(parseRoute('', '')).toEqual({ screen: 'genesis' })
     expect(parseRoute('#/w/broken', '')).toEqual({ screen: 'genesis' })
+  })
+
+  it('opens the planet lens from the link suffix', () => {
+    expect(parseRoute(`${linkHash(tree)}/planet`, '')).toEqual({
+      screen: 'observatory',
+      link: tree,
+      lens: 'planet',
+    })
   })
 })
 
@@ -225,10 +235,15 @@ describe('multiverse link', () => {
   })
 
   it('routes #/m/ links and converts older links', () => {
-    expect(parseRoute(linkHash(tree), '')).toEqual({ screen: 'observatory', link: tree })
+    expect(parseRoute(linkHash(tree), '')).toEqual({
+      screen: 'observatory',
+      link: tree,
+      lens: 'current',
+    })
     expect(parseRoute('#/w/AQAHXmEAAAAA', '')).toEqual({
       screen: 'observatory',
       link: { version: 1, seed: 482913, tick: 0, decisions: [], branches: [] },
+      lens: 'current',
     })
   })
 

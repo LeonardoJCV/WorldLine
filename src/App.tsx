@@ -30,7 +30,7 @@ export function App() {
 
   const start = (link: MultiverseLink) => {
     history.pushState(null, '', `${window.location.pathname}${linkHash(link)}`)
-    setRoute({ screen: 'observatory', link })
+    setRoute({ screen: 'observatory', link, lens: 'current' })
   }
 
   const leave = () => {
@@ -42,6 +42,6 @@ export function App() {
   return route.screen === 'genesis' ? (
     <Genesis onStart={start} />
   ) : (
-    <Observatory link={route.link} onLeave={leave} />
+    <Observatory link={route.link} lens={route.lens} onLeave={leave} />
   )
 }

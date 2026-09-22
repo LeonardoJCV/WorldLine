@@ -145,4 +145,13 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'graphics.2d': '2D',
   'scene.label': 'Realidades no espaço até o ano {year}',
   'scene.recenter': 'Recentralizar',
+  'surface.enter': 'Ver planeta',
+  'surface.exit': 'Voltar às correntes',
+  'surface.label': 'Superfície do planeta no ano {year}',
+  'surface.levels': 'Nível de zoom',
+  'surface.level.orbit': 'Órbita',
+  'surface.level.continent': 'Continente',
+  'surface.level.region': 'Região',
+  'surface.hour': 'Hora do dia',
+  'surface.autoHour': 'Acompanhar o sol',
 }

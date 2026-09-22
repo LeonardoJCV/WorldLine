@@ -9,11 +9,17 @@
   cursor: ew-resize;
 }
 
-.scene3d__recenter {
+.scene3d__actions {
   position: absolute;
   top: 12px;
   right: var(--gutter);
   z-index: 1;
+  display: flex;
+  gap: 6px;
+}
+
+.scene3d__enter,
+.scene3d__recenter {
   padding: 4px 10px;
   background: rgba(10, 11, 30, 0.7);
   border: 1px solid var(--haze);

@@ -95,6 +95,8 @@ export interface CurrentScene {
   recenter(): void
   project(point: Vec3): Projected
   onFrame(callback: () => void): () => void
+  dive(): Promise<void>
+  pause(paused: boolean): void
   readonly scene: Scene
   dispose(release?: boolean): void
 }
@@ -220,7 +222,10 @@ export function createCurrentScene(
         entry.body.group.position.set(...world.head)
         entry.body.group.scale.setScalar(world.focused ? FOCUS_RADIUS : OTHER_RADIUS)
       }
-      if (world.focused && world.head) goal = railPose(world.head).target
+      if (world.focused) {
+        focusHead = world.head
+        if (world.head) goal = railPose(world.head).target
+      }
     }
     for (const key of [...entries.keys()]) if (!seen.has(key)) remove(key)
   }
@@ -315,7 +320,21 @@ export function createCurrentScene(
   let samples: number[] = []
   let time = 0
 
-  renderer.setAnimationLoop((now: number) => {
+  const DIVE_MS = 900
+  let dive: { from: Vector3; to: Vector3; look: Vec3; start: number; done: () => void } | null =
+    null
+  let back: { from: Vector3; to: Vector3; start: number } | null = null
+  let saved: Vector3 | null = null
+  let focusHead: Vec3 | null = null
+  const ease = (t: number) => t * t * (3 - 2 * t)
+
+  function renderFrame(): void {
+    if (composer) composer.render()
+    else renderer.render(scene, camera)
+    for (const listener of listeners) listener()
+  }
+
+  const frame = (now: number) => {
     const dt = Math.min((now - last) / 1000, 0.1)
     if (measuring && now - started > MEASURE_DELAY_MS) {
       samples.push(now - last)
@@ -325,6 +344,28 @@ export function createCurrentScene(
       }
     }
     last = now
+    if (dive) {
+      const k = ease(Math.min(1, (now - dive.start) / DIVE_MS))
+      camera.position.lerpVectors(dive.from, dive.to, k)
+      controls.target.set(
+        target[0] + (dive.look[0] - target[0]) * k,
+        target[1] + (dive.look[1] - target[1]) * k,
+        target[2] + (dive.look[2] - target[2]) * k,
+      )
+      camera.lookAt(controls.target)
+      if (k >= 1) {
+        const done = dive.done
+        dive = null
+        done()
+      }
+      renderFrame()
+      return
+    }
+    if (back) {
+      const k = ease(Math.min(1, (now - back.start) / DIVE_MS))
+      camera.position.lerpVectors(back.from, back.to, k)
+      if (k >= 1) back = null
+    }
     if (!options.still) time += dt
     const next = approach(target, goal, dt)
     const delta = [next[0] - target[0], next[1] - target[1], next[2] - target[2]] as const
@@ -338,10 +379,9 @@ export function createCurrentScene(
       entry.stream.setTime(time)
       entry.body.tick(options.still ? 0 : dt, time, light)
     }
-    if (composer) composer.render()
-    else renderer.render(scene, camera)
-    for (const listener of listeners) listener()
-  })
+    renderFrame()
+  }
+  renderer.setAnimationLoop(frame)
 
   return {
     scene,
@@ -398,6 +438,41 @@ export function createCurrentScene(
     onFrame(callback) {
       listeners.add(callback)
       return () => listeners.delete(callback)
+    },
+    dive() {
+      return new Promise<void>((resolve) => {
+        if (!focusHead) {
+          resolve()
+          return
+        }
+        saved = camera.position.clone()
+        const head = new Vector3(...focusHead)
+        const away = camera.position
+          .clone()
+          .sub(head)
+          .normalize()
+          .multiplyScalar(FOCUS_RADIUS * 2.6)
+        dive = {
+          from: camera.position.clone(),
+          to: head.clone().add(away),
+          look: focusHead,
+          start: performance.now(),
+          done: resolve,
+        }
+      })
+    },
+    pause(paused) {
+      if (paused) {
+        renderer.setAnimationLoop(null)
+        return
+      }
+      last = performance.now()
+      if (saved) {
+        back = { from: camera.position.clone(), to: saved, start: last }
+        saved = null
+      }
+      controls.target.set(...target)
+      renderer.setAnimationLoop(frame)
     },
     dispose(release = false) {
       renderer.setAnimationLoop(null)

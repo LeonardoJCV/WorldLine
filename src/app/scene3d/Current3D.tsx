@@ -17,6 +17,7 @@ import { planetPalette, planetState } from '../planet/uniforms.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
 import type { View } from '../sim/store.ts'
+import { lensStore } from '../surface/lens.ts'
 import { terrainMap } from '../surface/runtime.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
@@ -62,7 +63,15 @@ interface TouchState {
 
 const ERA_EVENTS = new Set(EVENTS.filter((def) => def.kind === 'era').map((def) => def.id))
 
-export function Current3D({ width, height }: { readonly width: number; readonly height: number }) {
+export function Current3D({
+  width,
+  height,
+  paused = false,
+}: {
+  readonly width: number
+  readonly height: number
+  readonly paused?: boolean
+}) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<CurrentScene | null>(null)
@@ -73,7 +82,15 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     markers: readonly SceneMarker[]
     selected: string | null
     cursorPoint: Vec3 | null
-  }>({ size: { width, height }, worlds: [], markers: [], selected: null, cursorPoint: null })
+    paused: boolean
+  }>({
+    size: { width, height },
+    worlds: [],
+    markers: [],
+    selected: null,
+    cursorPoint: null,
+    paused,
+  })
   const labelsRef = useRef<readonly Label[]>([])
   const labelElsRef = useRef<Map<string, HTMLSpanElement>>(new Map())
   const tier = useTier()
@@ -147,6 +164,8 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
         scene.setWorlds(current)
         scene.setMarkers(markers, selectedKey)
         scene.setCursor(cursorPoint)
+        // FIX: um link aberto direto no planeta não pode deixar a Corrente renderizando por baixo
+        scene.pause(latest.current.paused)
         unsubscribeFrame = scene.onFrame(() => {
           const eras: { el: HTMLSpanElement; x: number; y: number }[] = []
           for (const label of labelsRef.current) {
@@ -190,6 +209,11 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
   useEffect(() => {
     sceneRef.current?.resize(width, height, window.devicePixelRatio || 1)
   }, [width, height])
+
+  useEffect(() => {
+    latest.current = { ...latest.current, paused }
+    sceneRef.current?.pause(paused)
+  }, [paused])
 
   useEffect(() => {
     if (worlds.length === 0) return
@@ -398,6 +422,13 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
     return scene ? screenTargets(sceneWorlds, markers, (point) => scene.project(point)) : []
   }
 
+  const enter = () => {
+    const scene = sceneRef.current
+    const open = () => lensStore.getState().setLens('planet')
+    if (scene) void scene.dive().then(open)
+    else open()
+  }
+
   const yearAt = useCallback(
     (x: number, y: number): number | null => {
       const scene = sceneRef.current
@@ -519,6 +550,10 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
             simulation.getState().select(Number(hit.key))
             return
           }
+          if (hit?.kind === 'enter') {
+            enter()
+            return
+          }
           event.currentTarget.setPointerCapture(event.pointerId)
           const year = yearAt(x, y)
           if (year !== null) simulation.getState().setCursor(year)
@@ -571,13 +606,18 @@ export function Current3D({ width, height }: { readonly width: number; readonly 
           </span>
         ))}
       </div>
-      <button
-        type="button"
-        className="scene3d__recenter"
-        onClick={() => sceneRef.current?.recenter()}
-      >
-        {t('scene.recenter')}
-      </button>
+      <div className="scene3d__actions">
+        <button type="button" className="scene3d__enter" onClick={enter}>
+          {t('surface.enter')}
+        </button>
+        <button
+          type="button"
+          className="scene3d__recenter"
+          onClick={() => sceneRef.current?.recenter()}
+        >
+          {t('scene.recenter')}
+        </button>
+      </div>
     </div>
   )
 }

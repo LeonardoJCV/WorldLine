@@ -147,6 +147,15 @@ export const en = {
   'graphics.2d': '2D',
   'scene.label': 'Worldlines in space up to year {year}',
   'scene.recenter': 'Recenter',
+  'surface.enter': 'View planet',
+  'surface.exit': 'Back to the currents',
+  'surface.label': 'Planet surface in year {year}',
+  'surface.levels': 'Zoom level',
+  'surface.level.orbit': 'Orbit',
+  'surface.level.continent': 'Continent',
+  'surface.level.region': 'Region',
+  'surface.hour': 'Time of day',
+  'surface.autoHour': 'Follow the sun',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

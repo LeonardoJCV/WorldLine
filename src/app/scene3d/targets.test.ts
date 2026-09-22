@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { RangeResult } from '../sim/client.ts'
-import { pickTarget, type Vec3 } from './camera.ts'
+import { FOCUS_RADIUS, pickTarget, type Vec3 } from './camera.ts'
 import { buildPath, headPoint } from './path.ts'
 import { screenTargets, type TargetWorld } from './targets.ts'
 
@@ -35,13 +35,15 @@ describe('screenTargets', () => {
     expect(pickTarget(targets, 500, 402)).toMatchObject({ kind: 'world', key: 'B' })
   })
 
-  it('lets a click on the focused planet fall through to scrubbing', () => {
+  it('enters the focused planet within its projected radius, and falls through outside it', () => {
     const targets = screenTargets(worlds, [], project)
     const head = worlds[0]?.head
     if (!head) throw new Error('missing head')
     const p = project(head)
-    expect(pickTarget(targets, p.x, p.y)).toBeNull()
-    expect(targets.some((target) => target.key === 'A')).toBe(false)
+    const edge = project([head[0], head[1] + FOCUS_RADIUS, head[2]])
+    const radius = Math.hypot(edge.x - p.x, edge.y - p.y)
+    expect(pickTarget(targets, p.x, p.y)).toMatchObject({ kind: 'enter', key: 'A' })
+    expect(pickTarget(targets, p.x + radius + 20, p.y)).toBeNull()
   })
 
   it('selects events on the focused stream', () => {
