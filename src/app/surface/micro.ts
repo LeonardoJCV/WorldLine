@@ -79,10 +79,9 @@ export function microevents({ seed, sites, series }: MicroInput): MicroEvent[] {
           ? Array.from({ length: alive }, (_, k) => k).filter((k) => sites[k]?.coast)
           : Array.from({ length: alive }, (_, k) => k)
       if (pool.length === 0) return
-      const site =
-        pool[
-          Math.min(pool.length - 1, Math.floor(uniform(seed, year, WHERE + index) * pool.length))
-        ]
+      // FIX: sorteio ao quadrado favorece as cidades maiores (índice menor)
+      const u = uniform(seed, year, WHERE + index)
+      const site = pool[Math.min(pool.length - 1, Math.floor(u * u * pool.length))]
       if (site === undefined) return
       events.push({ year, kind, site })
       happened += 1

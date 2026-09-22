@@ -97,6 +97,7 @@ test('names the cities and opens a city card', async ({ page }) => {
   await city.click()
   const card = page.getByRole('dialog')
   await expect(card.getByRole('heading', { name })).toBeVisible()
+  await expect(card).toBeFocused()
   await expect(card.getByText('Founded')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(card).toHaveCount(0)

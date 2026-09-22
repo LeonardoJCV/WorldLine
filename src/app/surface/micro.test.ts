@@ -91,4 +91,13 @@ describe('microevents', () => {
       if (e.kind === 'harbour') expect(sites[e.site]?.coast).toBe(true)
     }
   })
+
+  it('favours the biggest cities', () => {
+    const events = microevents({ seed: 482913, sites, series: series(0, 999) })
+    const alive = thresholds(sites.length).filter((t) => t <= 3_000_000).length
+    const count = (site: number) =>
+      events.filter((e) => e.kind !== 'founding' && e.site === site).length
+    expect(alive).toBeGreaterThan(1)
+    expect(count(0)).toBeGreaterThan(count(alive - 1))
+  })
 })

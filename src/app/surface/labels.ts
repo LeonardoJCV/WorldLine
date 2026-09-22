@@ -28,7 +28,7 @@ export function cityEvents(events: readonly MicroEvent[], site: number): MicroEv
   return out
 }
 
-// a fundação anual é exata; a do modelo vem de médias por balde
+// FIX: a fundação anual é exata; a do modelo vem de médias por balde
 export function foundedYear(events: readonly MicroEvent[], city: City): number {
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i]

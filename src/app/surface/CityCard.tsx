@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { formatCompact, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import type { City } from './civilization.ts'
@@ -23,9 +24,23 @@ export function CityCard({
 }) {
   const t = useT()
   const locale = useLocale()
+  const ref = useRef<HTMLElement>(null)
+  const opened =
+    card.kind === 'city'
+      ? `city:${card.city.site}`
+      : `micro:${card.event.year}:${card.event.kind}:${card.event.site}`
+  useEffect(() => {
+    ref.current?.focus()
+  }, [opened])
   const describe = (e: MicroEvent) => t(`micro.${e.kind}`, { city: names[e.site] ?? '' })
   return (
-    <aside className="surface__card" role="dialog" aria-labelledby="surface-card-title">
+    <aside
+      ref={ref}
+      tabIndex={-1}
+      className="surface__card"
+      role="dialog"
+      aria-labelledby="surface-card-title"
+    >
       <button
         type="button"
         className="surface__card-close"
