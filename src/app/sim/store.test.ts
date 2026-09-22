@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HORIZON } from '../../engine/params.ts'
+import { currentLink } from '../world/current.ts'
 import { SimulationClient } from './client.ts'
 import { createSimulationStore } from './store.ts'
 import { connectInProcess, flush } from './testing.ts'
@@ -244,5 +245,30 @@ describe('simulation store', () => {
     expect(state.worlds.find((w) => w.info.id === id)?.crossings).toEqual([crossing])
     expect(state.worlds.find((w) => w.info.id === 'A')?.crossings).toEqual([])
     expect(state.credit).toBe(before + 4 - crossing.cost)
+  })
+
+  it('reopens the crossings its own link describes', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const store = createSimulationStore(client)
+    store.getState().create(482913)
+    store.getState().step(300)
+    await flush()
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    await client.cross(id, 'A', 'knowledge', 1)
+    await flush()
+    const link = currentLink(store.getState())
+    if (link === null) throw new Error('no link')
+    const { store: reopened } = setup()
+    reopened.getState().open(link)
+    await flush()
+    expect(reopened.getState().worlds.map((world) => world.crossings)).toEqual(
+      store.getState().worlds.map((world) => world.crossings),
+    )
   })
 })

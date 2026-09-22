@@ -64,8 +64,9 @@ export class SimulationClient {
     tick: number,
     root: readonly Decision[],
     branches: readonly BranchSpec[],
+    crossings: readonly Crossing[] = [],
   ): void {
-    this.#port.send({ type: 'open', seed, tick, root, branches })
+    this.#port.send({ type: 'open', seed, tick, root, branches, crossings })
   }
 
   play(speed: Speed): void {

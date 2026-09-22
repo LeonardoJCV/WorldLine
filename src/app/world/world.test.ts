@@ -1,7 +1,9 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { CROSSING_KINDS, DOSES, type Crossing, type CrossingKind } from '../../engine/crossing.ts'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
+import { WORLDLINE_IDS } from '../../worker/protocol.ts'
 import { parseWorldFile, serializeWorld } from './file.ts'
 import {
   decodeLink,
@@ -57,7 +59,52 @@ const link = fc
     decisions: decisions
       .sort(([a], [b]) => a - b)
       .map(([at, alloc]): Decision => ({ tick: at, allocation: alloc })),
+    crossings: [],
   }))
+
+const PARCELS: Readonly<Record<CrossingKind, number>> = {
+  knowledge: 1,
+  resource: 2,
+  doctrine: 0,
+  people: 1,
+}
+
+const crossing = fc
+  .record({
+    tick: fc.integer({ min: 0, max: HORIZON - 1 }),
+    kind: fc.constantFrom(...CROSSING_KINDS),
+    dose: fc.constantFrom(...DOSES),
+    cost: fc.integer({ min: 0, max: 255 }),
+    parcels: fc.array(fc.float({ min: 0, max: 1e6, noNaN: true }), {
+      minLength: 2,
+      maxLength: 2,
+    }),
+    world: fc.constantFrom(...WORLDLINE_IDS),
+    leaving: fc.boolean(),
+    allocation,
+  })
+  .map((draw): Crossing => {
+    const doctrine = draw.kind === 'doctrine'
+    return {
+      tick: draw.tick,
+      kind: draw.kind,
+      dose: draw.dose,
+      amounts: draw.parcels.slice(0, PARCELS[draw.kind]),
+      origin: { world: draw.world, tick: draw.tick },
+      cost: draw.cost,
+      direction: draw.kind === 'people' && draw.leaving ? 'out' : 'in',
+      ...(doctrine ? { allocation: draw.allocation } : {}),
+    }
+  })
+
+const log = fc
+  .array(crossing, { maxLength: 6 })
+  .map((list) => [...list].sort((a, b) => a.tick - b.tick))
+
+function withExtraByte(text: string): string {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
+  return btoa(`${binary}\0`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
 
 describe('seedFromText', () => {
   it('keeps whole numbers as they are', () => {
@@ -132,7 +179,7 @@ describe('parseRoute', () => {
   it('opens the observatory for a world link', () => {
     expect(parseRoute('#/w/AQAHXmEAAAAA', '')).toEqual({
       screen: 'observatory',
-      link: { version: 1, seed: 482913, tick: 0, decisions: [], branches: [] },
+      link: { version: 1, seed: 482913, tick: 0, decisions: [], crossings: [], branches: [] },
       lens: 'current',
     })
   })
@@ -186,11 +233,60 @@ describe('world file', () => {
 
 const tree: MultiverseLink = {
   ...sample,
+  crossings: [],
   branches: [
-    { parent: 0, fork: 100, decisions: [{ tick: 100, allocation: starved }] },
-    { parent: 1, fork: 200, decisions: [] },
+    { parent: 0, fork: 100, decisions: [{ tick: 100, allocation: starved }], crossings: [] },
+    { parent: 1, fork: 200, decisions: [], crossings: [] },
   ],
 }
+
+const arrival: Crossing = {
+  tick: 120,
+  kind: 'resource',
+  dose: 2,
+  amounts: [12.5, 0.25],
+  origin: { world: 'B', tick: 120 },
+  cost: 6,
+  direction: 'in',
+}
+
+const doctrine: Crossing = {
+  tick: 200,
+  kind: 'doctrine',
+  dose: 1,
+  amounts: [],
+  origin: { world: 'A', tick: 200 },
+  cost: 2,
+  direction: 'in',
+  allocation: starved,
+}
+
+const departure: Crossing = {
+  tick: 260,
+  kind: 'people',
+  dose: 3,
+  amounts: [4096],
+  origin: { world: 'C', tick: 260 },
+  cost: 9,
+  direction: 'out',
+}
+
+const crossed: MultiverseLink = {
+  ...tree,
+  crossings: [arrival, departure],
+  branches: [
+    {
+      parent: 0,
+      fork: 100,
+      decisions: [{ tick: 100, allocation: starved }],
+      crossings: [doctrine],
+    },
+    { parent: 1, fork: 200, decisions: [], crossings: [] },
+  ],
+}
+
+// FEAT: gravado pelo escritor da versão 1, antes das travessias existirem
+const VERSION_1 = 'AQAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAA'
 
 describe('multiverse link', () => {
   it('round-trips a tree of worldlines', () => {
@@ -208,6 +304,58 @@ describe('multiverse link', () => {
     expect(decodeMultiverse('')).toBeNull()
     expect(decodeMultiverse('not base64!')).toBeNull()
     expect(decodeMultiverse(encodeMultiverse(tree).slice(0, -5))).toBeNull()
+  })
+
+  it('carries crossings back and forth', () => {
+    expect(decodeMultiverse(encodeMultiverse(crossed))).toEqual(crossed)
+  })
+
+  it('carries the crossings of a world without branches', () => {
+    const alone: MultiverseLink = { ...sample, branches: [], crossings: [arrival, departure] }
+    expect(decodeMultiverse(encodeMultiverse(alone))).toEqual(alone)
+    expect(linkHash(alone)).toMatch(/^#\/m\//)
+  })
+
+  it('round-trips any crossing log', () => {
+    fc.assert(
+      fc.property(link, log, (base, crossings) => {
+        const value: MultiverseLink = { ...base, branches: [], crossings }
+        expect(decodeMultiverse(encodeMultiverse(value))).toEqual(value)
+        return true
+      }),
+    )
+  })
+
+  it('still reads a version 1 link', () => {
+    expect(decodeMultiverse(VERSION_1)).toEqual({ ...tree, version: 1 })
+  })
+
+  it('refuses trailing bytes', () => {
+    expect(decodeMultiverse(withExtraByte(encodeMultiverse(crossed)))).toBeNull()
+    expect(decodeMultiverse(withExtraByte(VERSION_1))).toBeNull()
+  })
+
+  it('refuses a corrupted crossing log without throwing', () => {
+    const swapped: MultiverseLink = { ...crossed, crossings: [departure, arrival] }
+    expect(decodeMultiverse(encodeMultiverse(swapped))).toBeNull()
+    expect(isValidMultiverse({ ...crossed, crossings: [{ ...arrival, amounts: [1] }] })).toBe(false)
+    expect(isValidMultiverse({ ...crossed, crossings: [{ ...arrival, cost: 1e9 }] })).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...crossed,
+        crossings: [{ ...arrival, kind: 'gossip' }] as unknown as Crossing[],
+      }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...crossed,
+        crossings: [],
+        branches: [{ parent: 0, fork: 100, decisions: [], crossings: [{ ...doctrine, tick: 50 }] }],
+      }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({ ...crossed, crossings: 'x' as unknown as readonly Crossing[] }),
+    ).toBe(false)
   })
 
   it('rejects impossible trees', () => {
@@ -242,7 +390,7 @@ describe('multiverse link', () => {
     })
     expect(parseRoute('#/w/AQAHXmEAAAAA', '')).toEqual({
       screen: 'observatory',
-      link: { version: 1, seed: 482913, tick: 0, decisions: [], branches: [] },
+      link: { version: 1, seed: 482913, tick: 0, decisions: [], crossings: [], branches: [] },
       lens: 'current',
     })
   })
@@ -255,6 +403,30 @@ describe('multiverse link', () => {
       '',
     )
     expect(parseWorldFile(legacy)?.link.branches).toEqual([])
+  })
+
+  it('writes crossings to world files and reads files without them', () => {
+    const text = serializeWorld({ name: 'Crossed', link: crossed })
+    expect(JSON.parse(text)).toMatchObject({
+      version: MODEL_VERSION,
+      crossings: [arrival, departure],
+    })
+    expect(parseWorldFile(text)).toEqual({ name: 'Crossed', link: crossed })
+    const legacy = serializeWorld({ name: 'Old', link: tree }).replace(
+      /,?\s*"crossings": \[\]/g,
+      '',
+    )
+    expect(parseWorldFile(legacy)?.link).toEqual(tree)
+  })
+
+  it('rejects a world file whose crossings break the rules', () => {
+    const text = serializeWorld({ name: 'Crossed', link: crossed })
+    expect(parseWorldFile(text.replace('"cost": 6', '"cost": -1'))).toBeNull()
+    expect(parseWorldFile(text.replace('"kind": "resource"', '"kind": "gossip"'))).toBeNull()
+    expect(parseWorldFile(text.replace('"tick": 120', '"tick": 1e9'))).toBeNull()
+    expect(parseWorldFile(text.replace('"crossings": [', '"crossings": "none", "spare": ['))).toBe(
+      null,
+    )
   })
 })
 

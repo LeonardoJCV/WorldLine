@@ -136,7 +136,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         linkVersion: link.version,
         branching: false,
       })
-      client.open(link.seed, link.tick, link.decisions, link.branches)
+      client.open(link.seed, link.tick, link.decisions, link.branches, link.crossings ?? [])
     },
     togglePlay() {
       const { playing, speed, ended } = get()
