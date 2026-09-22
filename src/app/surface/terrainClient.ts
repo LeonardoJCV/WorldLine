@@ -9,14 +9,16 @@ export interface TerrainMap {
 
 export interface TerrainPort {
   send(request: TerrainRequest): void
-  listen(handler: (reply: TerrainReply) => void): void
+  listen(handler: (reply: TerrainReply) => void, onFailure: (message: string) => void): void
 }
 
 export function workerTerrainPort(worker: Worker): TerrainPort {
   return {
     send: (request) => worker.postMessage(request),
-    listen: (handler) => {
+    listen: (handler, onFailure) => {
       worker.onmessage = (event: MessageEvent<TerrainReply>) => handler(event.data)
+      worker.onerror = (event) => onFailure(event.message || 'worker failed')
+      worker.onmessageerror = () => onFailure('worker message could not be read')
     },
   }
 }
@@ -41,24 +43,37 @@ export class TerrainClient {
   readonly #port: TerrainPort
   readonly #pending = new Map<number, Pending>()
   #next = 1
+  #failed: Error | null = null
 
   constructor(port: TerrainPort) {
     this.#port = port
-    port.listen((reply) => {
-      const pending = this.#pending.get(reply.id)
-      if (!pending) return
-      this.#pending.delete(reply.id)
-      if (reply.type === 'error') pending.reject(new Error(reply.message))
-      else pending.resolve(reply)
-    })
+    port.listen(
+      (reply) => this.#receive(reply),
+      (message) => this.#fail(message),
+    )
   }
 
   #request(build: (id: number) => TerrainRequest): Promise<TerrainReply> {
+    if (this.#failed) return Promise.reject(this.#failed)
     const id = this.#next++
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject })
       this.#port.send(build(id))
     })
+  }
+
+  #fail(message: string): void {
+    this.#failed = new Error(message)
+    for (const pending of this.#pending.values()) pending.reject(this.#failed)
+    this.#pending.clear()
+  }
+
+  #receive(reply: TerrainReply): void {
+    const pending = this.#pending.get(reply.id)
+    if (!pending) return
+    this.#pending.delete(reply.id)
+    if (reply.type === 'error') pending.reject(new Error(reply.message))
+    else pending.resolve(reply)
   }
 
   async chunk(seed: number, key: string, resolution: number): Promise<ChunkMesh> {

@@ -25,6 +25,8 @@ export function terrainMap(seed: number): Promise<TerrainMap> {
     const oldest = maps.keys().next().value
     if (oldest !== undefined) maps.delete(oldest)
   }
-  next.catch(() => maps.delete(seed))
+  next.catch(() => {
+    if (maps.get(seed) === next) maps.delete(seed)
+  })
   return next
 }

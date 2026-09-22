@@ -48,12 +48,26 @@ export function createTerrainHandler(): (request: TerrainRequest) => Handled {
     if (cached?.seed !== seed) cached = createTerrain(seed, planetPalette(seed))
     return cached
   }
+  const validateKey = (text: string): void => {
+    const parts = text.split('/')
+    if (parts.length !== 4) throw new RangeError('invalid chunk key format')
+    const nums = parts.map(Number)
+    const face = nums[0] ?? NaN
+    const level = nums[1] ?? NaN
+    const x = nums[2] ?? NaN
+    const y = nums[3] ?? NaN
+    if (!Number.isInteger(face) || face < 0 || face > 5) throw new RangeError('invalid face')
+    if (!Number.isInteger(level) || level < 0) throw new RangeError('invalid level')
+    if (!Number.isInteger(x) || x < 0 || x >= 2 ** level) throw new RangeError('invalid x')
+    if (!Number.isInteger(y) || y < 0 || y >= 2 ** level) throw new RangeError('invalid y')
+  }
   return (request) => {
     try {
       if (request.type === 'chunk') {
         if (!Number.isInteger(request.resolution) || request.resolution < 1) {
           throw new RangeError('invalid chunk resolution')
         }
+        validateKey(request.key)
         const mesh = buildChunk(terrainFor(request.seed), parseKey(request.key), request.resolution)
         return {
           reply: { type: 'chunk', id: request.id, ...mesh },
@@ -64,14 +78,25 @@ export function createTerrainHandler(): (request: TerrainRequest) => Handled {
           ] as ArrayBuffer[],
         }
       }
-      if (!Number.isInteger(request.width) || !Number.isInteger(request.height)) {
-        throw new RangeError('invalid map size')
+      if (request.type === 'map') {
+        if (!Number.isInteger(request.width) || !Number.isInteger(request.height)) {
+          throw new RangeError('invalid map size')
+        }
+        const data = bakeMap(terrainFor(request.seed), request.width, request.height)
+        return {
+          reply: {
+            type: 'map',
+            id: request.id,
+            width: request.width,
+            height: request.height,
+            data,
+          },
+          transfer: [data.buffer as ArrayBuffer],
+        }
       }
-      const data = bakeMap(terrainFor(request.seed), request.width, request.height)
-      return {
-        reply: { type: 'map', id: request.id, width: request.width, height: request.height, data },
-        transfer: [data.buffer as ArrayBuffer],
-      }
+      throw new RangeError(
+        `unknown request type: ${String((request as Record<string, unknown>).type)}`,
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { reply: { type: 'error', id: request.id, message }, transfer: [] }
