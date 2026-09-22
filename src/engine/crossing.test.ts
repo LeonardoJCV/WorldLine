@@ -94,6 +94,14 @@ describe('validateCrossings', () => {
     expect(() => validateCrossings([{ ...one, direction: 'out' }])).toThrow(RangeError)
   })
 
+  it('refuses a year before the first one or a year that is not whole', () => {
+    expect(() => validateCrossings([{ ...one, tick: -1 }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, tick: -300 }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, tick: 10.5 }])).toThrow(RangeError)
+    expect(() => validateCrossings([{ ...one, tick: -1 }, one])).toThrow(RangeError)
+    expect(validateCrossings([{ ...one, tick: 0 }])).toHaveLength(1)
+  })
+
   it('accepts two crossings in the same year', () => {
     expect(validateCrossings([one, { ...one, kind: 'people', amounts: [10] }])).toHaveLength(2)
   })

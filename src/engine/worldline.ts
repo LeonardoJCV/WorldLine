@@ -34,6 +34,11 @@ type Columns = Record<Variable, Float64Array>
 
 const NO_CROSSINGS: readonly Crossing[] = []
 
+interface DueCrossings {
+  readonly due: readonly Crossing[]
+  readonly next: number
+}
+
 function allocateColumns(capacity: number): Columns {
   const columns = {} as Columns
   for (const variable of VARIABLES) columns[variable] = new Float64Array(capacity)
@@ -109,8 +114,8 @@ export class Worldline {
       const due = this.#dueDecision(this.#nextDecision, this.#state.tick)
       if (due) this.#nextDecision++
       const arriving = this.#dueCrossings(this.#nextCrossing, this.#state.tick)
-      this.#nextCrossing += arriving.length
-      const result = step(this.#state, this.world, this.records.length, due, arriving)
+      this.#nextCrossing = arriving.next
+      const result = step(this.#state, this.world, this.records.length, due, arriving.due)
       this.records.push(...result.started)
       for (const index of result.ended) {
         const record = this.records[index]
@@ -149,7 +154,7 @@ export class Worldline {
       throw new Error('scheduled crossings are still pending')
     }
     const validated = validateCrossings([...this.#crossings, crossing])
-    const recorded = validated[this.#crossings.length] ?? crossing
+    const recorded = validated.at(-1) ?? crossing
     this.#crossings.push(recorded)
     return recorded
   }
@@ -176,8 +181,8 @@ export class Worldline {
       const due = this.#dueDecision(index, state.tick)
       if (due) index++
       const arriving = this.#dueCrossings(crossed, state.tick)
-      crossed += arriving.length
-      const result = step(state, this.world, records, due, arriving)
+      crossed = arriving.next
+      const result = step(state, this.world, records, due, arriving.due)
       records += result.started.length
       state = result.state
     }
@@ -234,11 +239,17 @@ export class Worldline {
     return decision?.tick === tick ? decision : undefined
   }
 
-  // FEAT: várias travessias podem cair no mesmo ano
-  #dueCrossings(index: number, tick: number): readonly Crossing[] {
-    let end = index
+  // FEAT: várias travessias podem cair no mesmo ano; uma entrada vencida nunca trava o cursor
+  #dueCrossings(index: number, tick: number): DueCrossings {
+    let start = index
+    while (start < this.#crossings.length) {
+      const stale = this.#crossings[start]
+      if (!stale || stale.tick >= tick) break
+      start++
+    }
+    let end = start
     while (this.#crossings[end]?.tick === tick) end++
-    return end === index ? NO_CROSSINGS : this.#crossings.slice(index, end)
+    return { due: end === start ? NO_CROSSINGS : this.#crossings.slice(start, end), next: end }
   }
 
   #record(state: WorldState): void {

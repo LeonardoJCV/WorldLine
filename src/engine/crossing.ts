@@ -82,7 +82,12 @@ export function credit(worlds: readonly CreditWorld[]): number {
 export function validateCrossings(crossings: readonly Crossing[]): Crossing[] {
   let previous = -1
   for (const crossing of crossings) {
-    if (!Number.isInteger(crossing.tick) || crossing.tick < previous || crossing.tick >= HORIZON) {
+    if (
+      !Number.isInteger(crossing.tick) ||
+      crossing.tick < 0 ||
+      crossing.tick < previous ||
+      crossing.tick >= HORIZON
+    ) {
       throw new RangeError('crossings must have whole years in order inside the horizon')
     }
     if (crossing.amounts.length !== PARCELS[crossing.kind]) {

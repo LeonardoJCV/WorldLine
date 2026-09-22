@@ -212,6 +212,17 @@ describe('crossings', () => {
     expect(() => new Worldline(SEED, [], null, [incoming(400), incoming(100)])).toThrow(RangeError)
   })
 
+  it('refuses a log dated before the first year instead of replaying it differently', () => {
+    expect(() => new Worldline(SEED, [], null, [incoming(-1), incoming(300)])).toThrow(RangeError)
+    expect(() => new Worldline(SEED, [], null, [incoming(0.5)])).toThrow(RangeError)
+
+    const line = new Worldline(SEED, [], null, [incoming(300)])
+    line.advance(900)
+    const straight = new Worldline(SEED, [], null, [incoming(300)])
+    straight.advance(500)
+    expect(line.hashAt(500)).toBe(hashState(straight.present))
+  })
+
   it('leaves a world without crossings identical to a world built with an empty list', () => {
     const plain = new Worldline(SEED)
     plain.advance(1200)
