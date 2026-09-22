@@ -37,9 +37,12 @@ import { packLife, type SurfaceModel } from './civilization.ts'
 import { displaySet, keyOf, rootKeys, selectChunks, type Vec3 } from './cube.ts'
 import { createLife } from './life.ts'
 import { wantedTiles } from './lifeTiles.ts'
+import { createNight } from './night.ts'
 import { focalPixels, lodOf } from './lod.ts'
 import type { ObjectSet } from './objects.ts'
+import { aliveKey, buildRoads, type Road } from './roads.ts'
 import { shadeByDaySide, skyFragment, skyVertex } from './shading.ts'
+import type { Site } from './sites.ts'
 import { createTerrain, surfaceRadius } from './terrain.ts'
 import type { TerrainClient } from './terrainClient.ts'
 
@@ -68,6 +71,7 @@ export interface SurfaceSceneOptions {
   readonly density: number
   readonly tileBudget: number
   readonly start: Vec3 | null
+  readonly sites: readonly Site[]
   readonly onLevel: (level: Level) => void
 }
 
@@ -148,6 +152,14 @@ export function createSurfaceScene(
   const life = createLife({ sun: sunDir })
   life.group.visible = false
   scene.add(life.group)
+  const night = createNight({
+    sun: sunDir,
+    shared: life.shared,
+    density: options.density,
+    still: options.still,
+    animated: options.tier !== 'low',
+  })
+  scene.add(night.group)
 
   const sampler = createTerrain(options.seed, options.palette)
   const lod = lodOf(options.tier)
@@ -172,6 +184,8 @@ export function createSurfaceScene(
   let lifeClock = 0
   let model: SurfaceModel | null = null
   let modelDirty = false
+  let roads: Road[] = []
+  let roadsFor = ''
   const animated = options.tier !== 'low' && !options.still
 
   const start = options.start
@@ -290,12 +304,12 @@ export function createSurfaceScene(
 
   function refreshLife(): void {
     lifeDirty = false
-    life.setTiles(
-      lifeWanted.flatMap((key) => {
-        const set = lifeTiles.get(key)
-        return set ? [set] : []
-      }),
-    )
+    const sets = lifeWanted.flatMap((key) => {
+      const set = lifeTiles.get(key)
+      return set ? [set] : []
+    })
+    life.setTiles(sets)
+    night.setTiles(sets)
   }
 
   const inView = (center: Vec3, radius: number) => {
@@ -374,8 +388,19 @@ export function createSurfaceScene(
       modelDirty = false
       life.group.visible = model !== null
       if (model) life.setUniforms(packLife(model, lifeClock))
+      const living = aliveKey(model)
+      if (living !== roadsFor) {
+        roadsFor = living
+        roads = model ? buildRoads(model, options.sites, sampler) : []
+      }
+      night.setModel(model, options.sites, roads)
     } else if (animated) {
       life.setTime(lifeClock)
+    }
+    night.tick(dt, altitude)
+    if (import.meta.env.DEV) {
+      const walking = String(night.people())
+      if (canvas.dataset.people !== walking) canvas.dataset.people = walking
     }
     renderer.render(scene, camera)
   })
@@ -388,6 +413,7 @@ export function createSurfaceScene(
       renderer.setSize(width, height, false)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
+      night.setFocal(focalPixels(height * renderer.getPixelRatio(), FOV))
     },
     zoom(factor) {
       goal = Math.min(ALTITUDE.max, Math.max(lod.minAltitude, goal * factor))
@@ -415,6 +441,7 @@ export function createSurfaceScene(
       meshes.clear()
       terrainMaterial.dispose()
       life.dispose()
+      night.dispose()
       lifeTiles.clear()
       oceanGeometry.dispose()
       oceanMaterial.dispose()

@@ -305,43 +305,96 @@ for (const level of ['Continent', 'Region'] as const) {
   })
 }
 
-async function enterLife(page: Page, level: 'Continent' | 'Region', steps: number) {
+interface LifeRun {
+  readonly level: 'Orbit' | 'Continent' | 'Region'
+  readonly steps?: number
+  readonly hour?: number
+  readonly industry?: number
+  readonly extinct?: boolean
+  readonly seconds?: number
+}
+
+async function enterLife(page: Page, run: LifeRun) {
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?seed=482913')
-  if (steps > 0) {
+  if (run.industry !== undefined) {
+    await page.getByRole('button', { name: 'Intervene' }).click()
+    if (run.extinct) await page.getByRole('slider', { name: /Conservation/ }).fill('0')
+    await page.getByRole('slider', { name: /Industry/ }).fill(String(run.industry))
+    await page.getByRole('button', { name: 'Apply decision' }).click()
+    await page.getByRole('button', { name: 'Observe' }).click()
+  }
+  if (run.extinct) {
+    await page.getByRole('button', { name: 'Max' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 120_000 })
+  } else if (run.steps) {
     const step = page.getByRole('button', { name: 'Advance one year' })
-    for (let i = 0; i < steps; i++) await step.click()
+    for (let i = 0; i < run.steps; i++) await step.click()
   } else {
     await page.getByRole('button', { name: '×256' }).click()
     await page.getByRole('button', { name: 'Play' }).click()
-    await page.waitForTimeout(4000)
+    await page.waitForTimeout((run.seconds ?? 4) * 1000)
     await page.getByRole('button', { name: 'Pause' }).click()
   }
   await page.getByRole('button', { name: 'View planet' }).click()
-  await page.getByRole('button', { name: level }).click()
-  await expect(page.locator('.surface')).toHaveAttribute('data-level', level.toLowerCase(), {
+  if (run.level !== 'Orbit') await page.getByRole('button', { name: run.level }).click()
+  await expect(page.locator('.surface')).toHaveAttribute('data-level', run.level.toLowerCase(), {
     timeout: 10_000,
   })
   await page.getByLabel('Follow the sun').uncheck()
   const hour = page.getByLabel('Time of day')
   await hour.focus()
   await hour.press('Home')
-  for (let i = 0; i < 8; i++) await hour.press('ArrowRight')
+  for (let i = 0; i < (run.hour ?? 8); i++) await hour.press('ArrowRight')
   await page.waitForTimeout(4000)
 }
 
+const NIGHT_HOUR = 58
+
 test('surface life region', async ({ page }) => {
-  await enterLife(page, 'Region', 0)
+  await enterLife(page, { level: 'Region' })
   await page.screenshot({ path: 'screens/surface-life-region.png' })
 })
 
 test('surface life continent', async ({ page }) => {
-  await enterLife(page, 'Continent', 0)
+  await enterLife(page, { level: 'Continent' })
   await page.screenshot({ path: 'screens/surface-life-continent.png' })
 })
 
 test('surface life early', async ({ page }) => {
-  await enterLife(page, 'Region', 20)
+  await enterLife(page, { level: 'Region', steps: 20 })
   await page.screenshot({ path: 'screens/surface-life-early.png' })
+})
+
+test('surface life night', async ({ page }) => {
+  await enterLife(page, { level: 'Region', hour: NIGHT_HOUR })
+  await page.screenshot({ path: 'screens/surface-life-night.png' })
+})
+
+test('surface life continent night', async ({ page }) => {
+  await enterLife(page, { level: 'Continent', hour: NIGHT_HOUR })
+  await page.screenshot({ path: 'screens/surface-life-continent-night.png' })
+})
+
+test('surface life orbit night', async ({ page }) => {
+  await enterLife(page, { level: 'Orbit', hour: NIGHT_HOUR })
+  await page.screenshot({ path: 'screens/surface-life-orbit-night.png' })
+})
+
+test('surface life orbit day', async ({ page }) => {
+  await enterLife(page, { level: 'Orbit' })
+  await page.screenshot({ path: 'screens/surface-life-orbit.png' })
+})
+
+test('surface life industrial', async ({ page }) => {
+  await enterLife(page, { level: 'Region', industry: 50, seconds: 5 })
+  await page.screenshot({ path: 'screens/surface-life-industrial.png' })
+})
+
+test('surface life extinct', async ({ page }) => {
+  test.setTimeout(180_000)
+  await enterLife(page, { level: 'Region', industry: 60, extinct: true })
+  await page.screenshot({ path: 'screens/surface-life-extinct.png' })
 })

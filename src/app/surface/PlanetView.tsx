@@ -143,6 +143,7 @@ export function PlanetView({
           density: DENSITY[tier],
           tileBudget: TILE_BUDGET[tier],
           start: list[0]?.dir ?? null,
+          sites: list,
           onLevel: setLevel,
         })
         sceneRef.current = scene

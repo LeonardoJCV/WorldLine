@@ -146,7 +146,8 @@ vWindow = 0.0;
 #elif LIFE_KIND == 1
   show = (alive || ruin) && ring <= max(city.x, 0.02) && rank < 0.92 ? 1.0 : 0.0;
   lift = alive ? city.z * (1.0 + 1.5 * (1.0 - ring / max(city.x, 0.001))) : city.z;
-  if (ruin) vTint = vec3(0.45, 0.43, 0.42);
+  // FIX: tom negativo pede cinza; as ruínas perdem a cor dos telhados
+  if (ruin) vTint = vec3(-0.55, -0.54, -0.53);
   vWindow = alive ? city.w : 0.0;
 #elif LIFE_KIND == 2
   show = alive && ring >= city2.x && ring <= city2.y && rank < 0.85 ? 1.0 : 0.0;
@@ -192,7 +193,7 @@ float dayLight = smoothstep(DAY_FROM, DAY_TO, dot(normalize(vSurface), uSun));
 outgoingLight += diffuseColor.rgb * SKY_FILL;
 outgoingLight *= NIGHT_FLOOR + (1.0 - NIGHT_FLOOR) * dayLight;
 float rows = step(0.5, fract(vLocalY * 2600.0)) * step(vLocalY, BODY_TOP);
-outgoingLight += vec3(1.0, 0.78, 0.45) * vWindow * rows * (1.0 - dayLight) * 0.9;
+outgoingLight += vec3(1.0, 0.78, 0.45) * vWindow * rows * (1.0 - dayLight) * 1.2;
 #include <opaque_fragment>
 `
 
@@ -278,7 +279,7 @@ export function createLife(options: LifeOptions): Life {
         .replace('#include <common>', `#include <common>\n${fragmentPrelude}`)
         .replace(
           '#include <color_fragment>',
-          '#include <color_fragment>\ndiffuseColor.rgb *= vTint;',
+          '#include <color_fragment>\ndiffuseColor.rgb = vTint.x < 0.0 ? dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)) * -vTint : diffuseColor.rgb * vTint;',
         )
         .replace('#include <opaque_fragment>', fragmentLight)
     }
