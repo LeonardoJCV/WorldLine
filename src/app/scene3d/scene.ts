@@ -327,6 +327,7 @@ export function createCurrentScene(
   let back: { from: Vector3; to: Vector3; start: number } | null = null
   let saved: Vector3 | null = null
   let focusHead: Vec3 | null = null
+  let paused = false
   const ease = (t: number) => t * t * (3 - 2 * t)
 
   function renderFrame(): void {
@@ -364,7 +365,8 @@ export function createCurrentScene(
     }
     if (back) {
       const k = ease(Math.min(1, (now - back.start) / DIVE_MS))
-      camera.position.lerpVectors(back.from, back.to, k)
+      // FIX: volta à pose relativa ao alvo do trilho, que pode ter mudado de foco durante o planeta
+      camera.position.lerpVectors(back.from, back.to, k).add(new Vector3(...target))
       if (k >= 1) back = null
     }
     if (!options.still) time += dt
@@ -443,12 +445,13 @@ export function createCurrentScene(
     dive() {
       // FIX: um mergulho já em andamento devolve a mesma promise, sem órfãos
       if (divePromise) return divePromise
+      if (paused) return Promise.resolve()
       const promise = new Promise<void>((resolve) => {
-        if (!focusHead) {
+        if (!focusHead || options.still) {
           resolve()
           return
         }
-        saved = camera.position.clone()
+        saved = camera.position.clone().sub(new Vector3(...target))
         const head = new Vector3(...focusHead)
         const away = camera.position
           .clone()
@@ -469,14 +472,21 @@ export function createCurrentScene(
       })
       return promise
     },
-    pause(paused) {
-      if (paused) {
+    pause(next) {
+      paused = next
+      if (next) {
         renderer.setAnimationLoop(null)
+        if (dive) {
+          const done = dive.done
+          dive = null
+          done()
+        }
         return
       }
       last = performance.now()
       if (saved) {
-        back = { from: camera.position.clone(), to: saved, start: last }
+        const offset = camera.position.clone().sub(new Vector3(...target))
+        back = { from: offset, to: saved, start: last }
         saved = null
       }
       controls.target.set(...target)

@@ -61,6 +61,9 @@ interface TouchState {
   ended: boolean
 }
 
+const CLICK_SLOP = 6
+const FALLBACK_MAP: TerrainMap = { width: 1, height: 1, data: new Float32Array(4) }
+
 const ERA_EVENTS = new Set(EVENTS.filter((def) => def.kind === 'era').map((def) => def.id))
 
 export function Current3D({
@@ -125,8 +128,11 @@ export function Current3D({
       (m) => {
         if (live) setLoaded({ seed, map: m })
       },
-      () => {
-        if (live) graphicsStore.getState().setWebglFailed()
+      (error: unknown) => {
+        if (!live) return
+        // FIX: sem mapa de terreno a cena segue com planetas lisos e o erro vira aviso
+        simulation.setState({ error: error instanceof Error ? error.message : String(error) })
+        setLoaded({ seed, map: FALLBACK_MAP })
       },
     )
     return () => {
@@ -441,6 +447,8 @@ export function Current3D({
     [focusPath, fetched],
   )
 
+  const pressRef = useRef<{ id: number; x: number; y: number } | null>(null)
+
   const touchRef = useRef<TouchState>({
     points: new Map(),
     before: null,
@@ -459,6 +467,7 @@ export function Current3D({
   }
 
   const startPinch = () => {
+    pressRef.current = null
     const touch = touchRef.current
     const spread = pinchSpread()
     const state = simulation.getState()
@@ -510,7 +519,7 @@ export function Current3D({
   }, [yearAt])
 
   return (
-    <div className="scene3d" style={{ width, height }}>
+    <div className="scene3d" style={{ width, height }} inert={paused}>
       <canvas
         ref={canvasRef}
         className="scene3d__canvas"
@@ -550,11 +559,12 @@ export function Current3D({
             simulation.getState().select(Number(hit.key))
             return
           }
+          event.currentTarget.setPointerCapture(event.pointerId)
           if (hit?.kind === 'enter') {
-            enter()
+            // FEAT: entra no planeta só no clique; arrastar a partir dele varre o tempo
+            pressRef.current = { id: event.pointerId, x, y }
             return
           }
-          event.currentTarget.setPointerCapture(event.pointerId)
           const year = yearAt(x, y)
           if (year !== null) simulation.getState().setCursor(year)
         }}
@@ -572,14 +582,32 @@ export function Current3D({
             if (touch.ended) return
           }
           if (event.buttons & 1) {
+            const press = pressRef.current
+            if (press?.id === event.pointerId) {
+              if (Math.hypot(x - press.x, y - press.y) < CLICK_SLOP) return
+              pressRef.current = null
+            }
             const year = yearAt(x, y)
             if (year !== null) simulation.getState().setCursor(year)
             return
           }
           event.currentTarget.style.cursor = pickTarget(targets(), x, y) ? 'pointer' : ''
         }}
-        onPointerUp={releaseTouch}
-        onPointerCancel={releaseTouch}
+        onPointerUp={(event: PointerEvent<HTMLCanvasElement>) => {
+          const press = pressRef.current
+          pressRef.current = null
+          const rect = event.currentTarget.getBoundingClientRect()
+          const moved = press
+            ? Math.hypot(event.clientX - rect.left - press.x, event.clientY - rect.top - press.y)
+            : Infinity
+          const single = touchRef.current.points.size <= 1 && touchRef.current.pinch === null
+          releaseTouch(event)
+          if (press?.id === event.pointerId && moved < CLICK_SLOP && single) enter()
+        }}
+        onPointerCancel={(event: PointerEvent<HTMLCanvasElement>) => {
+          pressRef.current = null
+          releaseTouch(event)
+        }}
         onDoubleClick={() => simulation.getState().setCursor(null)}
         onKeyDown={(event: KeyboardEvent<HTMLCanvasElement>) => {
           const effect = currentKey(event.key, event.shiftKey, { present, cursor, view })
