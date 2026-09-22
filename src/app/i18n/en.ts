@@ -181,6 +181,13 @@ export const en = {
   'card.recent': 'Recent events',
   'card.none': 'Nothing recorded in the last century.',
   'card.when': 'Year {year}, {city}',
+  'cross.needsWorlds': 'Open another worldline to cross into.',
+  'cross.pickOrigin': 'Choose a worldline to cross from.',
+  'cross.originExtinct': 'The origin worldline has ended; it can no longer send anything.',
+  'cross.destinationEnded': 'This worldline has ended; it can no longer receive a crossing.',
+  'cross.peopleOnlyNow': 'People can only cross into the present.',
+  'cross.limit': 'Six worldlines is the limit; remove one to cross into the past.',
+  'cross.credit': 'This crossing costs {cost}; {missing} more credit is needed.',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

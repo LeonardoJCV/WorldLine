@@ -179,4 +179,11 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'card.recent': 'Acontecimentos recentes',
   'card.none': 'Nada registrado no último século.',
   'card.when': 'Ano {year}, {city}',
+  'cross.needsWorlds': 'Abra outra worldline para cruzar.',
+  'cross.pickOrigin': 'Escolha uma worldline de origem.',
+  'cross.originExtinct': 'A worldline de origem terminou; ela não pode mais enviar nada.',
+  'cross.destinationEnded': 'Esta worldline terminou; ela não pode mais receber uma travessia.',
+  'cross.peopleOnlyNow': 'Pessoas só cruzam para o presente.',
+  'cross.limit': 'Seis realidades é o limite; remova uma para cruzar para o passado.',
+  'cross.credit': 'Esta travessia custa {cost}; faltam {missing} créditos.',
 }
