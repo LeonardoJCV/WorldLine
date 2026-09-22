@@ -63,7 +63,7 @@ export interface SimulationState {
   select(index: number | null): void
   decide(allocation: Allocation): void
   branch(allocation: Allocation): void
-  cross(kind: CrossingKind, dose: Dose): void
+  cross(kind: CrossingKind, dose: Dose): Promise<void>
   remove(id: WorldlineId): void
   setFocus(id: WorldlineId): void
   setView(view: View | null): void
@@ -90,6 +90,10 @@ function focused(worlds: readonly WorldView[], focus: WorldlineId) {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(messageOf(error))
 }
 
 export function createSimulationStore(client: SimulationClient): SimulationStore {
@@ -217,24 +221,34 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         (error: unknown) => set({ branching: false, error: messageOf(error) }),
       )
     },
+    // FEAT: quem chama só sabe que a travessia chegou quando o worker confirma
     cross(kind, dose) {
       const { focus, crossOrigin, cursor } = get()
-      if (crossOrigin === null) return
+      if (crossOrigin === null) return Promise.reject(new RangeError('a crossing needs an origin'))
       if (cursor === null) {
-        client.cross(crossOrigin, focus, kind, dose).then(
-          () => set({ error: null }),
-          (error: unknown) => set({ error: messageOf(error) }),
+        return client.cross(crossOrigin, focus, kind, dose).then(
+          () => {
+            set({ error: null })
+          },
+          (error: unknown) => {
+            const failure = asError(error)
+            set({ error: failure.message })
+            return Promise.reject(failure)
+          },
         )
-        return
       }
       set({ branching: true })
-      client.crossBranch(focus, cursor, crossOrigin, kind, dose).then(
+      return client.crossBranch(focus, cursor, crossOrigin, kind, dose).then(
         (id) => {
           set({ branching: false, error: null })
           get().setCursor(null)
           get().setFocus(id)
         },
-        (error: unknown) => set({ branching: false, error: messageOf(error) }),
+        (error: unknown) => {
+          const failure = asError(error)
+          set({ branching: false, error: failure.message })
+          return Promise.reject(failure)
+        },
       )
     },
     remove(id) {

@@ -139,3 +139,15 @@ test('keeps the keyboard and the choices when a crossing origin is picked', asyn
   await expect(supplies).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
 })
+
+test('announces a crossing only once the worker has recorded it', async ({ page }) => {
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await page.getByRole('button', { name: 'From worldline A' }).click()
+  const arrived = page.getByText('Knowledge arrived from A.')
+  await expect(arrived).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await expect(arrived).toBeVisible()
+  await expect(page.locator('.notices p')).toHaveCount(0)
+})

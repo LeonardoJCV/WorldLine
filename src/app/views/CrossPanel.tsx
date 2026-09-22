@@ -34,6 +34,7 @@ export function CrossPanel() {
   const [dose, setDose] = useState<Dose>(1)
   const [observed, setObserved] = useState<Observed | null>(null)
   const [done, setDone] = useState<Done | null>(null)
+  const [pending, setPending] = useState(false)
   const { cross, setCrossOrigin, setCursor } = simulation.getState()
   const inPast = cursor !== null
 
@@ -96,10 +97,17 @@ export function CrossPanel() {
       ? crossQuote({ kind, dose: carried, origin: source, destination })
       : null
   const [first = 0, second = 0] = quote?.amounts ?? []
+  // FIX: a confirmação só sai depois que o worker grava a travessia, senão o painel anuncia o que não chegou
   const open = () => {
     if (origin === null) return
-    cross(kind, carried)
-    if (!inPast) setDone({ kind, id: origin })
+    setPending(true)
+    cross(kind, carried).then(
+      () => {
+        setPending(false)
+        if (!inPast) setDone({ kind, id: origin })
+      },
+      () => setPending(false),
+    )
   }
 
   return (
@@ -216,7 +224,9 @@ export function CrossPanel() {
             type="button"
             className="cross__open"
             aria-describedby="cross-reason"
-            disabled={blocked !== null || awaiting || branching || playing || quote === null}
+            disabled={
+              blocked !== null || awaiting || branching || pending || playing || quote === null
+            }
             onClick={open}
           >
             {awaiting
