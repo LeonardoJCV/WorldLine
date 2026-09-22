@@ -1,5 +1,14 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import {
+  CROSSING_KINDS,
+  DOSES,
+  crossingAmounts,
+  crossingCost,
+  type Crossing,
+  type CrossingKind,
+  type Dose,
+} from './crossing.ts'
 import { GOLDEN_CASES, GOLDEN_SCRIPTS } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
@@ -30,6 +39,34 @@ const script = (maxTick: number) =>
     )
 
 const seed = fc.integer({ min: 0, max: 0xffffffff })
+
+const DONOR = { technology: 40, food: 600, energy: 400, population: 900 }
+const CREED: Allocation = { agriculture: 30, industry: 30, research: 20, conservation: 20 }
+
+const crossingAt = (tick: number, kind: CrossingKind, dose: Dose): Crossing => ({
+  tick,
+  kind,
+  dose,
+  amounts: crossingAmounts(kind, dose, DONOR),
+  origin: { world: 'donor', tick },
+  cost: crossingCost(kind, dose, 0.5),
+  direction: 'in',
+  ...(kind === 'doctrine' ? { allocation: CREED } : {}),
+})
+
+const crossScript = (maxTick: number) =>
+  fc
+    .array(
+      fc.tuple(
+        fc.integer({ min: 0, max: maxTick }),
+        fc.constantFrom(...CROSSING_KINDS),
+        fc.constantFrom(...DOSES),
+      ),
+      { maxLength: 4 },
+    )
+    .map((entries) =>
+      entries.sort(([a], [b]) => a - b).map(([tick, kind, dose]) => crossingAt(tick, kind, dose)),
+    )
 
 describe('golden hashes', () => {
   it.each(GOLDEN_CASES)('seed $seed, $script, year $year', ({ seed, script, year, hash }) => {
@@ -81,6 +118,72 @@ describe('determinism properties', () => {
         child.advance(parent.present.tick - child.present.tick)
         return child.hashAt(child.present.tick) === parent.hashAt(child.present.tick)
       }),
+      { numRuns: 15 },
+    )
+  })
+
+  it('same seed, decisions and crossings give the same timeline', () => {
+    fc.assert(
+      fc.property(seed, script(2999), crossScript(2999), (s, decisions, crossings) => {
+        const a = new Worldline(s, decisions, null, crossings)
+        const b = new Worldline(s, decisions, null, crossings)
+        a.advance(3000)
+        b.advance(3000)
+        return hashState(a.present) === hashState(b.present)
+      }),
+      { numRuns: 20 },
+    )
+  })
+
+  it('replaying a crossed history from a checkpoint equals running straight', () => {
+    fc.assert(
+      fc.property(
+        seed,
+        script(1199),
+        crossScript(1199),
+        fc.integer({ min: 0, max: 1200 }),
+        (s, decisions, crossings, tick) => {
+          const full = new Worldline(s, decisions, null, crossings)
+          full.advance(1200)
+          const straight = new Worldline(s, decisions, null, crossings)
+          straight.advance(tick)
+          return full.hashAt(Math.min(tick, full.present.tick)) === hashState(straight.present)
+        },
+      ),
+      { numRuns: 30 },
+    )
+  })
+
+  it("a fork that replays its parent's crossings stays on its parent", () => {
+    fc.assert(
+      fc.property(
+        seed,
+        script(1999),
+        crossScript(1999),
+        fc.integer({ min: 0, max: 1500 }),
+        (s, decisions, crossings, at) => {
+          const parent = new Worldline(s, decisions, null, crossings)
+          parent.advance(2000)
+          const forkAt = Math.min(at, parent.present.tick)
+          const child = parent.fork(forkAt)
+          if (child.crossings.some((c) => c.tick >= forkAt)) return false
+          const pending = [
+            ...decisions
+              .filter((d) => d.tick >= forkAt)
+              .map((d) => ({ tick: d.tick, apply: () => child.decide(d.allocation) })),
+            ...crossings
+              .filter((c) => c.tick >= forkAt)
+              .map((c) => ({ tick: c.tick, apply: () => child.cross(c) })),
+          ].sort((a, b) => a.tick - b.tick)
+          for (const entry of pending) {
+            child.advance(entry.tick - child.present.tick)
+            if (child.ended) break
+            entry.apply()
+          }
+          child.advance(parent.present.tick - child.present.tick)
+          return child.hashAt(child.present.tick) === parent.hashAt(child.present.tick)
+        },
+      ),
       { numRuns: 15 },
     )
   })

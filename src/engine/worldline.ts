@@ -1,3 +1,4 @@
+import { validateCrossings, type Crossing } from './crossing.ts'
 import type { EventRecord } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
@@ -31,6 +32,8 @@ interface Checkpoint {
 
 type Columns = Record<Variable, Float64Array>
 
+const NO_CROSSINGS: readonly Crossing[] = []
+
 function allocateColumns(capacity: number): Columns {
   const columns = {} as Columns
   for (const variable of VARIABLES) columns[variable] = new Float64Array(capacity)
@@ -56,17 +59,25 @@ export class Worldline {
   readonly lineage: Lineage | null
   readonly records: EventRecord[] = []
   readonly #decisions: Decision[]
+  readonly #crossings: Crossing[]
   readonly #checkpoints = new Map<number, Checkpoint>()
   #columns: Columns
   #length = 0
   #nextDecision = 0
+  #nextCrossing = 0
   #state: WorldState
 
-  constructor(seed: number, decisions: readonly Decision[] = [], lineage: Lineage | null = null) {
+  constructor(
+    seed: number,
+    decisions: readonly Decision[] = [],
+    lineage: Lineage | null = null,
+    crossings: readonly Crossing[] = [],
+  ) {
     const origin = genesis(seed)
     this.world = origin.world
     this.lineage = lineage
     this.#decisions = validateDecisions(decisions)
+    this.#crossings = validateCrossings(crossings)
     this.#columns = allocateColumns(1024)
     this.#state = origin.state
     this.#record(origin.state)
@@ -84,6 +95,10 @@ export class Worldline {
     return this.#decisions
   }
 
+  get crossings(): readonly Crossing[] {
+    return this.#crossings
+  }
+
   get ended(): boolean {
     return this.#state.status !== 'running' || this.#state.tick >= HORIZON
   }
@@ -93,7 +108,9 @@ export class Worldline {
     while (advanced < years && !this.ended) {
       const due = this.#dueDecision(this.#nextDecision, this.#state.tick)
       if (due) this.#nextDecision++
-      const result = step(this.#state, this.world, this.records.length, due)
+      const arriving = this.#dueCrossings(this.#nextCrossing, this.#state.tick)
+      this.#nextCrossing += arriving.length
+      const result = step(this.#state, this.world, this.records.length, due, arriving)
       this.records.push(...result.started)
       for (const index of result.ended) {
         const record = this.records[index]
@@ -121,6 +138,22 @@ export class Worldline {
     return decision
   }
 
+  // FEAT: registra uma travessia no ano presente, já validada
+  cross(crossing: Crossing): Crossing {
+    if (this.ended) throw new Error('worldline has ended')
+    if (crossing.tick !== this.#state.tick) {
+      throw new RangeError(`crossing for year ${crossing.tick} applied at year ${this.#state.tick}`)
+    }
+    const last = this.#crossings.at(-1)
+    if (last && last.tick > crossing.tick) {
+      throw new Error('scheduled crossings are still pending')
+    }
+    const validated = validateCrossings([...this.#crossings, crossing])
+    const recorded = validated[this.#crossings.length] ?? crossing
+    this.#crossings.push(recorded)
+    return recorded
+  }
+
   valueAt(variable: Variable, tick: number): number {
     this.#assertRecorded(tick)
     return this.#columns[variable][tick] ?? NaN
@@ -137,10 +170,14 @@ export class Worldline {
     let records = checkpoint.records
     let index = this.#decisions.findIndex((d) => d.tick >= base)
     if (index === -1) index = this.#decisions.length
+    let crossed = this.#crossings.findIndex((c) => c.tick >= base)
+    if (crossed === -1) crossed = this.#crossings.length
     while (state.tick < tick) {
       const due = this.#dueDecision(index, state.tick)
       if (due) index++
-      const result = step(state, this.world, records, due)
+      const arriving = this.#dueCrossings(crossed, state.tick)
+      crossed += arriving.length
+      const result = step(state, this.world, records, due, arriving)
       records += result.started.length
       state = result.state
     }
@@ -186,7 +223,8 @@ export class Worldline {
   fork(tick: number): Worldline {
     this.#assertRecorded(tick)
     const inherited = this.#decisions.filter((d) => d.tick < tick)
-    const child = new Worldline(this.seed, inherited, { parent: this, tick })
+    const inheritedCrossings = this.#crossings.filter((c) => c.tick < tick)
+    const child = new Worldline(this.seed, inherited, { parent: this, tick }, inheritedCrossings)
     child.advance(tick)
     return child
   }
@@ -194,6 +232,13 @@ export class Worldline {
   #dueDecision(index: number, tick: number): Decision | undefined {
     const decision = this.#decisions[index]
     return decision?.tick === tick ? decision : undefined
+  }
+
+  // FEAT: várias travessias podem cair no mesmo ano
+  #dueCrossings(index: number, tick: number): readonly Crossing[] {
+    let end = index
+    while (this.#crossings[end]?.tick === tick) end++
+    return end === index ? NO_CROSSINGS : this.#crossings.slice(index, end)
   }
 
   #record(state: WorldState): void {

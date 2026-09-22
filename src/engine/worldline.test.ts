@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Crossing } from './crossing.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
 import { Worldline } from './worldline.ts'
@@ -142,5 +143,80 @@ describe('Worldline', () => {
     w.advance(10)
     expect(() => w.stateAt(11)).toThrow(RangeError)
     expect(() => w.valueAt('food', -1)).toThrow(RangeError)
+  })
+})
+
+describe('crossings', () => {
+  const incoming = (tick: number): Crossing => ({
+    tick,
+    kind: 'knowledge',
+    dose: 2,
+    amounts: [40],
+    origin: { world: 'B', tick },
+    cost: 6,
+    direction: 'in',
+  })
+
+  it('replays a crossed history from a checkpoint', () => {
+    const line = new Worldline(SEED, [], null, [incoming(300)])
+    line.advance(900)
+    for (const year of [299, 300, 301, 500, 900]) {
+      const short = new Worldline(SEED, [], null, [incoming(300)])
+      short.advance(year)
+      expect(line.hashAt(year)).toBe(short.hashAt(year))
+    }
+  })
+
+  it('replays a year that carries several crossings at once', () => {
+    const script = [incoming(200), incoming(200), incoming(640)]
+    const line = new Worldline(SEED, [], null, script)
+    line.advance(800)
+    for (const year of [199, 200, 201, 639, 640, 700, 800]) {
+      const short = new Worldline(SEED, [], null, script)
+      short.advance(year)
+      expect(line.hashAt(year)).toBe(hashState(short.present))
+    }
+  })
+
+  it('keeps a fork free of later crossings', () => {
+    const line = new Worldline(SEED, [], null, [incoming(100), incoming(400)])
+    line.advance(600)
+    const child = line.fork(200)
+    expect(child.crossings.map((c) => c.tick)).toEqual([100])
+    expect(child.hashAt(200)).toBe(line.hashAt(200))
+  })
+
+  it('records a crossing at the present year', () => {
+    const line = new Worldline(SEED)
+    line.advance(50)
+    const crossing = line.cross({ ...incoming(50) })
+    expect(line.crossings).toEqual([crossing])
+    expect(() => line.cross({ ...incoming(10) })).toThrow(RangeError)
+  })
+
+  it('refuses a crossing the validator rejects', () => {
+    const line = new Worldline(SEED)
+    line.advance(20)
+    expect(() => line.cross({ ...incoming(20), amounts: [] })).toThrow(RangeError)
+    expect(() => line.cross({ ...incoming(20), kind: 'doctrine', amounts: [] })).toThrow(RangeError)
+    expect(line.crossings).toEqual([])
+  })
+
+  it('refuses a crossing once the worldline has ended', () => {
+    const line = new Worldline(SEED)
+    line.advance(HORIZON)
+    expect(() => line.cross(incoming(HORIZON - 1))).toThrow(Error)
+  })
+
+  it('rejects a malformed crossing log', () => {
+    expect(() => new Worldline(SEED, [], null, [incoming(400), incoming(100)])).toThrow(RangeError)
+  })
+
+  it('leaves a world without crossings identical to a world built with an empty list', () => {
+    const plain = new Worldline(SEED)
+    plain.advance(1200)
+    const empty = new Worldline(SEED, [], null, [])
+    empty.advance(1200)
+    expect(plain.hashAt(1200)).toBe(empty.hashAt(1200))
   })
 })
