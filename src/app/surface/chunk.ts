@@ -77,7 +77,7 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
     groundNormal[at + 2] = (groundNormal[at + 2] ?? 0) + n[2]
   }
 
-  // FIX: vira b/c se a normal apontar para dentro da referência (origem ou centro do bloco).
+  // FIX: vira b/c se a normal apontar para dentro da referência (origem ou centro do bloco)
   const push = (
     ax: number,
     ay: number,
@@ -292,7 +292,7 @@ export function buildChunk(terrain: Terrain, key: ChunkKey, resolution: number):
       const rg = (tint[i0 * 3 + 1] ?? 0) * 0.8
       const rb = (tint[i0 * 3 + 2] ?? 0) * 0.8
       const r0 = Math.hypot(e0x, e0y, e0z) || 1
-      // FIX: usa a normal do terreno vizinho (não a radial) para o skirt casar com a iluminação do chão
+      // FIX: o skirt usa a normal do chão vizinho para casar com a iluminação do terreno
       const gnx = (groundNormal[i0 * 3] ?? 0) + (groundNormal[i1 * 3] ?? 0)
       const gny = (groundNormal[i0 * 3 + 1] ?? 0) + (groundNormal[i1 * 3 + 1] ?? 0)
       const gnz = (groundNormal[i0 * 3 + 2] ?? 0) + (groundNormal[i1 * 3 + 2] ?? 0)
