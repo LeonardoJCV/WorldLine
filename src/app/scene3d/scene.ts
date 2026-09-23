@@ -251,22 +251,14 @@ export function createCurrentScene(
     return hash
   }
 
-  // FIX: piso garante uma curva legível quase coincidente; a parte proporcional cresce com o salto
-  const ARC_BOW_MIN = FOCUS_RADIUS + 5.5
-  const ARC_BOW_SCALE = 0.5
+  // FIX: sempre para cima; a soma das pontas dependia de onde elas caem e jogava o arco para fora
+  const ARC_BOW_MIN = 1.3
+  const ARC_BOW_SCALE = 0.15
 
   function arcControl(from: Vec3, to: Vec3): Vec3 {
-    // FIX: só a componente radial (y,z) afasta o controle; no presente as duas pontas têm o mesmo ano
-    const sum: readonly [number, number] = [from[1] + to[1], from[2] + to[2]]
-    const length = Math.hypot(...sum)
-    const dir: readonly [number, number] = length > 0 ? [sum[0] / length, sum[1] / length] : [1, 0]
     const separation = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2])
     const magnitude = Math.max(ARC_BOW_MIN, separation * ARC_BOW_SCALE)
-    return [
-      (from[0] + to[0]) / 2,
-      (from[1] + to[1]) / 2 + dir[0] * magnitude,
-      (from[2] + to[2]) / 2 + dir[1] * magnitude,
-    ]
+    return [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 + magnitude, (from[2] + to[2]) / 2]
   }
 
   function setCrossings(list: readonly CrossingArc[]): void {
