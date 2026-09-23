@@ -1,9 +1,14 @@
 import { CROSSING_KINDS } from './crossing.ts'
 import { DEBT_KINDS, PARADOX_KINDS } from './debt.ts'
 import { ECHO_TARGETS } from './echo.ts'
-import { SECTORS, VARIABLES, type WorldState } from './state.ts'
+import { NEVER, SECTORS, VARIABLES, type WorldState } from './state.ts'
 
 const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2 } as const
+// FIX: quantas EVENTS existiam antes da Tarefa 4; essas entradas de lastEnded sempre entram no
+// hash, mesmo em NEVER, para reproduzir os doze goldens antigos bit a bit. Um evento acrescentado
+// depois só entra quando de fato já disparou uma vez — do contrário toda a tabela crescer move
+// o fingerprint de qualquer mundo, tenha ele cruzado alguma travessia ou não
+const LEGACY_EVENT_COUNT = 11
 
 const FNV_OFFSET = 0x811c9dc5
 const FNV_PRIME = 0x01000193
@@ -26,7 +31,15 @@ export function hashState(s: WorldState): string {
     h = feed(h, entry.record)
     h = feed(h, entry.start)
   }
-  for (const value of s.lastEnded) h = feed(h, value)
+  for (let i = 0; i < s.lastEnded.length; i++) {
+    const value = s.lastEnded[i]
+    if (value === undefined) continue
+    if (i < LEGACY_EVENT_COUNT) h = feed(h, value)
+    else if (value !== NEVER) {
+      h = feed(h, i)
+      h = feed(h, value)
+    }
+  }
   h = feed(h, s.lastDecision ? s.lastDecision.tick : -1)
   for (const sector of s.lastDecision?.sectors ?? []) h = feed(h, SECTORS.indexOf(sector))
   h = feed(h, STATUS_CODES[s.status])

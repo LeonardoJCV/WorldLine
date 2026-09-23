@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { debtRatio, type Debt, type Paradox } from './debt.ts'
 import {
   EVENTS,
   EVENT_IDS,
@@ -271,6 +272,108 @@ describe('computeMetrics', () => {
     expect(m.crowding).toBeCloseTo(s.population / d.carryingCapacity, 12)
     expect(m.energyRatio).toBeCloseTo(s.energy / d.energyTarget, 12)
     expect(m.economyTrend).toBeCloseTo(1.2, 12)
+  })
+
+  it('derives the debt ratio the same way debt.ts computes it', () => {
+    const debts: Debt[] = [{ kind: 'knowledge', owed: 10, since: 0, origin: 'B' }]
+    const s = makeState({ debts })
+    const d = derive(s, TEST_WORLD, NEUTRAL_MODIFIERS, 0.5)
+    expect(computeMetrics(s, d).debtRatio).toBeCloseTo(debtRatio(debts, s), 12)
+  })
+
+  it('flags an active paradox, and separately whether its deadline has passed', () => {
+    const paradox: Paradox = { kind: 'debt', since: 50, deadline: 150 }
+    const before = makeState({ tick: 100, paradox })
+    const overdue = makeState({ tick: 150, paradox })
+    const none = makeState({ tick: 100, paradox: null })
+    const metricsOf = (s: WorldState) =>
+      computeMetrics(s, derive(s, TEST_WORLD, NEUTRAL_MODIFIERS, 0.5))
+
+    expect(metricsOf(before).paradoxActive).toBe(1)
+    expect(metricsOf(before).paradoxOverdue).toBe(0)
+    expect(metricsOf(overdue).paradoxActive).toBe(1)
+    expect(metricsOf(overdue).paradoxOverdue).toBe(1)
+    expect(metricsOf(none).paradoxActive).toBe(0)
+    expect(metricsOf(none).paradoxOverdue).toBe(0)
+  })
+})
+
+describe('debt events', () => {
+  it('starts debt_strain once the ratio passes 0.35 and releases it once it falls under 0.2', () => {
+    const s = world(EVENTS)
+    const started = evaluateEvents(s, makeMetrics({ debtRatio: 0.4 }), 1, 0).started
+    expect(started.map((r) => r.event)).toContain('debt_strain')
+
+    const strainIndex = EVENTS.findIndex((d) => d.id === 'debt_strain')
+    const active = world(EVENTS, { active: [{ def: strainIndex, record: 0, start: 90 }] })
+    expect(evaluateEvents(active, makeMetrics({ debtRatio: 0.3 }), 1, 1).ended).toEqual([])
+    expect(evaluateEvents(active, makeMetrics({ debtRatio: 0.1 }), 1, 1).ended).toEqual([0])
+  })
+
+  it('pulses foreign_rejection only when debt is heavy and stability is already low', () => {
+    const s = world(EVENTS)
+    const heavyAndUnstable = evaluateEvents(
+      s,
+      makeMetrics({ debtRatio: 0.6, stability: 40 }),
+      1,
+      0,
+    ).started
+    expect(heavyAndUnstable.map((r) => r.event)).toContain('foreign_rejection')
+
+    const heavyButStable = evaluateEvents(
+      s,
+      makeMetrics({ debtRatio: 0.6, stability: 60 }),
+      1,
+      0,
+    ).started
+    expect(heavyButStable.map((r) => r.event)).not.toContain('foreign_rejection')
+  })
+
+  it('starts dependency once debt passes 0.8 and releases it once it falls under 0.5', () => {
+    const s = world(EVENTS)
+    const started = evaluateEvents(s, makeMetrics({ debtRatio: 0.9 }), 1, 0).started
+    expect(started.map((r) => r.event)).toContain('dependency')
+
+    const depIndex = EVENTS.findIndex((d) => d.id === 'dependency')
+    const active = world(EVENTS, { active: [{ def: depIndex, record: 0, start: 90 }] })
+    expect(evaluateEvents(active, makeMetrics({ debtRatio: 0.6 }), 1, 1).ended).toEqual([])
+    expect(evaluateEvents(active, makeMetrics({ debtRatio: 0.4 }), 1, 1).ended).toEqual([0])
+  })
+})
+
+describe('paradox and collapse', () => {
+  it('starts paradox the instant the state carries one, and ends it once it clears', () => {
+    const s = world(EVENTS)
+    const started = evaluateEvents(s, makeMetrics({ paradoxActive: 1 }), 1, 0).started
+    expect(started.map((r) => r.event)).toContain('paradox')
+
+    const paradoxIndex = EVENTS.findIndex((d) => d.id === 'paradox')
+    const active = world(EVENTS, { active: [{ def: paradoxIndex, record: 0, start: 50 }] })
+    expect(evaluateEvents(active, makeMetrics({ paradoxActive: 1 }), 1, 1).ended).toEqual([])
+    expect(evaluateEvents(active, makeMetrics({ paradoxActive: 0 }), 1, 1).ended).toEqual([0])
+  })
+
+  it('collapses, as a terminal event, once the overdue metric flags a missed deadline', () => {
+    const s = world(EVENTS)
+    const outcome = evaluateEvents(s, makeMetrics({ paradoxOverdue: 1 }), 1, 0)
+    expect(outcome.extinct).toBe(true)
+    expect(outcome.started.map((r) => r.event)).toContain('collapse')
+    expect(outcome.active).toEqual([])
+  })
+
+  it('traces a paradox back to the crossing that caused it', () => {
+    const s = world(EVENTS, { lastCrossing: { tick: 80, kind: 'knowledge' } })
+    const outcome = evaluateEvents(s, makeMetrics({ paradoxActive: 1 }), 1, 0)
+    const record = outcome.started.find((r) => r.event === 'paradox')
+    expect(record?.causes).toContainEqual({ kind: 'crossing', tick: 80, crossing: 'knowledge' })
+  })
+
+  it('traces a collapse back to the paradox that is still active when it fires', () => {
+    const paradoxIndex = EVENTS.findIndex((d) => d.id === 'paradox')
+    const s = world(EVENTS, { active: [{ def: paradoxIndex, record: 3, start: 50 }] })
+    const outcome = evaluateEvents(s, makeMetrics({ paradoxActive: 1, paradoxOverdue: 1 }), 1, 10)
+    const record = outcome.started.find((r) => r.event === 'collapse')
+    expect(record?.causes).toContainEqual({ kind: 'event', record: 3 })
   })
 })
 

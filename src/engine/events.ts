@@ -1,4 +1,5 @@
 import type { CrossingKind } from './crossing.ts'
+import { debtRatio } from './debt.ts'
 import { smoothstep } from './math.ts'
 import { CAUSAL_WINDOW, EXTINCTION_THRESHOLD } from './params.ts'
 import { Channel, uniform } from './rng.ts'
@@ -17,6 +18,11 @@ export const EVENT_IDS = [
   'civil_unrest',
   'golden_age',
   'extinction',
+  'debt_strain',
+  'foreign_rejection',
+  'dependency',
+  'paradox',
+  'collapse',
 ] as const
 export type EventId = (typeof EVENT_IDS)[number]
 
@@ -33,6 +39,10 @@ export const METRICS = [
   'energyRatio',
   'economyTrend',
   'birthRate',
+  'debtRatio',
+  // FEAT: sinalizadores 0/1 do estado, para escrever paradox/collapse como condição comum
+  'paradoxActive',
+  'paradoxOverdue',
 ] as const
 export type Metric = (typeof METRICS)[number]
 export type Metrics = Readonly<Record<Metric, number>>
@@ -200,6 +210,53 @@ export const EVENTS: readonly EventDef[] = [
     cooldown: 0,
     influences: [],
   },
+  {
+    id: 'debt_strain',
+    kind: 'condition',
+    trigger: [{ metric: 'debtRatio', op: '>', value: 0.35 }],
+    release: [{ metric: 'debtRatio', op: '<', value: 0.2 }],
+    cooldown: 30,
+    influences: ['stability', 'economy'],
+    effect: { stability: -4 },
+  },
+  {
+    id: 'foreign_rejection',
+    kind: 'pulse',
+    duration: 15,
+    trigger: [
+      { metric: 'debtRatio', op: '>', value: 0.5 },
+      { metric: 'stability', op: '<', value: 45 },
+    ],
+    cooldown: 60,
+    influences: ['stability'],
+    effect: { stability: -8 },
+  },
+  {
+    id: 'dependency',
+    kind: 'condition',
+    trigger: [{ metric: 'debtRatio', op: '>', value: 0.8 }],
+    release: [{ metric: 'debtRatio', op: '<', value: 0.5 }],
+    cooldown: 40,
+    influences: ['technology', 'economy'],
+    // FIX: production é fator multiplicativo (não aditivo como stability); -0.05 do briefing
+    // inverteria o sinal da produção, então o corte de 5% é 0.95
+    effect: { production: 0.95 },
+  },
+  {
+    id: 'paradox',
+    kind: 'condition',
+    trigger: [{ metric: 'paradoxActive', op: '>', value: 0 }],
+    release: [{ metric: 'paradoxActive', op: '<', value: 1 }],
+    cooldown: 0,
+    influences: ['paradoxOverdue'],
+  },
+  {
+    id: 'collapse',
+    kind: 'terminal',
+    trigger: [{ metric: 'paradoxOverdue', op: '>', value: 0 }],
+    cooldown: 0,
+    influences: [],
+  },
 ]
 
 const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
@@ -210,11 +267,17 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
 }
 
 // FEAT: doutrina mexe no que qualquer setor mexe
+// FEAT: conhecimento, recurso e doutrina abrem dívida (debtOf), então também podem causar um
+// paradoxo; pessoas nunca abrem dívida, mas um presente grande demais ainda pode saltar a era
 const CROSSING_INFLUENCES: Readonly<Record<CrossingKind, readonly Metric[]>> = {
-  knowledge: ['technology'],
-  resource: ['food', 'foodSecurity', 'energy', 'energyRatio'],
-  people: ['population', 'crowding', 'foodSecurity'],
-  doctrine: SECTORS.flatMap((sector) => SECTOR_INFLUENCES[sector]),
+  knowledge: ['technology', 'debtRatio', 'paradoxActive'],
+  resource: ['food', 'foodSecurity', 'energy', 'energyRatio', 'debtRatio', 'paradoxActive'],
+  people: ['population', 'crowding', 'foodSecurity', 'paradoxActive'],
+  doctrine: [
+    ...SECTORS.flatMap((sector) => SECTOR_INFLUENCES[sector]),
+    'debtRatio',
+    'paradoxActive',
+  ],
 }
 
 export function computeMetrics(s: WorldState, d: Derived): Metrics {
@@ -231,6 +294,9 @@ export function computeMetrics(s: WorldState, d: Derived): Metrics {
     energyRatio: s.energy / d.energyTarget,
     economyTrend: s.economy / (s.recentEconomy[0] ?? s.economy),
     birthRate: d.birthRate,
+    debtRatio: debtRatio(s.debts, s),
+    paradoxActive: s.paradox ? 1 : 0,
+    paradoxOverdue: s.paradox && s.tick >= s.paradox.deadline ? 1 : 0,
   }
 }
 

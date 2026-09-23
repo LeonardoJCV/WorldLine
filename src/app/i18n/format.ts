@@ -56,9 +56,13 @@ export function formatMetric(metric: Metric, value: number, locale: Locale): str
     case 'crowding':
     case 'energyRatio':
     case 'economyTrend':
+    case 'debtRatio':
       return formatDecimal(value, locale, 2)
     case 'birthRate':
       return `${formatDecimal(value * 100, locale, 1)}%`
+    case 'paradoxActive':
+    case 'paradoxOverdue':
+      return formatDecimal(value, locale, 0)
   }
 }
 
@@ -77,9 +81,13 @@ export function formatCondition(metric: Metric, value: number, locale: Locale): 
     case 'crowding':
     case 'energyRatio':
     case 'economyTrend':
+    case 'debtRatio':
       return formatDecimal(value, locale, 2)
     case 'birthRate':
       return `${formatDecimal(value * 100, locale, 2)}%`
+    case 'paradoxActive':
+    case 'paradoxOverdue':
+      return formatDecimal(value, locale, 0)
   }
 }
 
@@ -174,6 +182,9 @@ const METRIC_KEYS: Readonly<Record<Metric, MessageKey>> = {
   energyRatio: 'metric.energyRatio',
   economyTrend: 'metric.economyTrend',
   birthRate: 'metric.birthRate',
+  debtRatio: 'metric.debtRatio',
+  paradoxActive: 'metric.paradoxActive',
+  paradoxOverdue: 'metric.paradoxOverdue',
 }
 
 export function metricKey(metric: Metric): MessageKey {

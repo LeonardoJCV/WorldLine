@@ -72,4 +72,16 @@ describe('hashState', () => {
     const b = hashState({ ...state, status: 'collapsed' })
     expect(a).not.toBe(b)
   })
+
+  it('ignores a new event that never fired, but reacts once one has', () => {
+    // FIX: os cinco eventos da dívida (Tarefa 4) só entram no hash depois que dispararam uma vez;
+    // um mundo que nunca cruzou nada tem lastEnded[11..] sempre em NEVER e reproduz o fingerprint antigo
+    const untouched = [...state.lastEnded]
+    untouched[11] = -1_000_000
+    expect(hashState({ ...state, lastEnded: untouched })).toBe(hashState(state))
+
+    const touched = [...state.lastEnded]
+    touched[11] = 400
+    expect(hashState({ ...state, lastEnded: touched })).not.toBe(hashState(state))
+  })
 })

@@ -43,6 +43,9 @@ export function makeMetrics(overrides: Partial<Metrics> = {}): Metrics {
     energyRatio: 0.9,
     economyTrend: 1.01,
     birthRate: 0.03,
+    debtRatio: 0,
+    paradoxActive: 0,
+    paradoxOverdue: 0,
     ...overrides,
   }
 }
