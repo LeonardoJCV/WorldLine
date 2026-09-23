@@ -14,7 +14,9 @@ import type { Vec3 } from './camera.ts'
 
 export const ARC_SPEED = 0.35
 export const ARC_JITTER = 0.05
-export const ARC_POINT_SIZE = 3.4
+// FIX: menor e mais fraco para não estourar em branco somado ao bloom e ao eco
+export const ARC_POINT_SIZE = 2.0
+export const ARC_ALPHA = 0.65
 export const ARC_COLOR = 0xf2d9a8
 export const ARC_LINE_SAMPLES = 24
 
@@ -43,7 +45,7 @@ void main() {
   vec4 view = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * view;
   gl_PointSize = clamp(uSize * uPixelRatio * (14.0 / -view.z), 1.0, 14.0);
-  vAlpha = edge;
+  vAlpha = edge * ${ARC_ALPHA};
 }
 `
 

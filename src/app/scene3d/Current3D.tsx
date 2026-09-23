@@ -26,7 +26,7 @@ import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import { streamClick } from '../views/cross.ts'
-import { crossingArcs, type CrossingArc, type CrossingWorld } from './crossings.ts'
+import { crossingArcs, echoWindows, type CrossingArc, type CrossingWorld } from './crossings.ts'
 import {
   eraOffsets,
   FOCUS_RADIUS,
@@ -38,7 +38,7 @@ import {
   type Vec3,
 } from './camera.ts'
 import { axisPoint, buildPath, headPoint, type PathData } from './path.ts'
-import type { CurrentScene, SceneMarker, SceneWorld } from './scene.ts'
+import type { CurrentScene, SceneEcho, SceneMarker, SceneWorld } from './scene.ts'
 import { SAMPLES, axisOffsets, resample } from './space.ts'
 import { MICRO_WINDOW, microKey, microTarget, screenTargets } from './targets.ts'
 import './scene3d.css'
@@ -92,6 +92,7 @@ export function Current3D({
     worlds: readonly SceneWorld[]
     markers: readonly SceneMarker[]
     arcs: readonly CrossingArc[]
+    echoes: readonly SceneEcho[]
     selected: string | null
     cursorPoint: Vec3 | null
     paused: boolean
@@ -100,6 +101,7 @@ export function Current3D({
     worlds: [],
     markers: [],
     arcs: [],
+    echoes: [],
     selected: null,
     cursorPoint: null,
     paused,
@@ -182,6 +184,7 @@ export function Current3D({
           worlds: current,
           markers,
           arcs,
+          echoes,
           selected: selectedKey,
           cursorPoint,
         } = latest.current
@@ -189,6 +192,7 @@ export function Current3D({
         scene.setWorlds(current)
         scene.setMarkers(markers, selectedKey)
         scene.setCrossings(arcs)
+        scene.setEchoes(echoes)
         scene.setCursor(cursorPoint)
         // FIX: um link aberto direto no planeta não pode deixar a Corrente renderizando por baixo
         scene.pause(latest.current.paused)
@@ -455,6 +459,25 @@ export function Current3D({
     [crossingWorlds, fetched],
   )
 
+  const echoes = useMemo<SceneEcho[]>(() => {
+    if (!fetched) return []
+    const span = Math.max(1, fetched.to - fetched.from)
+    const idToKey = new Map(sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.key]))
+    // FEAT: se um mundo tiver mais de uma janela de eco sobreposta, só a mais recente acende
+    const recent = new Map<string, { from: number; to: number }>()
+    for (const window of echoWindows(crossingWorlds)) {
+      const key = idToKey.get(window.world)
+      if (!key) continue
+      const current = recent.get(key)
+      if (!current || window.from > current.from) recent.set(key, window)
+    }
+    return [...recent].map(([key, window]) => ({
+      key,
+      from: (window.from - fetched.from) / span,
+      to: (window.to - fetched.from) / span,
+    }))
+  }, [crossingWorlds, fetched, sceneWorlds])
+
   const microList = useMemo(
     () =>
       sites?.seed === seed
@@ -469,10 +492,11 @@ export function Current3D({
 
   useEffect(() => {
     const selectedKey = selected === null ? null : String(selected)
-    latest.current = { ...latest.current, markers, arcs, selected: selectedKey }
+    latest.current = { ...latest.current, markers, arcs, echoes, selected: selectedKey }
     sceneRef.current?.setMarkers(markers, selectedKey)
     sceneRef.current?.setCrossings(arcs)
-  }, [markers, arcs, selected])
+    sceneRef.current?.setEchoes(echoes)
+  }, [markers, arcs, echoes, selected])
 
   const cursorPoint = useMemo<Vec3 | null>(() => {
     if (cursor === null || !focusPath || !fetched) return null

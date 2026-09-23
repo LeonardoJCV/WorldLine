@@ -24,6 +24,12 @@ export const INTENSITY_REFERENCE = 8000
 export const MIN_INTENSITY = 0.32
 export const MAX_INTENSITY = 1.8
 
+// FEAT: sem eco, uEchoFrom fica neste valor e o shader nem entra no ramo do brilho extra
+export const NO_ECHO = -1
+// FIX: brilho contido para não estourar em branco somado ao bloom e ao arco
+export const ECHO_STRENGTH = 1.1
+export const ECHO_EDGE_FRACTION = 0.1
+
 export function streamIntensity(count: number): number {
   if (count <= 0) return MAX_INTENSITY
   return Math.min(MAX_INTENSITY, Math.max(MIN_INTENSITY, Math.sqrt(INTENSITY_REFERENCE / count)))
@@ -37,6 +43,8 @@ uniform float uTime;
 uniform float uEmphasis;
 uniform float uPixelRatio;
 uniform float uIntensity;
+uniform float uEchoFrom;
+uniform float uEchoTo;
 
 attribute vec3 aSeed;
 attribute vec3 aColor;
@@ -73,11 +81,19 @@ void main() {
     20.0
   );
   vColor = aColor;
+  // FEAT: eco = brilho extra que entra suave no início da janela e decai suave até o fim
+  float echoBoost = 0.0;
+  if (uEchoFrom >= 0.0) {
+    float edge = max(uEchoTo - uEchoFrom, 0.0001) * ${ECHO_EDGE_FRACTION};
+    float enter = smoothstep(uEchoFrom - edge, uEchoFrom, u);
+    float decay = 1.0 - smoothstep(uEchoFrom, uEchoTo, u);
+    echoBoost = enter * decay;
+  }
   vAlpha = min(
     1.0,
     step(0.5, second.z) * (0.55 + 0.45 * value) * uEmphasis *
       (0.35 + 0.65 * smoothstep(0.0, 0.5, u)) * uIntensity
-  );
+  ) * (1.0 + ${ECHO_STRENGTH} * echoBoost);
 }
 `
 
@@ -114,6 +130,7 @@ export interface Stream {
   readonly points: Points
   setPath(path: PathData): void
   setEmphasis(focused: boolean): void
+  setEcho(from: number, to: number): void
   setTime(time: number): void
   setPixelRatio(dpr: number): void
   readonly count: number
@@ -165,6 +182,8 @@ export function createStream(count: number, seed: number): Stream {
     uEmphasis: { value: 1 },
     uPixelRatio: { value: 1 },
     uIntensity: { value: streamIntensity(count) },
+    uEchoFrom: { value: NO_ECHO },
+    uEchoTo: { value: NO_ECHO },
   }
   const material = new ShaderMaterial({
     vertexShader: vertex,
@@ -187,6 +206,10 @@ export function createStream(count: number, seed: number): Stream {
     },
     setEmphasis(focused) {
       uniforms.uEmphasis.value = focused ? 1 : OTHERS_BRIGHTNESS
+    },
+    setEcho(from, to) {
+      uniforms.uEchoFrom.value = from
+      uniforms.uEchoTo.value = to
     },
     setTime(time) {
       uniforms.uTime.value = time

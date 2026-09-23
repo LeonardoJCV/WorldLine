@@ -52,7 +52,7 @@ import {
 import type { CrossingArc } from './crossings.ts'
 import { axisPoint, type PathData } from './path.ts'
 import { starField } from './stars.ts'
-import { createStream, particleCounts, type Stream } from './streams.ts'
+import { createStream, NO_ECHO, particleCounts, type Stream } from './streams.ts'
 
 const VOID = 0x0a0b1e
 const BLOOM_SCALE = 0.22
@@ -71,6 +71,12 @@ export interface SceneMarker {
   readonly key: string
   readonly kind: 'event' | 'decision' | 'fork' | 'micro'
   readonly position: Vec3
+}
+
+export interface SceneEcho {
+  readonly key: string
+  readonly from: number
+  readonly to: number
 }
 
 export interface CurrentSceneOptions {
@@ -92,6 +98,7 @@ export interface CurrentScene {
   setWorlds(worlds: readonly SceneWorld[]): void
   setMarkers(markers: readonly SceneMarker[], selected: string | null): void
   setCrossings(arcs: readonly CrossingArc[]): void
+  setEchoes(windows: readonly SceneEcho[]): void
   setCursor(point: Vec3 | null): void
   measure(): void
   resize(width: number, height: number, dpr: number): void
@@ -284,6 +291,14 @@ export function createCurrentScene(
     }
   }
 
+  function setEchoes(windows: readonly SceneEcho[]): void {
+    const byKey = new Map(windows.map((window) => [window.key, window] as const))
+    for (const [key, entry] of entries) {
+      const window = byKey.get(key)
+      entry.stream.setEcho(window?.from ?? NO_ECHO, window?.to ?? NO_ECHO)
+    }
+  }
+
   const markerGroup = new Group()
   scene.add(markerGroup)
   const markerGeometry = {
@@ -438,6 +453,7 @@ export function createCurrentScene(
     setWorlds,
     setMarkers,
     setCrossings,
+    setEchoes,
     setCursor,
     measure() {
       if (!options.onMeasured || measuring) return
