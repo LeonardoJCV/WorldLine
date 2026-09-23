@@ -112,7 +112,7 @@ test('keeps the keyboard and the choices when a crossing origin is picked', asyn
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
   const supplies = page.getByRole('button', { name: 'Supplies' })
   await supplies.click()
-  const origin = page.getByRole('button', { name: 'From worldline A' })
+  const origin = page.getByRole('button', { name: 'From worldline A', exact: true })
   await origin.focus()
   await page.keyboard.press('Enter')
   await expect(origin).toHaveAttribute('aria-pressed', 'true')
@@ -179,9 +179,11 @@ test('shows the crossing as a cause of the events it changed', async ({ page }) 
   await page.getByRole('button', { name: 'Pause' }).click()
   await golden.click()
   await expect(
-    page.locator('.causal__node[data-kind="crossing"]', { hasText: 'Doctrine that crossed in' }),
+    page.locator('.causal__node[data-kind="crossing"]', {
+      hasText: 'Doctrine that crossed between worldlines',
+    }),
   ).toBeVisible()
-  // a linha da travessia não tem índice de evento: escolhê-la larga a cadeia causal anterior
+  // FIX: a linha da travessia não tem índice de evento: escolhê-la larga a cadeia causal anterior
   await page.locator('.events__item', { hasText: 'Received Doctrine from A' }).click()
   await expect(page.getByText('Select an event to trace its causes.')).toBeVisible()
 })

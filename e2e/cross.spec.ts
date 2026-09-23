@@ -21,7 +21,9 @@ test('picks the crossing origin from the strip by keyboard and marks it without 
   await branchFromStart(page)
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
 
-  const origin = page.getByRole('button', { name: 'Use worldline A as the crossing origin' })
+  const origin = page.getByRole('button', {
+    name: 'From worldline A, use as the crossing origin',
+  })
   await origin.focus()
   await origin.press('Enter')
 
@@ -42,7 +44,9 @@ test('opens a crossing into the focused worldline', async ({ page }) => {
   await branchFromStart(page)
   await page.getByRole('button', { name: 'Cross', exact: true }).click()
 
-  const origin = page.getByRole('button', { name: 'Use worldline A as the crossing origin' })
+  const origin = page.getByRole('button', {
+    name: 'From worldline A, use as the crossing origin',
+  })
   await origin.focus()
   await origin.press('Enter')
   await page.getByRole('button', { name: 'Knowledge' }).click()
@@ -51,6 +55,7 @@ test('opens a crossing into the focused worldline', async ({ page }) => {
   const { cost, credit } = await quoted(page)
   expect(cost).toBeGreaterThan(0)
   expect(credit).toBeGreaterThanOrEqual(cost)
+  await expect(page.locator('.cross__price')).toHaveAttribute('role', 'status')
 
   await page.getByRole('button', { name: 'Open the crossing' }).click()
   await expect(page.getByText('Knowledge arrived from A.')).toBeVisible()
@@ -62,6 +67,31 @@ test('opens a crossing into the focused worldline', async ({ page }) => {
   const arrival = page.locator('.events__item', { hasText: 'Received Knowledge from A' })
   await expect(arrival).toBeVisible()
   await expect(arrival.locator('.events__year')).toHaveText('0005')
+})
+
+test('warns that a doctrine crossing carries the allocation from before this year’s decision', async ({
+  page,
+}) => {
+  test.slow()
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Focus on worldline A' }).click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const agriculture = page.getByRole('slider', { name: /Agriculture/ })
+  await agriculture.focus()
+  for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
+  await page.getByRole('button', { name: 'Apply decision' }).click()
+
+  await page.getByRole('button', { name: 'Focus on worldline B' }).click()
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Doctrine' }).click()
+
+  await expect(
+    page.getByText(
+      'A decision made this year only takes effect next year, so this carries the allocation A was following before it.',
+    ),
+  ).toBeVisible()
 })
 
 test('crossing in a past year creates a worldline', async ({ page }) => {

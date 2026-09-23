@@ -4,7 +4,14 @@ import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
 import { formatCompact, formatDecimal, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
-import { crossBlock, crossOrigins, crossQuote, DOSES_FOR, worldEnded } from './cross.ts'
+import {
+  crossBlock,
+  crossCarriesPreviousAllocation,
+  crossOrigins,
+  crossQuote,
+  DOSES_FOR,
+  worldEnded,
+} from './cross.ts'
 
 interface Done {
   readonly kind: CrossingKind
@@ -77,7 +84,8 @@ export function CrossPanel() {
   const destination = inPast ? (inspected?.tick === cursor ? inspected : null) : present
   const doses = DOSES_FOR(kind)
   const carried = doses.includes(dose) ? dose : 1
-  const year = formatYear(cursor ?? present?.tick ?? 0)
+  const rawYear = cursor ?? present?.tick ?? null
+  const year = formatYear(rawYear ?? 0)
   const awaiting =
     inPast && world !== null && !originEnded && (source === null || destination === null)
   const blocked = crossBlock({
@@ -85,13 +93,15 @@ export function CrossPanel() {
     dose: carried,
     cursor,
     credit,
-    // FIX: origem morta não conta, senão o painel pede uma escolha que não existe na tela
-    worlds: usable.length + 1,
+    usableOrigins: usable.length,
+    totalWorlds: worlds.length,
     origin: source,
     destination,
     originEnded,
     destinationEnded: !inPast && present !== null && worldEnded(present),
   })
+  const sameYearDoctrine =
+    world !== null && crossCarriesPreviousAllocation(kind, rawYear, world.decisions)
   const quote =
     source !== null && destination !== null
       ? crossQuote({ kind, dose: carried, origin: source, destination })
@@ -183,7 +193,9 @@ export function CrossPanel() {
       </div>
       {quote !== null && world !== null && (
         <div className="cross__quote">
-          <p className="cross__price">{t('cross.price', { cost: quote.cost, credit })}</p>
+          <p className="cross__price" role="status">
+            {t('cross.price', { cost: quote.cost, credit })}
+          </p>
           <p className="cross__carries">
             {kind === 'knowledge' &&
               t('cross.carries.knowledge', { value: formatDecimal(first, locale, 1) })}
@@ -199,6 +211,9 @@ export function CrossPanel() {
                 id: world.info.id,
               })}
           </p>
+          {sameYearDoctrine && (
+            <p className="cross__note">{t('cross.doctrineSameYear', { id: world.info.id })}</p>
+          )}
         </div>
       )}
       <div className="cross__footer">

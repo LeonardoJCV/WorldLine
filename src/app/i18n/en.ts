@@ -60,7 +60,7 @@ export const en = {
   'causal.decision': 'Decision in year {year}',
   'causal.repeated': 'already shown',
   'causal.unknown': 'Unknown event',
-  'causal.crossing': '{kind} that crossed in from another worldline in year {year}',
+  'causal.crossing': '{kind} that crossed between worldlines in year {year}',
   'allocation.title': 'Allocation of effort',
   'allocation.apply': 'Apply decision',
   'allocation.reset': 'Reset',
@@ -137,7 +137,7 @@ export const en = {
   'worlds.distance': 'Distance {value}',
   'worlds.extinct': 'Extinct in {year}',
   'worlds.focus': 'Focus on worldline {id}',
-  'worlds.origin': 'Use worldline {id} as the crossing origin',
+  'worlds.origin': 'From worldline {id}, use as the crossing origin',
   'worlds.remove': 'Remove worldline {id}',
   'worlds.confirm': 'Remove {id} and every worldline that branched from it?',
   'worlds.confirmYes': 'Remove',
@@ -200,6 +200,8 @@ export const en = {
   'cross.carries.resource':
     'About {food} of food and {energy} of energy, assimilated over decades.',
   'cross.carries.doctrine': 'The allocation {id} was following that year.',
+  'cross.doctrineSameYear':
+    'A decision made this year only takes effect next year, so this carries the allocation {id} was following before it.',
   'cross.carries.people': 'About {value} people leave {id} and arrive here.',
   'cross.open': 'Open the crossing',
   'cross.openFromYear': 'Cross in year {year}',

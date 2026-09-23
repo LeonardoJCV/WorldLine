@@ -21,5 +21,5 @@ export async function branchFromStart(page: Page) {
 }
 
 export async function pickOrigin(page: Page, id = 'A') {
-  await page.getByRole('button', { name: `From worldline ${id}` }).click()
+  await page.getByRole('button', { name: `From worldline ${id}`, exact: true }).click()
 }

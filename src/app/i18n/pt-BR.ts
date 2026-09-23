@@ -58,7 +58,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'causal.decision': 'Decisão no ano {year}',
   'causal.repeated': 'já mostrado',
   'causal.unknown': 'Evento desconhecido',
-  'causal.crossing': '{kind} que atravessou de outra worldline no ano {year}',
+  'causal.crossing': '{kind} que atravessou entre realidades no ano {year}',
   'allocation.title': 'Alocação de esforço',
   'allocation.apply': 'Aplicar decisão',
   'allocation.reset': 'Desfazer ajustes',
@@ -135,7 +135,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'worlds.distance': 'Distância {value}',
   'worlds.extinct': 'Extinta em {year}',
   'worlds.focus': 'Focar a realidade {id}',
-  'worlds.origin': 'Usar a realidade {id} como origem',
+  'worlds.origin': 'Da realidade {id}, usar como origem da travessia',
   'worlds.remove': 'Remover a realidade {id}',
   'worlds.confirm': 'Remover {id} e todas as realidades que nasceram dela?',
   'worlds.confirmYes': 'Remover',
@@ -182,7 +182,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'card.none': 'Nada registrado no último século.',
   'card.when': 'Ano {year}, {city}',
   'cross.title': 'Travessia para {id}',
-  'cross.origin': 'Da worldline {id}',
+  'cross.origin': 'Da realidade {id}',
   'cross.originLabel': 'De onde vem',
   'cross.kindLabel': 'O que atravessa',
   'cross.kind.knowledge': 'Conhecimento',
@@ -198,6 +198,8 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'cross.carries.resource':
     'Cerca de {food} de comida e {energy} de energia, assimilados ao longo de décadas.',
   'cross.carries.doctrine': 'A alocação que {id} seguia naquele ano.',
+  'cross.doctrineSameYear':
+    'Uma decisão tomada neste ano só vale a partir do próximo, então isto carrega a alocação que {id} seguia antes dela.',
   'cross.carries.people': 'Cerca de {value} pessoas deixam {id} e chegam aqui.',
   'cross.open': 'Abrir a travessia',
   'cross.openFromYear': 'Cruzar no ano {year}',
@@ -207,15 +209,15 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'cross.loading': 'Lendo a outra realidade…',
   'cross.playing': 'Pause os anos antes: o preço muda enquanto a simulação corre.',
   'cross.needsWorlds':
-    'Ramifique uma segunda worldline antes: uma travessia precisa de uma origem.',
-  'cross.pickOrigin': 'Escolha a worldline de onde ela vem.',
-  'cross.originExtinct': 'A worldline {id} está extinta e não tem mais o que enviar.',
-  'cross.destinationEnded': 'Esta worldline terminou; nada mais chega até ela.',
+    'Ramifique uma segunda realidade antes: uma travessia precisa de uma origem.',
+  'cross.pickOrigin': 'Escolha a realidade de onde ela vem.',
+  'cross.originExtinct': 'A realidade {id} está extinta e não tem mais o que enviar.',
+  'cross.destinationEnded': 'Esta realidade terminou; nada mais chega até ela.',
   'cross.peopleOnlyNow':
     'Pessoas só atravessam no presente: movê-las reescreveria o passado das duas realidades.',
-  'cross.limit': 'Cruzar no passado cria uma worldline, e as seis já existem.',
+  'cross.limit': 'Cruzar no passado cria uma realidade, e as seis já existem.',
   'cross.credit':
-    'Crédito insuficiente: faltam {missing}. O crédito cresce conforme as worldlines vivem mais.',
+    'Crédito insuficiente: faltam {missing}. O crédito cresce conforme as realidades vivem mais.',
   'cross.hint': 'O que atravessa chega no ano {year} e é assimilado nas décadas seguintes.',
-  'cross.hintPast': 'Cruzar no ano {year} cria uma nova worldline a partir desse ano.',
+  'cross.hintPast': 'Cruzar no ano {year} cria uma nova realidade a partir desse ano.',
 }

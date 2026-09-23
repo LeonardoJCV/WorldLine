@@ -3,10 +3,11 @@ import { causalDistance } from '../../engine/distance.ts'
 import { crossingAmounts, crossingCost, DOSES, type Crossing } from '../../engine/crossing.ts'
 import type { EventId, EventRecord } from '../../engine/events.ts'
 import { HORIZON } from '../../engine/params.ts'
-import type { Status, Variable } from '../../engine/state.ts'
+import type { Decision, Status, Variable } from '../../engine/state.ts'
 import { MAX_WORLDLINES, type Snapshot, type WorldlineId } from '../../worker/protocol.ts'
 import {
   crossBlock,
+  crossCarriesPreviousAllocation,
   crossOrigins,
   crossQuote,
   DOSES_FOR,
@@ -50,7 +51,8 @@ function baseInput(overrides: Partial<CrossBlockInput> = {}): CrossBlockInput {
     dose: 1,
     cursor: null,
     credit: 100,
-    worlds: 2,
+    usableOrigins: 1,
+    totalWorlds: 2,
     origin,
     destination,
     originEnded: false,
@@ -105,10 +107,38 @@ describe('crossOrigins', () => {
   it('refuses the crossing for want of a worldline, not for want of a choice', () => {
     const worlds = [world('A', alive), world('B', dead)]
     const usable = crossOrigins(worlds, 'A')
-    expect(crossBlock(baseInput({ worlds: usable.length + 1, origin: null }))).toEqual({
+    expect(
+      crossBlock(
+        baseInput({ usableOrigins: usable.length, totalWorlds: worlds.length, origin: null }),
+      ),
+    ).toEqual({
       key: 'cross.needsWorlds',
       params: {},
     })
+  })
+
+  it('regression: a lone extinct worldline among six does not undercount the past-crossing cap (C1)', () => {
+    // FIX: a origem só conta quem está vivo, mas o teto de seis conta toda worldline, viva ou não
+    const worlds = [
+      world('A', alive),
+      world('B', alive),
+      world('C', alive),
+      world('D', alive),
+      world('E', dead),
+      world('F', alive),
+    ]
+    const usable = crossOrigins(worlds, 'F')
+    expect(usable.length).toBe(4)
+    expect(
+      crossBlock(
+        baseInput({
+          cursor: 50,
+          usableOrigins: usable.length,
+          totalWorlds: worlds.length,
+          origin: usable[0]?.present ?? null,
+        }),
+      ),
+    ).toEqual({ key: 'cross.limit', params: {} })
   })
 })
 
@@ -155,7 +185,7 @@ describe('crossBlock', () => {
   })
 
   it('blocks when there is no other worldline to cross with', () => {
-    expect(crossBlock(baseInput({ worlds: 1, origin: null }))).toEqual({
+    expect(crossBlock(baseInput({ usableOrigins: 0, origin: null }))).toEqual({
       key: 'cross.needsWorlds',
       params: {},
     })
@@ -194,14 +224,14 @@ describe('crossBlock', () => {
   })
 
   it('blocks a past crossing once the worldline limit is reached', () => {
-    expect(crossBlock(baseInput({ cursor: 50, worlds: MAX_WORLDLINES }))).toEqual({
+    expect(crossBlock(baseInput({ cursor: 50, totalWorlds: MAX_WORLDLINES }))).toEqual({
       key: 'cross.limit',
       params: {},
     })
   })
 
   it('allows a past crossing under the worldline limit', () => {
-    expect(crossBlock(baseInput({ cursor: 50, worlds: MAX_WORLDLINES - 1 }))).toBeNull()
+    expect(crossBlock(baseInput({ cursor: 50, totalWorlds: MAX_WORLDLINES - 1 }))).toBeNull()
   })
 
   it('blocks when credit is not enough, and says how much is missing', () => {
@@ -228,9 +258,9 @@ describe('crossBlock', () => {
   })
 
   it('prioritises origin extinct over destination ended', () => {
-    expect(crossBlock(baseInput({ worlds: 2, originEnded: true, destinationEnded: true }))).toEqual(
-      { key: 'cross.originExtinct', params: {} },
-    )
+    expect(
+      crossBlock(baseInput({ usableOrigins: 1, originEnded: true, destinationEnded: true })),
+    ).toEqual({ key: 'cross.originExtinct', params: {} })
   })
 
   it('prioritises pick-origin over origin extinct', () => {
@@ -244,7 +274,7 @@ describe('crossBlock', () => {
     expect(
       crossBlock(
         baseInput({
-          worlds: 1,
+          usableOrigins: 0,
           origin: null,
           originEnded: true,
           destinationEnded: true,
@@ -261,7 +291,7 @@ describe('crossBlock', () => {
           kind: 'people',
           cursor: 50,
           destinationEnded: true,
-          worlds: MAX_WORLDLINES,
+          totalWorlds: MAX_WORLDLINES,
           credit: 0,
         }),
       ),
@@ -270,15 +300,37 @@ describe('crossBlock', () => {
 
   it('prioritises people-only-now over the worldline limit and over credit', () => {
     expect(
-      crossBlock(baseInput({ kind: 'people', cursor: 50, worlds: MAX_WORLDLINES, credit: 0 })),
+      crossBlock(baseInput({ kind: 'people', cursor: 50, totalWorlds: MAX_WORLDLINES, credit: 0 })),
     ).toEqual({ key: 'cross.peopleOnlyNow', params: {} })
   })
 
   it('prioritises the worldline limit over insufficient credit', () => {
-    expect(crossBlock(baseInput({ cursor: 50, worlds: MAX_WORLDLINES, credit: 0 }))).toEqual({
+    expect(crossBlock(baseInput({ cursor: 50, totalWorlds: MAX_WORLDLINES, credit: 0 }))).toEqual({
       key: 'cross.limit',
       params: {},
     })
+  })
+})
+
+describe('crossCarriesPreviousAllocation', () => {
+  const decisions: readonly Decision[] = [
+    { tick: 10, allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 } },
+  ]
+
+  it('warns when a doctrine crossing lands on the exact year the origin just decided', () => {
+    expect(crossCarriesPreviousAllocation('doctrine', 10, decisions)).toBe(true)
+  })
+
+  it('stays quiet when the origin decided a different year', () => {
+    expect(crossCarriesPreviousAllocation('doctrine', 11, decisions)).toBe(false)
+  })
+
+  it('stays quiet for kinds other than doctrine, even on the same year', () => {
+    expect(crossCarriesPreviousAllocation('knowledge', 10, decisions)).toBe(false)
+  })
+
+  it('stays quiet when there is no year to check', () => {
+    expect(crossCarriesPreviousAllocation('doctrine', null, decisions)).toBe(false)
   })
 })
 
