@@ -64,6 +64,8 @@ export function hashState(s: WorldState): string {
       h = feed(h, debt.since)
     }
   }
+  // FEAT: o contador de tensão só existe junto com a dívida, então segue a mesma regra condicional
+  if (s.strain > 0) h = feed(h, s.strain)
   if (s.paradox) {
     h = feed(h, PARADOX_KINDS.indexOf(s.paradox.kind))
     h = feed(h, s.paradox.since)

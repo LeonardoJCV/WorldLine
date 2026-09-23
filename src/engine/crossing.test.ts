@@ -21,6 +21,19 @@ describe('crossingCost', () => {
   it('never returns less than one', () => {
     expect(crossingCost('doctrine', 1, 0)).toBeGreaterThanOrEqual(1)
   })
+
+  it('charges more to reach a destination already deep in debt, and clamps the burden to one', () => {
+    expect(crossingCost('knowledge', 3, 0, 0)).toBe(9)
+    expect(crossingCost('knowledge', 3, 0, 0.5)).toBe(14)
+    expect(crossingCost('knowledge', 3, 0, 1)).toBe(18)
+    expect(crossingCost('knowledge', 3, 0, 5)).toBe(18)
+    expect(crossingCost('knowledge', 3, 0, -1)).toBe(9)
+    expect(crossingCost('knowledge', 3, 0, NaN)).toBe(9)
+  })
+
+  it('costs the same as before for everyone who still calls it with three arguments', () => {
+    expect(crossingCost('resource', 2, 0.25)).toBe(crossingCost('resource', 2, 0.25, 0))
+  })
 })
 
 describe('crossingAmounts', () => {
@@ -107,6 +120,12 @@ describe('validateCrossings', () => {
     expect(() => validateCrossings([{ ...one, tick: 10.5 }])).toThrow(RangeError)
     expect(() => validateCrossings([{ ...one, tick: -1 }, one])).toThrow(RangeError)
     expect(validateCrossings([{ ...one, tick: 0 }])).toHaveLength(1)
+  })
+
+  it('accepts and carries the circular flag the host puts on a crossing', () => {
+    const list = validateCrossings([{ ...one, circular: true }])
+    expect(list[0]?.circular).toBe(true)
+    expect(validateCrossings([one])[0]?.circular).toBeUndefined()
   })
 
   it('accepts two crossings in the same year', () => {

@@ -24,6 +24,7 @@ export function makeState(overrides: Partial<WorldState> = {}): WorldState {
     lastCrossing: null,
     debts: [],
     paradox: null,
+    strain: 0,
     status: 'running',
     ...overrides,
   }

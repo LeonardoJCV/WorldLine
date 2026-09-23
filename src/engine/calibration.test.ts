@@ -6,7 +6,7 @@ import {
   type CrossingKind,
   type Dose,
 } from './crossing.ts'
-import { debtRatio, resolveParadox, totalOwed, worldSize, type Paradox } from './debt.ts'
+import { debtRatio, totalOwed, worldSize } from './debt.ts'
 import { causalDistance } from './distance.ts'
 import type { EventId } from './events.ts'
 import { genesis } from './genesis.ts'
@@ -99,6 +99,7 @@ interface Borrowed {
   readonly peakRatio: number
   readonly longestAbove: number
   readonly paradox: boolean
+  readonly debtParadox: boolean
   readonly collapsed: boolean
   readonly stabilityDrop: number
   readonly alive: boolean
@@ -108,7 +109,15 @@ function series(
   seed: number,
   decisions: readonly Decision[],
   crossings: readonly Crossing[],
-): { ratio: number[]; owed: number[]; stability: number[]; alive: boolean } {
+): {
+  ratio: number[]
+  owed: number[]
+  stability: number[]
+  alive: boolean
+  paradox: boolean
+  debtParadox: boolean
+  collapsed: boolean
+} {
   const origin = genesis(seed)
   let s: WorldState = origin.state
   const ratio = [0]
@@ -117,6 +126,8 @@ function series(
   let decided = 0
   let crossed = 0
   let records = 0
+  let paradox = false
+  let debtParadox = false
   while (s.tick < DEBT_HORIZON && s.status === 'running') {
     const pending = decisions[decided]
     const due = pending?.tick === s.tick ? pending : undefined
@@ -130,30 +141,23 @@ function series(
     const result = step(s, origin.world, records, due, arriving)
     records += result.started.length
     s = result.state
+    if (s.paradox) {
+      paradox = true
+      if (s.paradox.kind === 'debt') debtParadox = true
+    }
     ratio.push(debtRatio(s.debts, s))
     owed.push(totalOwed(s.debts))
     stability.push(s.stability)
   }
-  return { ratio, owed, stability, alive: s.status === 'running' }
-}
-
-// FEAT: o paradoxo só entra no passo na Tarefa 5; aqui ele é projetado sobre a série real de
-// razões com a mesma função pura do motor, que é o que a calibração precisa medir
-function project(owed: readonly number[], ratio: readonly number[], from: number) {
-  let paradox: Paradox | null = null
-  let strain = 0
-  let installed = false
-  for (let year = from; year < ratio.length; year++) {
-    const due = owed[year] ?? 0
-    const debts =
-      due > 0 ? [{ kind: 'knowledge' as const, owed: due, since: from, origin: 'D' }] : []
-    const resolution = resolveParadox(paradox, debts, ratio[year] ?? 0, strain, year)
-    strain = resolution.strain
-    if (resolution.paradox) installed = true
-    paradox = resolution.paradox
-    if (resolution.collapsed) return { paradox: installed, collapsed: true }
+  return {
+    ratio,
+    owed,
+    stability,
+    alive: s.status === 'running',
+    paradox,
+    debtParadox,
+    collapsed: s.status === 'collapsed',
   }
-  return { paradox: installed, collapsed: false }
 }
 
 function borrow(
@@ -196,15 +200,15 @@ function borrow(
     if (above > longestAbove) longestAbove = above
     if (repaidAfter < 0 && y > year && (run.owed[y] ?? 0) === 0) repaidAfter = y - year
   }
-  const projected = project(run.owed, run.ratio, year)
   const window = Math.min(year + 100, run.stability.length - 1, base.stability.length - 1)
   return {
     cost,
     repaidAfter,
     peakRatio,
     longestAbove,
-    paradox: projected.paradox,
-    collapsed: projected.collapsed,
+    paradox: run.paradox,
+    debtParadox: run.debtParadox,
+    collapsed: run.collapsed,
     stabilityDrop: (base.stability[window] ?? 0) - (run.stability[window] ?? 0),
     alive: run.alive,
   }
@@ -235,7 +239,8 @@ describe('debt calibration', () => {
     expect(small.every((b) => b.alive)).toBe(true)
     expect(Math.max(...small.map((b) => b.peakRatio))).toBeLessThan(PARADOX_RATIO)
     expect(Math.max(...small.map((b) => b.stabilityDrop))).toBeLessThan(15)
-    expect(shareOf(small.map((b) => b.paradox))).toBe(0)
+    expect(shareOf(small.map((b) => b.debtParadox))).toBe(0)
+    expect(shareOf(small.map((b) => b.collapsed))).toBe(0)
   })
 
   it('a world that invests in the currency it owes repays it and never reaches a paradox', () => {
@@ -245,7 +250,11 @@ describe('debt calibration', () => {
     expect(median(repaid)).toBeGreaterThan(5)
     expect(median(repaid)).toBeLessThan(250)
     expect(Math.max(...investing.map((b) => b.longestAbove))).toBeLessThan(PARADOX_PATIENCE)
-    expect(shareOf(investing.map((b) => b.paradox))).toBe(0)
+    expect(shareOf(investing.map((b) => b.debtParadox))).toBe(0)
+    // FEAT: um presente grande demais ainda instala o paradoxo do salto no ato, mas quem investe
+    // quita dentro do prazo e o desfaz — nenhum mundo que investe morre por ter recebido
+    expect(investing.every((b) => b.alive)).toBe(true)
+    expect(shareOf(investing.map((b) => b.collapsed))).toBe(0)
   })
 
   it('a large gift into a world that never invests turns into a paradox', () => {

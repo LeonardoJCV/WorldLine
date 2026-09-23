@@ -15,6 +15,9 @@ export interface Crossing {
   readonly cost: number
   readonly direction: 'in' | 'out'
   readonly allocation?: Allocation
+  // FEAT: marcado pelo hospedeiro quando a travessia fecha um ciclo entre mundos; a engine nunca
+  // conhece as outras worldlines, e não entra no hash porque o paradoxo que instala já entra
+  readonly circular?: boolean
 }
 
 export interface CreditWorld {
@@ -49,9 +52,16 @@ function safe(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-export function crossingCost(kind: CrossingKind, dose: Dose, distance: number): number {
+export function crossingCost(
+  kind: CrossingKind,
+  dose: Dose,
+  distance: number,
+  debtRatio = 0,
+): number {
   const spread = 1 + Math.min(1, Math.max(0, Number.isFinite(distance) ? distance : 0))
-  return Math.max(1, Math.ceil(CROSSING_BASE[kind] * dose * spread))
+  // FEAT: alcançar um mundo já afundado em dívida custa até o dobro
+  const burden = 1 + Math.min(1, Math.max(0, Number.isFinite(debtRatio) ? debtRatio : 0))
+  return Math.max(1, Math.ceil(CROSSING_BASE[kind] * dose * spread * burden))
 }
 
 export function crossingAmounts(

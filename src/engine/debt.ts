@@ -1,5 +1,5 @@
 import type { Crossing } from './crossing.ts'
-import { EVENTS } from './events.ts'
+import { EVENTS, holds, worldMetrics, type Metrics } from './events.ts'
 import {
   DEBT_EPSILON,
   DEBT_POP_UNIT,
@@ -11,7 +11,13 @@ import {
   REPAY_SCALE,
 } from './params.ts'
 import type { Derived } from './rules.ts'
-import { Era, changedSectors, hasEra, type Allocation, type WorldState } from './state.ts'
+import {
+  changedSectors,
+  hasEra,
+  type Allocation,
+  type WorldConfig,
+  type WorldState,
+} from './state.ts'
 
 export const DEBT_KINDS = ['knowledge', 'resource', 'doctrine'] as const
 export type DebtKind = (typeof DEBT_KINDS)[number]
@@ -38,32 +44,6 @@ export interface ParadoxResolution {
   readonly paradox: Paradox | null
   readonly collapsed: boolean
   readonly strain: number
-}
-
-// FIX: os limiares de era vêm do gatilho real do evento em events.ts, não de um palpite novo;
-// se o evento não existir ou não tiver a condição, o limiar vira infinito e nunca dispara por era
-function eraGate(
-  id: 'agricultural_revolution' | 'industrial_revolution',
-  metric: 'technology' | 'energy',
-): number {
-  const def = EVENTS.find((event) => event.id === id)
-  const condition = def?.trigger.find((c) => c.metric === metric)
-  return condition?.value ?? Number.POSITIVE_INFINITY
-}
-
-// FIX: adiado para a primeira chamada, não para a carga do módulo — rules.ts passou a importar
-// debt.ts (Tarefa 3), fechando um ciclo com events.ts que deixaria EVENTS indefinido nesse ponto
-let eraGates: { agricultural: number; industrialTech: number; industrialEnergy: number } | null =
-  null
-function getEraGates() {
-  if (!eraGates) {
-    eraGates = {
-      agricultural: eraGate('agricultural_revolution', 'technology'),
-      industrialTech: eraGate('industrial_revolution', 'technology'),
-      industrialEnergy: eraGate('industrial_revolution', 'energy'),
-    }
-  }
-  return eraGates
 }
 
 export function debtOf(crossing: Crossing): Debt | null {
@@ -162,33 +142,40 @@ function magnitudeLeap(crossing: Crossing, s: WorldState): boolean {
   return false
 }
 
-// FIX: só é salto quem atravessa o limiar; um mundo que já passou daquela grandeza e não alcançou
-// a era está preso por outra condição, e receber mais da mesma grandeza não adianta a história
-function crossesGate(have: number, arriving: number, gate: number): boolean {
-  return have <= gate && have + arriving > gate
+// FEAT: o mundo que existiria se a travessia caísse inteira de uma vez, para perguntar o que ela
+// sozinha destrancaria; a doutrina não move nenhuma grandeza e devolve o mundo como está
+function landed(s: WorldState, crossing: Crossing): WorldState {
+  const [first = 0, second = 0] = crossing.amounts
+  if (crossing.kind === 'knowledge') return { ...s, technology: s.technology + first }
+  if (crossing.kind === 'resource') {
+    return { ...s, food: s.food + first, energy: s.energy + second }
+  }
+  if (crossing.kind === 'people') {
+    const moved = crossing.direction === 'out' ? -first : first
+    return { ...s, population: Math.max(0, s.population + moved) }
+  }
+  return s
 }
 
-function eraLeap(crossing: Crossing, s: WorldState): boolean {
-  const gates = getEraGates()
-  if (crossing.kind === 'knowledge') {
-    const arriving = crossing.amounts[0] ?? 0
-    return (
-      (!hasEra(s, Era.agricultural) && crossesGate(s.technology, arriving, gates.agricultural)) ||
-      (!hasEra(s, Era.industrial) && crossesGate(s.technology, arriving, gates.industrialTech))
-    )
+// FIX: só é salto de era o presente que sozinho vence TODAS as condições ainda não cumpridas do
+// evento daquela era; vencer uma delas enquanto outra segue séculos longe não adianta a história
+function eraLeap(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
+  if (crossing.kind === 'doctrine') return false
+  let before: Metrics | null = null
+  let after: Metrics | null = null
+  for (const def of EVENTS) {
+    const era = def.era
+    if (era === undefined || hasEra(s, era)) continue
+    before ??= worldMetrics(s, world)
+    if (holds(def.trigger, before)) continue
+    after ??= worldMetrics(landed(s, crossing), world)
+    if (holds(def.trigger, after)) return true
   }
-  if (crossing.kind === 'resource') {
-    return (
-      !hasEra(s, Era.industrial) &&
-      crossesGate(s.energy, crossing.amounts[1] ?? 0, gates.industrialEnergy)
-    )
-  }
-  // FEAT: doutrina e pessoas não têm uma grandeza ligada a um gatilho de era em events.ts
   return false
 }
 
-export function leapParadox(crossing: Crossing, s: WorldState): boolean {
-  return magnitudeLeap(crossing, s) || eraLeap(crossing, s)
+export function leapParadox(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
+  return magnitudeLeap(crossing, s) || eraLeap(crossing, s, world)
 }
 
 export function circularParadox(

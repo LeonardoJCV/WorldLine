@@ -3,8 +3,15 @@ import { debtRatio } from './debt.ts'
 import { smoothstep } from './math.ts'
 import { CAUSAL_WINDOW, EXTINCTION_THRESHOLD } from './params.ts'
 import { Channel, uniform } from './rng.ts'
-import { NEUTRAL_MODIFIERS, type Derived, type Modifiers } from './rules.ts'
-import { Era, SECTORS, type ActiveEvent, type Sector, type WorldState } from './state.ts'
+import { NEUTRAL_MODIFIERS, derive, type Derived, type Modifiers } from './rules.ts'
+import {
+  Era,
+  SECTORS,
+  type ActiveEvent,
+  type Sector,
+  type WorldConfig,
+  type WorldState,
+} from './state.ts'
 
 export const EVENT_IDS = [
   'agricultural_revolution',
@@ -300,6 +307,13 @@ export function computeMetrics(s: WorldState, d: Derived): Metrics {
   }
 }
 
+// FEAT: as grandezas do mundo tal como os eventos as leem, para quem precisa perguntar "o que
+// aconteceria neste estado" sem repetir o encadeamento de derive
+export function worldMetrics(s: WorldState, world: WorldConfig): Metrics {
+  const mods = collectModifiers(s.active)
+  return computeMetrics(s, derive(s, world, mods, uniform(world.seed, s.tick, Channel.harvest)))
+}
+
 export function collectModifiers(
   active: readonly ActiveEvent[],
   defs: readonly EventDef[] = EVENTS,
@@ -327,9 +341,10 @@ export interface EventOutcome {
   readonly started: readonly EventRecord[]
   readonly ended: readonly number[]
   readonly extinct: boolean
+  readonly collapsed: boolean
 }
 
-function holds(conditions: readonly Condition[], metrics: Metrics): boolean {
+export function holds(conditions: readonly Condition[], metrics: Metrics): boolean {
   return conditions.every((c) =>
     c.op === '<' ? metrics[c.metric] < c.value : metrics[c.metric] > c.value,
   )
@@ -403,6 +418,7 @@ export function evaluateEvents(
 
   let eras = s.eras
   let extinct = false
+  let collapsed = false
   const started: EventRecord[] = []
   const isActive = (id: EventId) => active.some((entry) => defs[entry.def]?.id === id)
 
@@ -438,9 +454,12 @@ export function evaluateEvents(
       })
     }
     if (def.era !== undefined) eras |= def.era
-    if (def.kind === 'terminal') extinct = true
-    else active = [...active, { def: i, record, start: s.tick }]
+    // FEAT: os dois fins são terminais, mas um mundo que colapsa não é um mundo que se extinguiu
+    if (def.kind === 'terminal') {
+      if (def.id === 'collapse') collapsed = true
+      else extinct = true
+    } else active = [...active, { def: i, record, start: s.tick }]
   }
 
-  return { active, eras, lastEnded, started, ended, extinct }
+  return { active, eras, lastEnded, started, ended, extinct, collapsed }
 }

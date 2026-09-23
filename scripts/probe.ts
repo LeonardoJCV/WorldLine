@@ -5,14 +5,7 @@ import {
   type CrossingKind,
   type Dose,
 } from '../src/engine/crossing.ts'
-import {
-  debtRatio,
-  leapParadox,
-  resolveParadox,
-  totalOwed,
-  worldSize,
-  type Paradox,
-} from '../src/engine/debt.ts'
+import { debtRatio, leapParadox, totalOwed, worldSize } from '../src/engine/debt.ts'
 import { causalDistance } from '../src/engine/distance.ts'
 import { genesis } from '../src/engine/genesis.ts'
 import { PARADOX_RATIO } from '../src/engine/params.ts'
@@ -116,6 +109,8 @@ interface Run {
   readonly owed: readonly number[]
   readonly status: string
   readonly ended: number
+  readonly paradoxAt: number
+  readonly collapsedAt: number
 }
 
 function simulate(
@@ -133,6 +128,7 @@ function simulate(
   let decided = 0
   let crossed = 0
   let records = 0
+  let paradoxAt = -1
   while (s.tick < years && s.status === 'running') {
     const pending = decisions[decided]
     const due = pending?.tick === s.tick ? pending : undefined
@@ -148,10 +144,20 @@ function simulate(
     s = result.state
     stability.push(s.stability)
     population.push(s.population)
+    if (s.paradox && paradoxAt < 0) paradoxAt = s.paradox.since
     ratio.push(debtRatio(s.debts, s))
     owed.push(totalOwed(s.debts))
   }
-  return { stability, population, ratio, owed, status: s.status, ended: s.tick }
+  return {
+    stability,
+    population,
+    ratio,
+    owed,
+    status: s.status,
+    ended: s.tick,
+    paradoxAt,
+    collapsedAt: s.status === 'collapsed' ? s.tick : -1,
+  }
 }
 
 const donorCache = new Map<string, WorldState>()
@@ -174,28 +180,6 @@ function baseline(seed: number, decisions: readonly Decision[]): Run {
   const run = simulate(seed, decisions, [], DEBT_HORIZON)
   baselineCache.set(key, run)
   return run
-}
-
-// FEAT: a Tarefa 5 é que liga o paradoxo ao passo; aqui ele é projetado sobre a série real de
-// razões com a mesma função pura do motor, para a calibração não ficar cega até lá
-function projectParadox(run: Run, from: number): { paradoxAt: number; collapsedAt: number } {
-  let paradox: Paradox | null = null
-  let strain = 0
-  let paradoxAt = -1
-  let collapsedAt = -1
-  for (let year = from; year < run.ratio.length; year++) {
-    const owed = run.owed[year] ?? 0
-    const debts = owed > 0 ? [{ kind: 'knowledge' as const, owed, since: from, origin: 'D' }] : []
-    const resolution = resolveParadox(paradox, debts, run.ratio[year] ?? 0, strain, year)
-    strain = resolution.strain
-    if (resolution.paradox && !paradox) paradoxAt = year
-    paradox = resolution.paradox
-    if (resolution.collapsed) {
-      collapsedAt = year
-      break
-    }
-  }
-  return { paradoxAt, collapsedAt }
 }
 
 function trace(
@@ -258,17 +242,16 @@ function trace(
     if (above > longestAbove) longestAbove = above
     if (repaidAt < 0 && y > year && (run.owed[y] ?? 0) === 0) repaidAt = y
   }
-  const projected = projectParadox(run, year)
   const window = Math.min(year + 100, run.stability.length - 1, base.stability.length - 1)
   const last = Math.min(run.stability.length - 1, base.stability.length - 1)
   return {
     cost,
-    leap: leapParadox(crossing, state),
+    leap: leapParadox(crossing, state, destination.world),
     repaidAt: repaidAt < 0 ? -1 : repaidAt - year,
     peakRatio,
     longestAbove,
-    paradoxAt: projected.paradoxAt < 0 ? -1 : projected.paradoxAt - year,
-    collapsedAt: projected.collapsedAt < 0 ? -1 : projected.collapsedAt - year,
+    paradoxAt: run.paradoxAt < 0 ? -1 : run.paradoxAt - year,
+    collapsedAt: run.collapsedAt < 0 ? -1 : run.collapsedAt - year,
     stabilityDrop: (base.stability[window] ?? 0) - (run.stability[window] ?? 0),
     stabilityEnd: (base.stability[last] ?? 0) - (run.stability[last] ?? 0),
     populationShare: (run.population[last] ?? 0) / Math.max(1, base.population[last] ?? 1),
@@ -312,7 +295,8 @@ function summarise(cells: readonly Cell[]): void {
         `  peak<=${Math.max(...traces.map((t) => t.peakRatio)).toFixed(2)}` +
         `  above<=${Math.max(...traces.map((t) => t.longestAbove))}` +
         `  drop<=${Math.max(...traces.map((t) => t.stabilityDrop)).toFixed(1)}` +
-        `  repay med ${repaid.length === 0 ? 'never' : median(repaid).toFixed(0)}`,
+        `  repay med ${(repaid.length === 0 ? 'never' : median(repaid).toFixed(0)).padStart(5)}` +
+        `  leap ${(share(traces.map((t) => t.leap)) * 100).toFixed(0).padStart(3)}%`,
     )
   }
   console.log('\n-- summary --')
@@ -355,7 +339,7 @@ function summarise(cells: readonly Cell[]): void {
 function debtProbe(): void {
   console.log(
     `\n== debt grid ==  ${DEBT_SEEDS.length} seeds × kind × dose × year × donor × stance` +
-      `  (horizon ${DEBT_HORIZON}, paradox projected offline)`,
+      `  (horizon ${DEBT_HORIZON})`,
   )
   console.log(
     'kind      dose year  donor stance     cost  repaid   peak   above  parad  colps    dS100    dSend      pop%  leap%',

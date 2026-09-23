@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Crossing } from './crossing.ts'
 import { hashState } from './hash.ts'
-import { HORIZON } from './params.ts'
+import { HORIZON, PARADOX_GRACE } from './params.ts'
 import { Worldline } from './worldline.ts'
 
 const SEED = 482913
@@ -147,11 +147,13 @@ describe('Worldline', () => {
 })
 
 describe('crossings', () => {
+  // FEAT: uma dose proporcional ao que o mundo já sabe, para o roteiro medir a repetição da
+  // história e não o paradoxo que um presente desmedido instalaria
   const incoming = (tick: number): Crossing => ({
     tick,
     kind: 'knowledge',
     dose: 2,
-    amounts: [40],
+    amounts: [4],
     origin: { world: 'B', tick },
     cost: 6,
     direction: 'in',
@@ -229,5 +231,56 @@ describe('crossings', () => {
     const empty = new Worldline(SEED, [], null, [])
     empty.advance(1200)
     expect(plain.hashAt(1200)).toBe(empty.hashAt(1200))
+  })
+})
+
+describe('collapse', () => {
+  const idle = { agriculture: 60, industry: 20, research: 0, conservation: 20 }
+  // FEAT: um presente muito acima da grandeza do mundo, num mundo que nunca pesquisa e por isso
+  // nunca quita: o paradoxo entra no ato da travessia e o prazo vence
+  const CROSSED_AT = 300
+  const overwhelming: Crossing = {
+    tick: CROSSED_AT,
+    kind: 'knowledge',
+    dose: 3,
+    amounts: [200],
+    origin: { world: 'B', tick: CROSSED_AT },
+    cost: 18,
+    direction: 'in',
+  }
+  const doomed = () => new Worldline(SEED, [{ tick: 0, allocation: idle }], null, [overwhelming])
+
+  it('installs the paradox at the crossing and collapses when the deadline passes', () => {
+    const line = doomed()
+    line.advance(HORIZON)
+    // FEAT: o paradoxo entra no passo do ano da travessia, logo aparece no estado do ano seguinte
+    expect(line.stateAt(CROSSED_AT + 1).paradox).toEqual({
+      kind: 'leap',
+      since: CROSSED_AT,
+      deadline: CROSSED_AT + PARADOX_GRACE,
+    })
+    expect(line.present.status).toBe('collapsed')
+    const overdue = CROSSED_AT + PARADOX_GRACE
+    expect(line.records.some((r) => r.event === 'collapse' && r.start === overdue)).toBe(true)
+  })
+
+  it('stops advancing once the world has collapsed', () => {
+    const line = doomed()
+    line.advance(HORIZON)
+    const stopped = line.present.tick
+    expect(line.ended).toBe(true)
+    expect(line.advance(100)).toBe(0)
+    expect(line.present.tick).toBe(stopped)
+    expect(stopped).toBeLessThan(HORIZON)
+  })
+
+  it('rebuilds the collapse from the checkpoints, year by year', () => {
+    const line = doomed()
+    line.advance(HORIZON)
+    for (const year of [CROSSED_AT, CROSSED_AT + 1, 256, 400, line.present.tick]) {
+      const short = doomed()
+      short.advance(year)
+      expect(line.hashAt(year)).toBe(hashState(short.present))
+    }
   })
 })

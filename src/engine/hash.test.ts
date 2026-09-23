@@ -51,7 +51,14 @@ describe('hashState', () => {
   })
 
   it('ignores the debt fields while they are empty', () => {
-    expect(hashState({ ...state, debts: [], paradox: null })).toBe(hashState(state))
+    expect(hashState({ ...state, debts: [], paradox: null, strain: 0 })).toBe(hashState(state))
+  })
+
+  it('separates two worlds that carried the strain for different lengths of time', () => {
+    const a = hashState({ ...state, strain: 12 })
+    const b = hashState({ ...state, strain: 13 })
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(hashState(state))
   })
 
   it('separates two worlds that owe different things', () => {

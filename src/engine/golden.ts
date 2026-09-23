@@ -81,6 +81,6 @@ export const GOLDEN_CASES: readonly GoldenCase[] = [
   { seed: 0xffffffff, script: 'steady', year: 5000, hash: '68b49e5f' },
   { seed: 0xffffffff, script: 'shifting', year: 1000, hash: 'ae5e39c0' },
   { seed: 0xffffffff, script: 'shifting', year: 5000, hash: '795871e1' },
-  { seed: 482913, script: 'crossed', year: 1000, hash: '42d40c7c' },
-  { seed: 482913, script: 'crossed', year: 5000, hash: '1f8e025b' },
+  { seed: 482913, script: 'crossed', year: 1000, hash: '6fe1fab6' },
+  { seed: 482913, script: 'crossed', year: 5000, hash: '8347686d' },
 ]

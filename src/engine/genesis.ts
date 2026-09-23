@@ -39,6 +39,7 @@ export function genesis(seed: number): { readonly world: WorldConfig; readonly s
       lastCrossing: null,
       debts: [],
       paradox: null,
+      strain: 0,
       status: 'running',
     },
   }

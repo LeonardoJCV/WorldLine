@@ -1,7 +1,16 @@
 import type { Crossing } from './crossing.ts'
-import { addDebt, debtOf, debtRatio, repay, resolveParadox } from './debt.ts'
+import {
+  addDebt,
+  debtOf,
+  debtRatio,
+  leapParadox,
+  repay,
+  resolveParadox,
+  type Paradox,
+} from './debt.ts'
 import { addEcho, assimilate } from './echo.ts'
 import { collectModifiers, computeMetrics, evaluateEvents, type EventRecord } from './events.ts'
+import { PARADOX_GRACE } from './params.ts'
 import { Channel, uniform } from './rng.ts'
 import { derive, integrate } from './rules.ts'
 import { changedSectors, type Decision, type WorldConfig, type WorldState } from './state.ts'
@@ -44,6 +53,24 @@ function applyDebts(s: WorldState, crossings: readonly Crossing[]): WorldState {
   return debts === s.debts ? s : { ...s, debts }
 }
 
+// FEAT: dois dos três caminhos do paradoxo nascem na própria travessia — o ciclo chega marcado
+// pelo hospedeiro, porque a engine não conhece as outras worldlines; o terceiro é a dívida velha
+function arrivingParadox(
+  s: WorldState,
+  world: WorldConfig,
+  crossings: readonly Crossing[],
+): Paradox | null {
+  for (const crossing of crossings) {
+    if (crossing.circular) {
+      return { kind: 'circular', since: s.tick, deadline: s.tick + PARADOX_GRACE }
+    }
+    if (leapParadox(crossing, s, world)) {
+      return { kind: 'leap', since: s.tick, deadline: s.tick + PARADOX_GRACE }
+    }
+  }
+  return null
+}
+
 export function step(
   s: WorldState,
   world: WorldConfig,
@@ -79,9 +106,15 @@ export function step(
   // FIX: a quitação usa a produção do próprio ano, então só corre depois do derive
   const repaid = repay(owing.debts, owing, derived, s.tick)
   const ratio = debtRatio(repaid, owing)
-  // FEAT: o contador de anos acima do limite ainda não mora no estado (Tarefa 5 decide onde); placeholder inerte
-  const resolution = resolveParadox(owing.paradox, repaid, ratio, 0, s.tick)
-  const settled: WorldState = { ...owing, debts: repaid, paradox: resolution.paradox }
+  // FEAT: um paradoxo em curso já tem prazo próprio; só um mundo livre recebe o da travessia
+  const standing = owing.paradox ?? arrivingParadox(decided, world, crossings)
+  const resolution = resolveParadox(standing, repaid, ratio, owing.strain, s.tick)
+  const settled: WorldState = {
+    ...owing,
+    debts: repaid,
+    paradox: resolution.paradox,
+    strain: resolution.strain,
+  }
 
   const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, nextRecord)
   const integrated = integrate(settled, derived, mods)
@@ -92,7 +125,7 @@ export function step(
       eras: outcome.eras,
       active: outcome.active,
       lastEnded: outcome.lastEnded,
-      status: outcome.extinct ? 'extinct' : 'running',
+      status: outcome.extinct ? 'extinct' : outcome.collapsed ? 'collapsed' : 'running',
     },
     started: outcome.started,
     ended: outcome.ended,

@@ -16,7 +16,7 @@ import { PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
 import type { Derived } from './rules.ts'
 import { Era, type Allocation } from './state.ts'
 import type { Crossing } from './crossing.ts'
-import { makeState } from './testing.ts'
+import { TEST_WORLD, makeState } from './testing.ts'
 
 const GIFTED_ALLOCATION: Allocation = {
   agriculture: 20,
@@ -225,8 +225,8 @@ describe('leapParadox — magnitude, per kind', () => {
     const state = makeState({ technology: 10, eras: Era.agricultural | Era.industrial })
     const tooMuch = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [31] })
     const proportional = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [15] })
-    expect(leapParadox(tooMuch, state)).toBe(true)
-    expect(leapParadox(proportional, state)).toBe(false)
+    expect(leapParadox(tooMuch, state, TEST_WORLD)).toBe(true)
+    expect(leapParadox(proportional, state, TEST_WORLD)).toBe(false)
   })
 
   it('checks a resource crossing against food and energy independently, in parcel order [food, energy]', () => {
@@ -234,17 +234,17 @@ describe('leapParadox — magnitude, per kind', () => {
     const tooMuchFood = makeCrossing({ kind: 'resource', dose: 1, amounts: [301, 5] })
     const tooMuchEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [50, 31] })
     const proportional = makeCrossing({ kind: 'resource', dose: 1, amounts: [200, 20] })
-    expect(leapParadox(tooMuchFood, state)).toBe(true)
-    expect(leapParadox(tooMuchEnergy, state)).toBe(true)
-    expect(leapParadox(proportional, state)).toBe(false)
+    expect(leapParadox(tooMuchFood, state, TEST_WORLD)).toBe(true)
+    expect(leapParadox(tooMuchEnergy, state, TEST_WORLD)).toBe(true)
+    expect(leapParadox(proportional, state, TEST_WORLD)).toBe(false)
   })
 
   it('fires for people when the migration is more than PARADOX_LEAP times the population the world has', () => {
     const state = makeState({ population: 1000 })
     const tooMany = makeCrossing({ kind: 'people', dose: 1, amounts: [3001] })
     const proportional = makeCrossing({ kind: 'people', dose: 1, amounts: [2000] })
-    expect(leapParadox(tooMany, state)).toBe(true)
-    expect(leapParadox(proportional, state)).toBe(false)
+    expect(leapParadox(tooMany, state, TEST_WORLD)).toBe(true)
+    expect(leapParadox(proportional, state, TEST_WORLD)).toBe(false)
   })
 
   it('never fires on magnitude for doctrine: a doctrine crossing carries no amounts to compare', () => {
@@ -255,33 +255,47 @@ describe('leapParadox — magnitude, per kind', () => {
       amounts: [],
       allocation: GIFTED_ALLOCATION,
     })
-    expect(leapParadox(doctrine, state)).toBe(false)
+    expect(leapParadox(doctrine, state, TEST_WORLD)).toBe(false)
   })
 })
 
-describe('leapParadox — era, grounded in the real era-event thresholds', () => {
-  it('fires for knowledge that would push technology past the industrial gate (technology > 40) while industrial is unreached', () => {
-    const state = makeState({ technology: 35, eras: Era.agricultural })
+describe('leapParadox — era: only a gift that alone unlocks an era out of reach', () => {
+  it('fires for knowledge when technology is the last unmet condition of the industrial era', () => {
+    const state = makeState({ technology: 35, energy: 2, eras: Era.agricultural })
     const pushesPastIndustrial = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [10] })
-    expect(leapParadox(pushesPastIndustrial, state)).toBe(true)
+    expect(leapParadox(pushesPastIndustrial, state, TEST_WORLD)).toBe(true)
+  })
+
+  it('fires for resource energy when energy is the last unmet condition of the industrial era', () => {
+    const state = makeState({ technology: 50, energy: 1, eras: 0 })
+    const pushesEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [1, 0.3] })
+    expect(leapParadox(pushesEnergy, state, TEST_WORLD)).toBe(true)
+  })
+
+  it('does not fire when another condition of that era is still centuries away', () => {
+    // FIX: o portão de energia industrial cedia a um presente de recurso comum enquanto quem
+    // tranca a era é a tecnologia; vencer uma condição sozinha não adianta a história
+    const state = makeState({ technology: 5, energy: 1, eras: 0 })
+    const pushesEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [1, 0.3] })
+    expect(leapParadox(pushesEnergy, state, TEST_WORLD)).toBe(false)
   })
 
   it('does not fire for knowledge that stays under every unreached era gate', () => {
-    const state = makeState({ technology: 35, eras: Era.agricultural })
+    const state = makeState({ technology: 35, energy: 2, eras: Era.agricultural })
     const modest = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [2] })
-    expect(leapParadox(modest, state)).toBe(false)
+    expect(leapParadox(modest, state, TEST_WORLD)).toBe(false)
   })
 
   it('does not fire for knowledge crossing a gate the world has already reached', () => {
-    const state = makeState({ technology: 35, eras: Era.agricultural | Era.industrial })
+    const state = makeState({ technology: 35, energy: 2, eras: Era.agricultural | Era.industrial })
     const pushesPast40 = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [10] })
-    expect(leapParadox(pushesPast40, state)).toBe(false)
+    expect(leapParadox(pushesPast40, state, TEST_WORLD)).toBe(false)
   })
 
-  it('fires for resource energy that would push energy past the industrial gate (energy > 1.2)', () => {
-    const state = makeState({ energy: 1, food: 1e6, eras: 0 })
-    const pushesEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [1, 0.3] })
-    expect(leapParadox(pushesEnergy, state)).toBe(true)
+  it('does not fire when the era would arrive this year with or without the gift', () => {
+    const state = makeState({ technology: 45, energy: 2, eras: Era.agricultural })
+    const extra = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [1] })
+    expect(leapParadox(extra, state, TEST_WORLD)).toBe(false)
   })
 
   it('never fires era-based for doctrine or people: no era-event condition is keyed to those metrics', () => {
@@ -293,8 +307,8 @@ describe('leapParadox — era, grounded in the real era-event thresholds', () =>
       allocation: GIFTED_ALLOCATION,
     })
     const people = makeCrossing({ kind: 'people', dose: 1, amounts: [100] })
-    expect(leapParadox(doctrine, state)).toBe(false)
-    expect(leapParadox(people, state)).toBe(false)
+    expect(leapParadox(doctrine, state, TEST_WORLD)).toBe(false)
+    expect(leapParadox(people, state, TEST_WORLD)).toBe(false)
   })
 })
 

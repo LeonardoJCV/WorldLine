@@ -356,7 +356,9 @@ describe('paradox and collapse', () => {
   it('collapses, as a terminal event, once the overdue metric flags a missed deadline', () => {
     const s = world(EVENTS)
     const outcome = evaluateEvents(s, makeMetrics({ paradoxOverdue: 1 }), 1, 0)
-    expect(outcome.extinct).toBe(true)
+    // FEAT: um fim que não é a extinção — quem lê o desfecho precisa poder distinguir os dois
+    expect(outcome.collapsed).toBe(true)
+    expect(outcome.extinct).toBe(false)
     expect(outcome.started.map((r) => r.event)).toContain('collapse')
     expect(outcome.active).toEqual([])
   })

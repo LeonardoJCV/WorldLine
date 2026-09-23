@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Crossing, CrossingKind } from './crossing.ts'
-import type { Debt } from './debt.ts'
+import type { Debt, Paradox } from './debt.ts'
 import { EVENTS } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
+import { PARADOX_GRACE, PARADOX_PATIENCE } from './params.ts'
 import { step } from './step.ts'
 import { VARIABLES } from './state.ts'
 
@@ -183,6 +184,107 @@ describe('debt', () => {
     const result = step(state, world, 0)
     expect(result.state.debts).toEqual([])
     expect(result.state.paradox).toBeNull()
+    expect(result.state.strain).toBe(0)
     expect(step(state, world, 0, undefined, [])).toEqual(result)
+  })
+})
+
+describe('paradox and collapse', () => {
+  const at = (kind: CrossingKind, amounts: number[], extra: Partial<Crossing> = {}): Crossing => ({
+    tick: state.tick,
+    kind,
+    dose: 1,
+    amounts,
+    origin: { world: 'B', tick: 0 },
+    cost: 3,
+    direction: 'in',
+    ...extra,
+  })
+
+  const heavy: Debt = { kind: 'knowledge', owed: 500, since: 0, origin: 'B' }
+  const idle = { agriculture: 60, industry: 20, research: 0, conservation: 20 }
+
+  it('installs a leap paradox the year a gift alone would unlock an era out of reach', () => {
+    // FEAT: tecnologia já acima da porta industrial; só a energia falta, e o presente a vence sozinho
+    const ready = { ...state, technology: 50, energy: 1, eras: 0 }
+    const result = step(ready, world, 0, undefined, [at('resource', [1, 0.3])])
+    expect(result.state.paradox).toEqual({ kind: 'leap', since: 0, deadline: PARADOX_GRACE })
+  })
+
+  it('leaves a gift alone when another condition of that era is still out of reach', () => {
+    const early = { ...state, technology: 5, energy: 1, eras: 0 }
+    const result = step(early, world, 0, undefined, [at('resource', [1, 0.3])])
+    expect(result.state.paradox).toBeNull()
+  })
+
+  it('installs a circular paradox from the flag the host puts on the crossing', () => {
+    const result = step(state, world, 0, undefined, [at('knowledge', [1], { circular: true })])
+    expect(result.state.paradox).toEqual({ kind: 'circular', since: 0, deadline: PARADOX_GRACE })
+  })
+
+  it('installs a debt paradox after PARADOX_PATIENCE years above the ratio', () => {
+    const strained = {
+      ...state,
+      allocation: idle,
+      debts: [heavy],
+      strain: PARADOX_PATIENCE - 2,
+    }
+    const waiting = step(strained, world, 0)
+    expect(waiting.state.paradox).toBeNull()
+    expect(waiting.state.strain).toBe(PARADOX_PATIENCE - 1)
+
+    const installed = step({ ...strained, strain: PARADOX_PATIENCE - 1 }, world, 0)
+    expect(installed.state.paradox).toEqual({ kind: 'debt', since: 0, deadline: PARADOX_GRACE })
+    expect(installed.started.map((r) => r.event)).toContain('paradox')
+  })
+
+  it('carries the strain counter from one year to the next and drops it once the debt clears', () => {
+    const owing = { ...state, allocation: idle, debts: [heavy] }
+    const first = step(owing, world, 0)
+    expect(first.state.strain).toBe(1)
+    const second = step({ ...owing, tick: first.state.tick, strain: first.state.strain }, world, 0)
+    expect(second.state.strain).toBe(2)
+    expect(step({ ...owing, debts: [], strain: 40 }, world, 0).state.strain).toBe(0)
+  })
+
+  it('dissolves the paradox and keeps the world alive when the debt clears before the deadline', () => {
+    const nearly: Debt = { kind: 'knowledge', owed: 1e-9, since: 0, origin: 'B' }
+    const installed: Paradox = { kind: 'leap', since: 0, deadline: PARADOX_GRACE }
+    const result = step(
+      { ...state, debts: [nearly], paradox: installed, strain: PARADOX_PATIENCE },
+      world,
+      0,
+    )
+    expect(result.state.paradox).toBeNull()
+    expect(result.state.strain).toBe(0)
+    expect(result.state.status).toBe('running')
+  })
+
+  it('collapses when the deadline passes with the debt still open', () => {
+    const overdue: Paradox = { kind: 'debt', since: 0, deadline: 0 }
+    const result = step(
+      { ...state, allocation: idle, debts: [heavy], paradox: overdue, strain: PARADOX_PATIENCE },
+      world,
+      0,
+    )
+    expect(result.state.status).toBe('collapsed')
+    expect(result.started.map((r) => r.event)).toContain('collapse')
+  })
+
+  it('tells a collapse apart from an extinction', () => {
+    const overdue: Paradox = { kind: 'debt', since: 0, deadline: 0 }
+    const doomed = {
+      ...state,
+      allocation: idle,
+      debts: [heavy],
+      paradox: overdue,
+      strain: PARADOX_PATIENCE,
+    }
+    expect(step(doomed, world, 0).state.status).toBe('collapsed')
+    expect(step({ ...doomed, population: 500 }, world, 0).state.status).toBe('extinct')
+  })
+
+  it('refuses to advance a collapsed world', () => {
+    expect(() => step({ ...state, status: 'collapsed' }, world, 0)).toThrow()
   })
 })

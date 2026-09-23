@@ -281,6 +281,23 @@ describe('determinism properties', () => {
     )
   })
 
+  it('never installs a paradox, strain or collapse in a world that never crossed anything', () => {
+    fc.assert(
+      fc.property(seed, script(2999), (s, decisions) => {
+        const w = new Worldline(s, decisions)
+        w.advance(3000)
+        for (let t = 0; t <= w.present.tick; t += 37) {
+          const state = w.stateAt(t)
+          if (state.paradox !== null || state.strain !== 0 || state.status === 'collapsed') {
+            return false
+          }
+        }
+        return true
+      }),
+      { numRuns: 20 },
+    )
+  })
+
   it('never produces non-finite values over the whole horizon', () => {
     fc.assert(
       fc.property(

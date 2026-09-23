@@ -58,6 +58,9 @@ export interface WorldState {
   readonly lastCrossing: { readonly tick: number; readonly kind: CrossingKind } | null
   readonly debts: readonly Debt[]
   readonly paradox: Paradox | null
+  // FEAT: anos seguidos com a dívida acima do limite; zera junto com a dívida, logo é zero para
+  // sempre num mundo que nunca recebeu nada
+  readonly strain: number
   readonly status: Status
 }
 
