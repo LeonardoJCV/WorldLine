@@ -24,7 +24,7 @@ export const INTENSITY_REFERENCE = 8000
 export const MIN_INTENSITY = 0.32
 export const MAX_INTENSITY = 1.8
 
-// FEAT: sem eco, uEchoFrom fica neste valor e o shader nem entra no ramo do brilho extra
+// FEAT: uEchoOn liga o brilho extra; a janela em si pode ser negativa e continuar válida
 export const NO_ECHO = -1
 // FIX: brilho contido para não estourar em branco somado ao bloom e ao arco
 export const ECHO_STRENGTH = 1.1
@@ -45,6 +45,7 @@ uniform float uPixelRatio;
 uniform float uIntensity;
 uniform float uEchoFrom;
 uniform float uEchoTo;
+uniform float uEchoOn;
 
 attribute vec3 aSeed;
 attribute vec3 aColor;
@@ -81,9 +82,9 @@ void main() {
     20.0
   );
   vColor = aColor;
-  // FIX: testa a sentinela, não o sinal — uma janela começada antes da borda visível é negativa e válida
+  // FIX: uma janela começada antes da borda visível é negativa e continua válida
   float echoBoost = 0.0;
-  if (uEchoFrom != ${NO_ECHO}.0) {
+  if (uEchoOn > 0.5) {
     float edge = max(uEchoTo - uEchoFrom, 0.0001) * ${ECHO_EDGE_FRACTION};
     float enter = smoothstep(uEchoFrom - edge, uEchoFrom, u);
     float decay = 1.0 - smoothstep(uEchoFrom, uEchoTo, u);
@@ -184,6 +185,7 @@ export function createStream(count: number, seed: number): Stream {
     uIntensity: { value: streamIntensity(count) },
     uEchoFrom: { value: NO_ECHO },
     uEchoTo: { value: NO_ECHO },
+    uEchoOn: { value: 0 },
   }
   const material = new ShaderMaterial({
     vertexShader: vertex,
@@ -210,6 +212,7 @@ export function createStream(count: number, seed: number): Stream {
     setEcho(from, to) {
       uniforms.uEchoFrom.value = from
       uniforms.uEchoTo.value = to
+      uniforms.uEchoOn.value = from === NO_ECHO && to === NO_ECHO ? 0 : 1
     },
     setTime(time) {
       uniforms.uTime.value = time
