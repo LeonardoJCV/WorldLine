@@ -44,8 +44,11 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
   const debts = useSimulation(
     (s) => s.worlds.find((world) => world.info.id === s.focus)?.debts ?? NO_DEBTS,
   )
-  // FIX: o estado não guarda a dívida de anos passados, então a tendência não tem com o que comparar
-  const debt = debtView(debts, null)
+  // FEAT: a dívida do último ano diferente já relatado pelo store, não uma reconstrução no cliente
+  const previousDebts = useSimulation(
+    (s) => s.worlds.find((world) => world.info.id === s.focus)?.previousDebts ?? null,
+  )
+  const debt = debtView(debts, previousDebts)
 
   return (
     <section className="panel state" aria-labelledby="state-title">

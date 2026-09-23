@@ -35,6 +35,7 @@ const worlds: WorldView[] = [
     crossings: [fromC],
     decisions: [early],
     debts: [],
+    previousDebts: null,
     paradox: null,
   },
   {
@@ -44,6 +45,7 @@ const worlds: WorldView[] = [
     crossings: [inherited, own, orphan],
     decisions: [early, late],
     debts: [],
+    previousDebts: null,
     paradox: null,
   },
   {
@@ -53,6 +55,7 @@ const worlds: WorldView[] = [
     crossings: [],
     decisions: [early, late],
     debts: [],
+    previousDebts: null,
     paradox: null,
   },
 ]

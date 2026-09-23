@@ -29,6 +29,8 @@ export interface WorldView {
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
   readonly debts: readonly Debt[]
+  // FEAT: a dívida do último ano diferente já relatado, para a tendência não piscar a cada quadro
+  readonly previousDebts: readonly Debt[] | null
   readonly paradox: Paradox | null
 }
 
@@ -86,6 +88,27 @@ function upsert(
   return next
 }
 
+interface DebtSnapshot {
+  readonly tick: number
+  readonly debts: readonly Debt[]
+  readonly previous: readonly Debt[] | null
+}
+
+// FEAT: a âncora só avança quando o ano do relatório muda; um relatório repetido no mesmo ano
+// (como o que uma travessia dispara sem avançar o tempo) não deve apagar a tendência anterior
+function trackDebts(
+  history: Map<string, DebtSnapshot>,
+  key: string,
+  tick: number,
+  debts: readonly Debt[],
+): readonly Debt[] | null {
+  const known = history.get(key)
+  const previous =
+    known === undefined || known.tick === tick ? (known?.previous ?? null) : known.debts
+  history.set(key, { tick, debts, previous })
+  return previous
+}
+
 function focused(worlds: readonly WorldView[], focus: WorldlineId) {
   const world = worlds.find((candidate) => candidate.info.id === focus)
   return world
@@ -108,6 +131,8 @@ function asError(error: unknown): Error {
 }
 
 export function createSimulationStore(client: SimulationClient): SimulationStore {
+  // FEAT: uma entrada por realidade (id + geração, para uma realidade recriada não herdar a de outra)
+  const debtHistory = new Map<string, DebtSnapshot>()
   const store = createStore<SimulationState>()((set, get) => ({
     seed: null,
     now: 0,
@@ -136,6 +161,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       get().open({ version: MODEL_VERSION, seed, tick: 0, decisions: [], branches: [] })
     },
     open(link) {
+      debtHistory.clear()
       set({
         seed: link.seed,
         now: 0,
@@ -304,6 +330,12 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
             decisions: update.decisions,
             crossings: update.crossings,
             debts: update.debts,
+            previousDebts: trackDebts(
+              debtHistory,
+              `${update.info.id}:${update.info.generation}`,
+              update.present.tick,
+              update.debts,
+            ),
             paradox: update.paradox,
           }
         })

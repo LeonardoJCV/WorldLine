@@ -274,6 +274,40 @@ describe('simulation store', () => {
     expect(store.getState().paradox).toBeNull()
   })
 
+  it('remembers the debts from the last year that differed, not from every progress message', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const store = createSimulationStore(client)
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    // FIX: uma travessia por si só reporta um progresso sem o ano mudar; não deve mexer na âncora
+    await client.cross('A', id, 'knowledge', 1)
+    await flush()
+    const beforeStep = store.getState().worlds.find((w) => w.info.id === id)
+    expect(beforeStep?.debts).toEqual([])
+    expect(beforeStep?.previousDebts).toBeNull()
+
+    store.getState().step(1)
+    await flush()
+    const firstYear = store.getState().worlds.find((w) => w.info.id === id)
+    expect(firstYear?.debts.length).toBeGreaterThan(0)
+    // FEAT: a âncora é a dívida do último ano diferente: nenhuma, de antes da travessia chegar
+    expect(firstYear?.previousDebts).toEqual([])
+
+    store.getState().step(1)
+    await flush()
+    const secondYear = store.getState().worlds.find((w) => w.info.id === id)
+    // FEAT: agora a âncora é a mesma referência guardada do ano anterior, não uma recomputada
+    expect(secondYear?.previousDebts).toBe(firstYear?.debts)
+  })
+
   it('opens a crossing in the present from the chosen origin', async () => {
     const { store } = setup()
     store.getState().create(482913)
