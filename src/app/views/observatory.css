@@ -462,6 +462,17 @@ button.state__row:hover,
   content: '▼ ';
 }
 
+.state__debt {
+  margin: 8px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--haze);
+  font-size: var(--text-sm);
+}
+
+.state__debtLabel {
+  color: var(--dim);
+}
+
 .events__list {
   max-height: 188px;
   overflow-y: auto;

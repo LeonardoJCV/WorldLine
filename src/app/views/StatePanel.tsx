@@ -1,11 +1,21 @@
+import type { Debt } from '../../engine/debt.ts'
 import type { Variable } from '../../engine/state.ts'
 import { STRANDS, type Strand } from '../current/normalize.ts'
-import { formatChange, formatVariable, formatYear } from '../i18n/format.ts'
+import {
+  formatChange,
+  formatCompact,
+  formatList,
+  formatVariable,
+  formatYear,
+} from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import { STRAND_COLORS } from '../theme/palette.ts'
+import { debtView } from './debt.ts'
 
 const ROWS: readonly Variable[] = [...STRANDS, 'stability']
+// FIX: referência estável, senão o seletor devolveria um array novo a cada render e travaria a store
+const NO_DEBTS: readonly Debt[] = []
 
 function isStrand(variable: Variable): variable is Strand {
   return (STRANDS as readonly Variable[]).includes(variable)
@@ -31,6 +41,11 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
     return world && world.present.tick === s.present?.tick ? world.present : null
   })
   const comparing = originId !== null
+  const debts = useSimulation(
+    (s) => s.worlds.find((world) => world.info.id === s.focus)?.debts ?? NO_DEBTS,
+  )
+  // FIX: o estado não guarda a dívida de anos passados, então a tendência não tem com o que comparar
+  const debt = debtView(debts, null)
 
   return (
     <section className="panel state" aria-labelledby="state-title">
@@ -107,6 +122,17 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
           )
         })}
       </ul>
+      {debt && (
+        <p className="state__debt">
+          <span className="state__debtLabel">{t('debt.title')}</span>{' '}
+          {t('debt.owed', {
+            value: formatCompact(debt.total, locale),
+            origins: formatList(debt.origins, locale),
+          })}
+          {' — '}
+          {t(`debt.${debt.trend}`)}
+        </p>
+      )}
     </section>
   )
 }

@@ -158,6 +158,23 @@ test('cross causal', async ({ page }) => {
   await page.screenshot({ path: 'screens/cross-causal.png' })
 })
 
+test('state debt', async ({ page }) => {
+  test.slow()
+  await enterCross(page, 1440, 900)
+  await page.getByRole('button', { name: 'Knowledge' }).click()
+  await page.getByRole('button', { name: 'A little' }).click()
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await expect(page.getByText('Knowledge arrived from A.')).toBeVisible()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  // FIX: a dívida entra na engine só no passo que segue a chegada, não no ano em que a travessia abre
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  const panel = page.locator('.panel.state')
+  await expect(panel.locator('.state__debt')).toBeVisible()
+  await panel.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(300)
+  await panel.screenshot({ path: 'screens/state-debt.png' })
+})
+
 test('cross panel mobile', async ({ page }) => {
   await enterCross(page, 390, 844)
   const overflow = await page.evaluate(

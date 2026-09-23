@@ -7,6 +7,7 @@ const compact = new Map<Locale, Intl.NumberFormat>()
 const decimal = new Map<string, Intl.NumberFormat>()
 const signedFormats = new Map<Locale, Intl.NumberFormat>()
 const percentFormats = new Map<Locale, Intl.NumberFormat>()
+const listFormats = new Map<Locale, Intl.ListFormat>()
 const RELATIVE: ReadonlySet<Variable> = new Set(['population', 'food', 'energy', 'economy'])
 
 export function formatYear(tick: number): string {
@@ -158,6 +159,16 @@ export function formatChange(
     text: `${format.format(rounded)}${relative ? '%' : ''}`,
     direction: rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat',
   }
+}
+
+// FEAT: quem se deve pode ser mais de uma origem, e a lista precisa soar como frase em cada língua
+export function formatList(values: readonly string[], locale: Locale): string {
+  let format = listFormats.get(locale)
+  if (!format) {
+    format = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' })
+    listFormats.set(locale, format)
+  }
+  return format.format(values)
 }
 
 export function formatPercent(value: number, locale: Locale): string {
