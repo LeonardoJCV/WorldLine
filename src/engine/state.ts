@@ -1,4 +1,5 @@
 import type { CrossingKind } from './crossing.ts'
+import type { Debt, Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
 
 export const SECTORS = ['agriculture', 'industry', 'research', 'conservation'] as const
@@ -31,7 +32,7 @@ export interface ActiveEvent {
   readonly start: number
 }
 
-export type Status = 'running' | 'extinct'
+export type Status = 'running' | 'extinct' | 'collapsed'
 
 export interface WorldConfig {
   readonly seed: number
@@ -55,6 +56,8 @@ export interface WorldState {
   readonly lastDecision: { readonly tick: number; readonly sectors: readonly Sector[] } | null
   readonly echoes: readonly Echo[]
   readonly lastCrossing: { readonly tick: number; readonly kind: CrossingKind } | null
+  readonly debts: readonly Debt[]
+  readonly paradox: Paradox | null
   readonly status: Status
 }
 

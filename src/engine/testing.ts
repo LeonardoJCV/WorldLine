@@ -22,6 +22,8 @@ export function makeState(overrides: Partial<WorldState> = {}): WorldState {
     lastDecision: null,
     echoes: [],
     lastCrossing: null,
+    debts: [],
+    paradox: null,
     status: 'running',
     ...overrides,
   }

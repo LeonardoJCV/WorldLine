@@ -1,6 +1,9 @@
 import { CROSSING_KINDS } from './crossing.ts'
+import { DEBT_KINDS, PARADOX_KINDS } from './debt.ts'
 import { ECHO_TARGETS } from './echo.ts'
 import { SECTORS, VARIABLES, type WorldState } from './state.ts'
+
+const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2 } as const
 
 const FNV_OFFSET = 0x811c9dc5
 const FNV_PRIME = 0x01000193
@@ -26,7 +29,7 @@ export function hashState(s: WorldState): string {
   for (const value of s.lastEnded) h = feed(h, value)
   h = feed(h, s.lastDecision ? s.lastDecision.tick : -1)
   for (const sector of s.lastDecision?.sectors ?? []) h = feed(h, SECTORS.indexOf(sector))
-  h = feed(h, s.status === 'running' ? 0 : 1)
+  h = feed(h, STATUS_CODES[s.status])
   // FEAT: campos de travessia só entram quando existem, para não mover os fingerprints antigos
   if (s.echoes.length > 0) {
     h = feed(h, s.echoes.length)
@@ -38,6 +41,20 @@ export function hashState(s: WorldState): string {
   if (s.lastCrossing) {
     h = feed(h, s.lastCrossing.tick)
     h = feed(h, CROSSING_KINDS.indexOf(s.lastCrossing.kind))
+  }
+  // FEAT: origem e alocação da dívida são texto e escolha de quitação, não física; ficam fora do hash
+  if (s.debts.length > 0) {
+    h = feed(h, s.debts.length)
+    for (const debt of s.debts) {
+      h = feed(h, DEBT_KINDS.indexOf(debt.kind))
+      h = feed(h, debt.owed)
+      h = feed(h, debt.since)
+    }
+  }
+  if (s.paradox) {
+    h = feed(h, PARADOX_KINDS.indexOf(s.paradox.kind))
+    h = feed(h, s.paradox.since)
+    h = feed(h, s.paradox.deadline)
   }
   return h.toString(16).padStart(8, '0')
 }

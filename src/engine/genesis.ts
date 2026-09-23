@@ -37,6 +37,8 @@ export function genesis(seed: number): { readonly world: WorldConfig; readonly s
       lastDecision: null,
       echoes: [],
       lastCrossing: null,
+      debts: [],
+      paradox: null,
       status: 'running',
     },
   }

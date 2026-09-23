@@ -49,4 +49,27 @@ describe('hashState', () => {
   it('pins the genesis hash', () => {
     expect(hashState(state)).toMatchInlineSnapshot(`"77ebb9f5"`)
   })
+
+  it('ignores the debt fields while they are empty', () => {
+    expect(hashState({ ...state, debts: [], paradox: null })).toBe(hashState(state))
+  })
+
+  it('separates two worlds that owe different things', () => {
+    const a = hashState({
+      ...state,
+      debts: [{ kind: 'knowledge', owed: 10, since: 0, origin: 'other' }],
+    })
+    const b = hashState({
+      ...state,
+      debts: [{ kind: 'resource', owed: 10, since: 0, origin: 'other' }],
+    })
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(hashState(state))
+  })
+
+  it('separates a collapsed world from an extinct one', () => {
+    const a = hashState({ ...state, status: 'extinct' })
+    const b = hashState({ ...state, status: 'collapsed' })
+    expect(a).not.toBe(b)
+  })
 })
