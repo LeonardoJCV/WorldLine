@@ -8,6 +8,7 @@ import {
   episodeY,
   eraLabelY,
   yearToX,
+  type CrossingLine,
   type Frame,
   type Marker,
   type Ribbon,
@@ -35,12 +36,15 @@ export interface DrawInput {
     readonly points: Float32Array
     readonly extinct: boolean
   }[]
+  readonly crossings: readonly CrossingLine[]
 }
 
 const AXIS = 'rgba(142, 136, 181, 0.28)'
 const INK = 'rgba(230, 228, 245, 0.86)'
 const BRIGHT = '#ffffff'
 const MUTED = 'rgba(142, 136, 181, 0.7)'
+// FEAT: mesma família de cor dos marcadores de travessia na cena 3D
+const CROSSING_COLOR = '#f2d9a8'
 const FONT = '500 12px "Archivo Variable", system-ui, sans-serif'
 const FONT_STRONG = '650 12px "Archivo Variable", system-ui, sans-serif'
 export const LABEL_WIDTH = 150
@@ -207,6 +211,20 @@ function drawCompanions(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   ctx.restore()
 }
 
+function drawCrossings(ctx: CanvasRenderingContext2D, input: DrawInput): void {
+  if (input.crossings.length === 0) return
+  ctx.save()
+  ctx.strokeStyle = withAlpha(CROSSING_COLOR, 0.75)
+  ctx.lineWidth = 1
+  for (const segment of input.crossings) {
+    ctx.beginPath()
+    ctx.moveTo(segment.x, segment.fromY)
+    ctx.lineTo(segment.x, segment.toY)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
 export function drawCurrent(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   const { frame, data } = input
   ctx.clearRect(0, 0, input.width, input.height)
@@ -217,6 +235,7 @@ export function drawCurrent(ctx: CanvasRenderingContext2D, input: DrawInput): vo
   ctx.lineTo(frame.right, frame.centerY)
   ctx.stroke()
   drawCompanions(ctx, input)
+  drawCrossings(ctx, input)
   if (data && data.series.population.length >= 2) {
     drawRibbons(ctx, input, data)
     drawEvents(ctx, input)

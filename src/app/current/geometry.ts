@@ -1,3 +1,4 @@
+import type { Crossing, CrossingKind } from '../../engine/crossing.ts'
 import { EVENTS, type EventId, type EventRecord } from '../../engine/events.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
 import { WORLDLINE_IDS, type Series, type WorldlineId } from '../../worker/protocol.ts'
@@ -249,6 +250,76 @@ export function companionAt(
     }
   }
   return null
+}
+
+export interface CompanionLane {
+  readonly id: string
+  readonly points: Float32Array
+}
+
+export interface CrossingWorld {
+  readonly id: string
+  readonly crossings: readonly Crossing[]
+}
+
+export interface CrossingLine {
+  readonly x: number
+  readonly fromY: number
+  readonly toY: number
+  readonly kind: CrossingKind
+}
+
+// FEAT: interpola a trilha da companheira entre duas amostras vizinhas do x pedido
+function pointYAtX(points: Float32Array, x: number): number | null {
+  const count = points.length / 2
+  if (count < 2) return null
+  const first = points[0] ?? 0
+  const last = points[(count - 1) * 2] ?? 0
+  if (x < first || x > last) return null
+  for (let i = 0; i < count - 1; i++) {
+    const x0 = points[i * 2] ?? 0
+    const x1 = points[(i + 1) * 2] ?? 0
+    if (x < x0 || x > x1) continue
+    const y0 = points[i * 2 + 1] ?? 0
+    const y1 = points[(i + 1) * 2 + 1] ?? 0
+    return y0 + (y1 - y0) * (x1 === x0 ? 0 : (x - x0) / (x1 - x0))
+  }
+  return null
+}
+
+function laneY(
+  id: string,
+  focus: string,
+  companions: readonly CompanionLane[],
+  x: number,
+  frame: Frame,
+): number | null {
+  if (id === focus) return frame.centerY
+  const lane = companions.find((companion) => companion.id === id)
+  return lane ? pointYAtX(lane.points, x) : null
+}
+
+export function crossingSegments(
+  worlds: readonly CrossingWorld[],
+  companions: readonly CompanionLane[],
+  focus: string,
+  frame: Frame,
+  from: number,
+  to: number,
+): CrossingLine[] {
+  const segments: CrossingLine[] = []
+  for (const world of worlds) {
+    for (const crossing of world.crossings) {
+      if (crossing.direction !== 'in') continue
+      if (crossing.tick < from || crossing.tick > to) continue
+      const x = yearToX(crossing.tick, from, to, frame)
+      const fromY = laneY(crossing.origin.world, focus, companions, x, frame)
+      const toY = laneY(world.id, focus, companions, x, frame)
+      if (fromY === null || toY === null) continue
+      segments.push({ x, fromY, toY, kind: crossing.kind })
+    }
+  }
+  return segments
 }
 
 export function markerAt(

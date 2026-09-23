@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Crossing } from '../../engine/crossing.ts'
 import type { EventRecord } from '../../engine/events.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { Series } from '../../worker/protocol.ts'
@@ -12,6 +13,7 @@ import {
   companionAt,
   companionPoints,
   companionSide,
+  crossingSegments,
   episodeY,
   eraLabelY,
   layoutEvents,
@@ -324,5 +326,73 @@ describe('markerAt', () => {
   it('clamps events that start before the window', () => {
     const [early] = layoutEvents([record('famine', 5, 50)], 20, 100, 100, frame, 120)
     expect(early?.x).toBe(frame.left)
+  })
+})
+
+describe('crossingSegments', () => {
+  const lane = (id: string, y: number) => ({
+    id,
+    points: Float32Array.from([frame.left, y, frame.right, y]),
+  })
+
+  const crossing = (overrides: Partial<Crossing> = {}): Crossing => ({
+    tick: 50,
+    kind: 'knowledge',
+    dose: 1,
+    amounts: [10],
+    origin: { world: 'B', tick: 50 },
+    cost: 3,
+    direction: 'in',
+    ...overrides,
+  })
+
+  it('places the segment at the year of the crossing, between the two lanes', () => {
+    const segments = crossingSegments(
+      [{ id: 'A', crossings: [crossing()] }],
+      [lane('B', 260)],
+      'A',
+      frame,
+      0,
+      100,
+    )
+    expect(segments).toEqual([
+      { x: yearToX(50, 0, 100, frame), fromY: 260, toY: frame.centerY, kind: 'knowledge' },
+    ])
+  })
+
+  it('skips a crossing outside the visible window', () => {
+    const segments = crossingSegments(
+      [{ id: 'A', crossings: [crossing({ tick: 150 })] }],
+      [lane('B', 260)],
+      'A',
+      frame,
+      0,
+      100,
+    )
+    expect(segments).toEqual([])
+  })
+
+  it('skips a crossing whose origin worldline is not among the drawn lanes', () => {
+    const segments = crossingSegments(
+      [{ id: 'A', crossings: [crossing({ origin: { world: 'Z', tick: 50 } })] }],
+      [lane('B', 260)],
+      'A',
+      frame,
+      0,
+      100,
+    )
+    expect(segments).toEqual([])
+  })
+
+  it('skips a mirrored out record, since the matching in record already drew the line', () => {
+    const segments = crossingSegments(
+      [{ id: 'A', crossings: [crossing({ direction: 'out' })] }],
+      [lane('B', 260)],
+      'A',
+      frame,
+      0,
+      100,
+    )
+    expect(segments).toEqual([])
   })
 })

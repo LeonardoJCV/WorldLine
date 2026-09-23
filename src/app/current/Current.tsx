@@ -9,6 +9,7 @@ import {
   companionAt,
   companionPoints,
   companionSide,
+  crossingSegments,
   layoutEvents,
   markerAt,
   movingAverage,
@@ -119,6 +120,19 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     [tracks, shownFrom, shownTo, frame],
   )
 
+  const crossings = useMemo(
+    () =>
+      crossingSegments(
+        worlds.map((world) => ({ id: world.info.id, crossings: world.crossings })),
+        companions,
+        worldFocus,
+        frame,
+        shownFrom,
+        shownTo,
+      ),
+    [worlds, companions, worldFocus, frame, shownFrom, shownTo],
+  )
+
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
@@ -145,6 +159,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         label: (event) => t(`event.${event}`),
         yearLabel: formatYear,
         companions,
+        crossings,
       })
     })
     return () => cancelAnimationFrame(frameId)
@@ -164,6 +179,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     seed,
     t,
     companions,
+    crossings,
   ])
 
   useEffect(() => {
