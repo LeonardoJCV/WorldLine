@@ -1,4 +1,5 @@
-import type { Crossing, Dose } from './crossing.ts'
+import type { Crossing } from './crossing.ts'
+import { EVENTS } from './events.ts'
 import {
   DEBT_EPSILON,
   PARADOX_GRACE,
@@ -8,7 +9,7 @@ import {
   REPAY_SCALE,
 } from './params.ts'
 import type { Derived } from './rules.ts'
-import { Era, hasEra, type WorldState } from './state.ts'
+import { Era, changedSectors, hasEra, type Allocation, type WorldState } from './state.ts'
 
 export const DEBT_KINDS = ['knowledge', 'resource', 'doctrine'] as const
 export type DebtKind = (typeof DEBT_KINDS)[number]
@@ -21,6 +22,8 @@ export interface Debt {
   readonly owed: number
   readonly since: number
   readonly origin: string
+  // FEAT: só a doutrina carrega a alocação recebida, para a quitação saber o que "manter" significa
+  readonly allocation?: Allocation
 }
 
 export interface Paradox {
@@ -35,21 +38,33 @@ export interface ParadoxResolution {
   readonly strain: number
 }
 
-// FEAT: presente cedo demais exige uma era mínima; dose 1 nunca exige (palpite calibrável na Tarefa 6)
-const DOSE_ERA: Readonly<Record<Dose, number>> = {
-  1: 0,
-  2: Era.agricultural,
-  3: Era.industrial,
+// FIX: os limiares de era vêm do gatilho real do evento em events.ts, não de um palpite novo;
+// se o evento não existir ou não tiver a condição, o limiar vira infinito e nunca dispara por era
+function eraGate(
+  id: 'agricultural_revolution' | 'industrial_revolution',
+  metric: 'technology' | 'energy',
+): number {
+  const def = EVENTS.find((event) => event.id === id)
+  const condition = def?.trigger.find((c) => c.metric === metric)
+  return condition?.value ?? Number.POSITIVE_INFINITY
 }
+
+const AGRICULTURAL_TECH_GATE = eraGate('agricultural_revolution', 'technology')
+const INDUSTRIAL_TECH_GATE = eraGate('industrial_revolution', 'technology')
+const INDUSTRIAL_ENERGY_GATE = eraGate('industrial_revolution', 'energy')
 
 export function debtOf(crossing: Crossing): Debt | null {
   if (crossing.kind === 'people') return null
-  return {
+  const debt: Debt = {
     kind: crossing.kind,
     owed: crossing.cost,
     since: crossing.tick,
     origin: crossing.origin.world,
   }
+  if (crossing.kind === 'doctrine' && crossing.allocation) {
+    return { ...debt, allocation: crossing.allocation }
+  }
+  return debt
 }
 
 export function addDebt(debts: readonly Debt[], entry: Debt): readonly Debt[] {
@@ -73,6 +88,11 @@ export function debtRatio(debts: readonly Debt[], s: WorldState): number {
   return totalOwed(debts) / (Math.max(0, s.economy) + DEBT_EPSILON)
 }
 
+// FEAT: nunca deixa a quitação passar de zero, mesmo que o ganho do ano supere o que falta
+export function clampRepayment(owed: number, gain: number): number {
+  return Math.max(0, owed - gain)
+}
+
 export function repay(
   debts: readonly Debt[],
   s: WorldState,
@@ -85,18 +105,26 @@ export function repay(
     researchShare *
     Math.sqrt(Math.max(0, s.economy)) *
     (1 - s.technology / 100)
-  const foodSurplus = Math.max(0, d.foodAvailable - s.population)
-  const energySurplus = Math.max(0, s.energy - d.energyTarget)
-  const resourceGain = REPAY_SCALE.resource * (foodSurplus + energySurplus)
+  // FIX: foodProduction e energyTarget são funções da capacidade/mão-de-obra/indústria do próprio
+  // mundo — não do estoque de comida ou energia, que é exatamente o que uma travessia de recurso
+  // alimenta pelos ecos. Usar d.foodAvailable ou s.energy faria o presente quitar a si mesmo.
+  const foodSurplus = Math.max(0, d.foodProduction - s.population)
+  const resourceGain = REPAY_SCALE.resource * (foodSurplus + d.energyTarget)
 
   return debts
     .map((debt) => {
       if (debt.kind === 'knowledge')
-        return { ...debt, owed: Math.max(0, debt.owed - knowledgeGain) }
-      if (debt.kind === 'resource') return { ...debt, owed: Math.max(0, debt.owed - resourceGain) }
-      // FEAT: uma doutrina só conta como "mantida" a partir do ano seguinte ao que chegou
-      const doctrineGain = year > debt.since ? REPAY_SCALE.doctrine : 0
-      return { ...debt, owed: Math.max(0, debt.owed - doctrineGain) }
+        return { ...debt, owed: clampRepayment(debt.owed, knowledgeGain) }
+      if (debt.kind === 'resource')
+        return { ...debt, owed: clampRepayment(debt.owed, resourceGain) }
+      // FEAT: uma doutrina só conta como "mantida" a partir do ano seguinte ao que chegou, e só
+      // enquanto o mundo, por decisão própria, ainda roda a alocação exata que recebeu
+      const kept =
+        year > debt.since &&
+        debt.allocation !== undefined &&
+        changedSectors(debt.allocation, s.allocation).length === 0
+      const doctrineGain = kept ? REPAY_SCALE.doctrine : 0
+      return { ...debt, owed: clampRepayment(debt.owed, doctrineGain) }
     })
     .filter((debt) => debt.owed >= DEBT_EPSILON)
 }
@@ -116,8 +144,19 @@ function magnitudeLeap(crossing: Crossing, s: WorldState): boolean {
 }
 
 function eraLeap(crossing: Crossing, s: WorldState): boolean {
-  const required = DOSE_ERA[crossing.dose]
-  return required !== 0 && !hasEra(s, required)
+  if (crossing.kind === 'knowledge') {
+    const nextTech = s.technology + (crossing.amounts[0] ?? 0)
+    return (
+      (!hasEra(s, Era.agricultural) && nextTech > AGRICULTURAL_TECH_GATE) ||
+      (!hasEra(s, Era.industrial) && nextTech > INDUSTRIAL_TECH_GATE)
+    )
+  }
+  if (crossing.kind === 'resource') {
+    const nextEnergy = s.energy + (crossing.amounts[1] ?? 0)
+    return !hasEra(s, Era.industrial) && nextEnergy > INDUSTRIAL_ENERGY_GATE
+  }
+  // FEAT: doutrina e pessoas não têm uma grandeza ligada a um gatilho de era em events.ts
+  return false
 }
 
 export function leapParadox(crossing: Crossing, s: WorldState): boolean {

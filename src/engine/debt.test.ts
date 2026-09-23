@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   addDebt,
   circularParadox,
+  clampRepayment,
   debtOf,
   debtRatio,
   leapParadox,
@@ -13,9 +14,16 @@ import {
 } from './debt.ts'
 import { PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
 import type { Derived } from './rules.ts'
-import { Era } from './state.ts'
+import { Era, type Allocation } from './state.ts'
 import type { Crossing } from './crossing.ts'
 import { makeState } from './testing.ts'
+
+const GIFTED_ALLOCATION: Allocation = {
+  agriculture: 20,
+  industry: 40,
+  research: 30,
+  conservation: 10,
+}
 
 function makeCrossing(overrides: Partial<Crossing> = {}): Crossing {
   return {
@@ -53,12 +61,31 @@ describe('debtOf', () => {
     expect(debtOf(crossing)).toBeNull()
   })
 
-  it('charges knowledge, resource and doctrine at the crossing cost', () => {
-    for (const kind of ['knowledge', 'resource', 'doctrine'] as const) {
+  it('charges knowledge and resource at the crossing cost', () => {
+    for (const kind of ['knowledge', 'resource'] as const) {
       const crossing = makeCrossing({ kind, cost: 7, tick: 42, origin: { world: 'C', tick: 42 } })
       const debt = debtOf(crossing)
       expect(debt).toEqual({ kind, owed: 7, since: 42, origin: 'C' })
     }
+  })
+
+  it('charges doctrine at the crossing cost and carries the gifted allocation', () => {
+    const crossing = makeCrossing({
+      kind: 'doctrine',
+      cost: 7,
+      tick: 42,
+      origin: { world: 'C', tick: 42 },
+      amounts: [],
+      allocation: GIFTED_ALLOCATION,
+    })
+    const debt = debtOf(crossing)
+    expect(debt).toEqual({
+      kind: 'doctrine',
+      owed: 7,
+      since: 42,
+      origin: 'C',
+      allocation: GIFTED_ALLOCATION,
+    })
   })
 })
 
@@ -115,74 +142,159 @@ describe('repay', () => {
     expect(afterIdle[0]?.owed).toBe(debts[0]?.owed)
   })
 
-  it('abates resource by the surplus of food and energy above what the world needs', () => {
+  it('abates resource by its own food production above consumption, plus its own energy target', () => {
     const debts: Debt[] = [{ kind: 'resource', owed: 1, since: 0, origin: 'B' }]
     const surplus = repay(
       debts,
-      makeState({ population: 1000, energy: 5 }),
-      makeDerived({ foodAvailable: 1e8, energyTarget: 1 }),
+      makeState({ population: 1000 }),
+      makeDerived({ foodProduction: 1e8, energyTarget: 5 }),
       1,
     )
     const scarce = repay(
       debts,
-      makeState({ population: 1000, energy: 0.1 }),
-      makeDerived({ foodAvailable: 900, energyTarget: 1 }),
+      makeState({ population: 1000 }),
+      makeDerived({ foodProduction: 0, energyTarget: 0 }),
       1,
     )
-    // FEAT: a fartura por si só já quita a dívida de 1 crédito
+    // FEAT: a produção do próprio mundo, acima do que ele consome, já quita a dívida de 1 crédito
     expect(surplus.length).toBe(0)
     expect(scarce[0]?.owed).toBe(1)
   })
 
-  it('abates doctrine by each year kept, but not the year it arrives', () => {
-    const debts: Debt[] = [{ kind: 'doctrine', owed: 1, since: 10, origin: 'B' }]
-    const sameYear = repay(debts, makeState(), makeDerived(), 10)
+  it('does not let a resource gift measurably speed up its own repayment', () => {
+    // FIX: foodProduction e energyTarget não leem s.food/s.energy, então inflar o estoque (o que
+    // uma travessia de recurso faz pelos ecos) não pode acelerar a quitação da própria dívida
+    const debts: Debt[] = [{ kind: 'resource', owed: 100, since: 0, origin: 'B' }]
+    const derived = makeDerived({ foodProduction: 5e5, energyTarget: 2 })
+    const withoutGift = repay(
+      debts,
+      makeState({ population: 1000, food: 1000, energy: 0.5 }),
+      derived,
+      1,
+    )
+    const withHugeGift = repay(
+      debts,
+      makeState({ population: 1000, food: 5e6, energy: 50 }),
+      derived,
+      1,
+    )
+    expect(withHugeGift[0]?.owed).toBe(withoutGift[0]?.owed)
+  })
+
+  it('abates doctrine only in years the world keeps, by its own decision, the exact allocation it received', () => {
+    const debts: Debt[] = [
+      { kind: 'doctrine', owed: 1, since: 10, origin: 'B', allocation: GIFTED_ALLOCATION },
+    ]
+    const sameYear = repay(debts, makeState({ allocation: GIFTED_ALLOCATION }), makeDerived(), 10)
+    // FEAT: não abate no ano em que a doutrina chega
     expect(sameYear[0]?.owed).toBe(1)
-    const nextYear = repay(debts, makeState(), makeDerived(), 11)
-    expect(nextYear[0]?.owed ?? 0).toBeLessThan(1)
+
+    const kept = repay(debts, makeState({ allocation: GIFTED_ALLOCATION }), makeDerived(), 11)
+    expect(kept[0]?.owed ?? 0).toBeLessThan(1)
+  })
+
+  it('does not abate doctrine once the world abandons the gifted allocation, however much time passes', () => {
+    const debts: Debt[] = [
+      { kind: 'doctrine', owed: 1, since: 10, origin: 'B', allocation: GIFTED_ALLOCATION },
+    ]
+    // FEAT: a alocação padrão de makeState, diferente da doada
+    const ownAllocation = makeState().allocation
+    const abandoned = repay(debts, makeState({ allocation: ownAllocation }), makeDerived(), 50)
+    expect(abandoned[0]?.owed).toBe(1)
   })
 
   it('drops a debt below DEBT_EPSILON from the list', () => {
     const debts: Debt[] = [{ kind: 'doctrine', owed: 1e-9, since: 0, origin: 'B' }]
     expect(repay(debts, makeState(), makeDerived(), 5)).toEqual([])
   })
+})
 
-  it('never goes negative, however large the repayment', () => {
-    const debts: Debt[] = [
-      { kind: 'resource', owed: 0.5, since: 0, origin: 'B' },
-      { kind: 'knowledge', owed: 0.5, since: 0, origin: 'B' },
-    ]
-    const result = repay(
-      debts,
-      makeState({
-        population: 10,
-        allocation: { agriculture: 10, industry: 10, research: 80, conservation: 0 },
-      }),
-      makeDerived({ foodAvailable: 1e9, energyTarget: 0 }),
-      1,
-    )
-    expect(totalOwed(result)).toBeGreaterThanOrEqual(0)
-    for (const debt of result) expect(debt.owed).toBeGreaterThanOrEqual(0)
+describe('clampRepayment', () => {
+  it('never lets a repayment push owed below zero', () => {
+    expect(clampRepayment(0.5, 10)).toBe(0)
+    expect(clampRepayment(0, 5)).toBe(0)
+  })
+
+  it('subtracts normally when the gain does not cover the whole debt', () => {
+    expect(clampRepayment(5, 2)).toBe(3)
   })
 })
 
-describe('leapParadox', () => {
-  it('fires when what arrives is more than PARADOX_LEAP times what the world has', () => {
-    const state = makeState({ technology: 10 })
-    const tooMuch = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [31] })
-    expect(leapParadox(tooMuch, state)).toBe(true)
-  })
-
-  it('fires when the crossing belongs to an era the world has not reached', () => {
-    const state = makeState({ technology: 100, eras: 0 })
-    const advanced = makeCrossing({ kind: 'knowledge', dose: 2, amounts: [1] })
-    expect(leapParadox(advanced, state)).toBe(true)
-  })
-
-  it('does not fire for a proportional gift within reach of the era', () => {
+describe('leapParadox — magnitude, per kind', () => {
+  it('fires for knowledge when what arrives is more than PARADOX_LEAP times the technology the world has', () => {
     const state = makeState({ technology: 10, eras: Era.agricultural | Era.industrial })
-    const modest = makeCrossing({ kind: 'knowledge', dose: 2, amounts: [15] })
+    const tooMuch = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [31] })
+    const proportional = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [15] })
+    expect(leapParadox(tooMuch, state)).toBe(true)
+    expect(leapParadox(proportional, state)).toBe(false)
+  })
+
+  it('checks a resource crossing against food and energy independently, in parcel order [food, energy]', () => {
+    const state = makeState({ food: 100, energy: 10, eras: Era.agricultural | Era.industrial })
+    const tooMuchFood = makeCrossing({ kind: 'resource', dose: 1, amounts: [301, 5] })
+    const tooMuchEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [50, 31] })
+    const proportional = makeCrossing({ kind: 'resource', dose: 1, amounts: [200, 20] })
+    expect(leapParadox(tooMuchFood, state)).toBe(true)
+    expect(leapParadox(tooMuchEnergy, state)).toBe(true)
+    expect(leapParadox(proportional, state)).toBe(false)
+  })
+
+  it('fires for people when the migration is more than PARADOX_LEAP times the population the world has', () => {
+    const state = makeState({ population: 1000 })
+    const tooMany = makeCrossing({ kind: 'people', dose: 1, amounts: [3001] })
+    const proportional = makeCrossing({ kind: 'people', dose: 1, amounts: [2000] })
+    expect(leapParadox(tooMany, state)).toBe(true)
+    expect(leapParadox(proportional, state)).toBe(false)
+  })
+
+  it('never fires on magnitude for doctrine: a doctrine crossing carries no amounts to compare', () => {
+    const state = makeState({ eras: Era.agricultural | Era.industrial })
+    const doctrine = makeCrossing({
+      kind: 'doctrine',
+      dose: 1,
+      amounts: [],
+      allocation: GIFTED_ALLOCATION,
+    })
+    expect(leapParadox(doctrine, state)).toBe(false)
+  })
+})
+
+describe('leapParadox — era, grounded in the real era-event thresholds', () => {
+  it('fires for knowledge that would push technology past the industrial gate (technology > 40) while industrial is unreached', () => {
+    const state = makeState({ technology: 35, eras: Era.agricultural })
+    const pushesPastIndustrial = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [10] })
+    expect(leapParadox(pushesPastIndustrial, state)).toBe(true)
+  })
+
+  it('does not fire for knowledge that stays under every unreached era gate', () => {
+    const state = makeState({ technology: 35, eras: Era.agricultural })
+    const modest = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [2] })
     expect(leapParadox(modest, state)).toBe(false)
+  })
+
+  it('does not fire for knowledge crossing a gate the world has already reached', () => {
+    const state = makeState({ technology: 35, eras: Era.agricultural | Era.industrial })
+    const pushesPast40 = makeCrossing({ kind: 'knowledge', dose: 1, amounts: [10] })
+    expect(leapParadox(pushesPast40, state)).toBe(false)
+  })
+
+  it('fires for resource energy that would push energy past the industrial gate (energy > 1.2)', () => {
+    const state = makeState({ energy: 1, food: 1e6, eras: 0 })
+    const pushesEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [1, 0.3] })
+    expect(leapParadox(pushesEnergy, state)).toBe(true)
+  })
+
+  it('never fires era-based for doctrine or people: no era-event condition is keyed to those metrics', () => {
+    const state = makeState({ eras: 0, population: 1000 })
+    const doctrine = makeCrossing({
+      kind: 'doctrine',
+      dose: 1,
+      amounts: [],
+      allocation: GIFTED_ALLOCATION,
+    })
+    const people = makeCrossing({ kind: 'people', dose: 1, amounts: [100] })
+    expect(leapParadox(doctrine, state)).toBe(false)
+    expect(leapParadox(people, state)).toBe(false)
   })
 })
 
