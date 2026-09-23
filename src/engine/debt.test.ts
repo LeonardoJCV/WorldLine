@@ -5,6 +5,7 @@ import {
   clampRepayment,
   debtOf,
   debtRatio,
+  heaviestDebt,
   leapParadox,
   repay,
   resolveParadox,
@@ -98,11 +99,48 @@ describe('addDebt', () => {
     expect(result).toEqual([{ kind: 'knowledge', owed: 8, since: 100, origin: 'B' }])
   })
 
+  it('adopts the allocation of the newest doctrine gift, the one the world is now asked to keep', () => {
+    const kept: Allocation = { agriculture: 10, industry: 40, research: 30, conservation: 20 }
+    const first: Debt = {
+      kind: 'doctrine',
+      owed: 2,
+      since: 100,
+      origin: 'B',
+      allocation: GIFTED_ALLOCATION,
+    }
+    const second: Debt = { kind: 'doctrine', owed: 3, since: 200, origin: 'B', allocation: kept }
+    const merged = addDebt([first], second)
+    expect(merged).toEqual([
+      { kind: 'doctrine', owed: 5, since: 100, origin: 'B', allocation: kept },
+    ])
+
+    // FIX: antes a dívida somada media a primeira doutrina e nunca caía, por mais séculos que passassem
+    const running = makeState({ allocation: kept })
+    const after = repay(merged, running, makeDerived(), 300)
+    expect(after[0]?.owed).toBeLessThan(5)
+  })
+
   it('keeps debts of the same kind separate when the origin differs', () => {
     const fromB: Debt = { kind: 'knowledge', owed: 5, since: 100, origin: 'B' }
     const fromC: Debt = { kind: 'knowledge', owed: 4, since: 120, origin: 'C' }
     const result = addDebt([fromB], fromC)
     expect(result).toEqual([fromB, fromC])
+  })
+})
+
+describe('heaviestDebt', () => {
+  it('is null with an empty ledger and otherwise names the biggest open debt', () => {
+    const small: Debt = { kind: 'doctrine', owed: 2, since: 10, origin: 'B' }
+    const big: Debt = { kind: 'knowledge', owed: 9, since: 40, origin: 'C' }
+    expect(heaviestDebt([])).toBeNull()
+    expect(heaviestDebt([small, big])).toBe(big)
+    expect(heaviestDebt([big, small])).toBe(big)
+  })
+
+  it('keeps the first of a tie, so the same ledger always names the same crossing', () => {
+    const first: Debt = { kind: 'knowledge', owed: 4, since: 10, origin: 'B' }
+    const tied: Debt = { kind: 'resource', owed: 4, since: 20, origin: 'C' }
+    expect(heaviestDebt([first, tied])).toBe(first)
   })
 })
 
@@ -204,6 +242,12 @@ describe('repay', () => {
     expect(abandoned[0]?.owed).toBe(1)
   })
 
+  it('never grows a knowledge debt when assimilation pushes technology past 100 before the clamp', () => {
+    const owed: Debt = { kind: 'knowledge', owed: 5, since: 0, origin: 'B' }
+    const overshot = makeState({ technology: 104 })
+    expect(repay([owed], overshot, makeDerived(), 10)[0]?.owed).toBe(5)
+  })
+
   it('drops a debt below DEBT_EPSILON from the list', () => {
     const debts: Debt[] = [{ kind: 'doctrine', owed: 1e-9, since: 0, origin: 'B' }]
     expect(repay(debts, makeState(), makeDerived(), 5)).toEqual([])
@@ -264,11 +308,11 @@ describe('leapParadox — magnitude, per kind', () => {
     expect(leapParadox(bag, hungry, TEST_WORLD)).toBe(false)
   })
 
-  it('fires for people when the migration is more than PARADOX_LEAP times the population the world has', () => {
+  it('never fires for people, whatever the migration: without debt no paradox survives the year it is born', () => {
     const state = makeState({ population: 1000 })
     const tooMany = makeCrossing({ kind: 'people', dose: 1, amounts: [3001] })
     const proportional = makeCrossing({ kind: 'people', dose: 1, amounts: [2000] })
-    expect(leapParadox(tooMany, state, TEST_WORLD)).toBe(true)
+    expect(leapParadox(tooMany, state, TEST_WORLD)).toBe(false)
     expect(leapParadox(proportional, state, TEST_WORLD)).toBe(false)
   })
 

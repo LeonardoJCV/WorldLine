@@ -24,13 +24,11 @@ export function runGoldenChecks(): GoldenResult[] {
   })
 }
 
-// FEAT: um presente de conhecimento que ninguém pesquisa nunca quita — o roteiro que a Tarefa 6
-// calibrou para colapsar sempre, em todas as sementes e nos dois doadores; a engine nunca avança
-// depois do colapso, então o ano é o próprio ano em que ele acontece, não um alvo distante
-const COLLAPSE_DECISIONS: readonly Decision[] = [
+// FEAT: um presente de conhecimento que ninguém pesquisa nunca quita, e o ano é o do próprio colapso
+export const COLLAPSE_DECISIONS: readonly Decision[] = [
   { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
 ]
-const COLLAPSE_CROSSINGS: readonly Crossing[] = [
+export const COLLAPSE_CROSSINGS: readonly Crossing[] = [
   {
     tick: 0,
     kind: 'knowledge',

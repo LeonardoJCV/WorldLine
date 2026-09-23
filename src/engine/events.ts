@@ -1,5 +1,5 @@
 import type { CrossingKind } from './crossing.ts'
-import { debtRatio } from './debt.ts'
+import { debtRatio, heaviestDebt } from './debt.ts'
 import { smoothstep } from './math.ts'
 import { CAUSAL_WINDOW, EXTINCTION_THRESHOLD } from './params.ts'
 import { Channel, uniform } from './rng.ts'
@@ -273,13 +273,11 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
   conservation: ['environment'],
 }
 
-// FEAT: doutrina mexe no que qualquer setor mexe
-// FEAT: conhecimento, recurso e doutrina abrem dívida (debtOf), então também podem causar um
-// paradoxo; pessoas nunca abrem dívida, mas um presente grande demais ainda pode saltar a era
+// FEAT: doutrina mexe no que qualquer setor mexe; só quem abre dívida chega ao paradoxo
 const CROSSING_INFLUENCES: Readonly<Record<CrossingKind, readonly Metric[]>> = {
   knowledge: ['technology', 'debtRatio', 'paradoxActive'],
   resource: ['food', 'foodSecurity', 'energy', 'energyRatio', 'debtRatio', 'paradoxActive'],
-  people: ['population', 'crowding', 'foodSecurity', 'paradoxActive'],
+  people: ['population', 'crowding', 'foodSecurity'],
   doctrine: [
     ...SECTORS.flatMap((sector) => SECTOR_INFLUENCES[sector]),
     'debtRatio',
@@ -355,6 +353,10 @@ export function holds(conditions: readonly Condition[], metrics: Metrics): boole
   )
 }
 
+function sameCrossing(cause: Cause, other: Extract<Cause, { kind: 'crossing' }>): boolean {
+  return cause.kind === 'crossing' && cause.tick === other.tick && cause.crossing === other.crossing
+}
+
 function causesOf(
   def: EventDef,
   s: WorldState,
@@ -392,6 +394,14 @@ function causesOf(
     CROSSING_INFLUENCES[crossing.kind].some(involved)
   ) {
     causes.push({ kind: 'crossing', tick: crossing.tick, crossing: crossing.kind })
+  }
+  // FEAT: a dívida cobra séculos depois, então a travessia que a abriu nomeia o paradoxo fora da janela
+  if (s.paradox?.kind === 'debt' && involved('paradoxActive')) {
+    const heaviest = heaviestDebt(s.debts)
+    const named = heaviest
+      ? ({ kind: 'crossing', tick: heaviest.since, crossing: heaviest.kind } as const)
+      : null
+    if (named && !causes.some((cause) => sameCrossing(cause, named))) causes.push(named)
   }
   return causes
 }

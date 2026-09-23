@@ -1,6 +1,7 @@
 import type { Crossing } from './crossing.ts'
 import {
   addDebt,
+  bearsDebt,
   debtOf,
   debtRatio,
   leapParadox,
@@ -61,7 +62,7 @@ function arrivingParadox(
   crossings: readonly Crossing[],
 ): Paradox | null {
   for (const crossing of crossings) {
-    if (crossing.circular) {
+    if (crossing.circular && bearsDebt(crossing.kind)) {
       return { kind: 'circular', since: s.tick, deadline: s.tick + PARADOX_GRACE }
     }
     if (leapParadox(crossing, s, world)) {

@@ -8,6 +8,7 @@ import {
   evaluateEvents,
   type EventDef,
 } from './events.ts'
+import { CAUSAL_WINDOW } from './params.ts'
 import { NEUTRAL_MODIFIERS, derive } from './rules.ts'
 import { Era, NEVER, type WorldState } from './state.ts'
 import { TEST_WORLD, makeMetrics, makeState } from './testing.ts'
@@ -368,6 +369,31 @@ describe('paradox and collapse', () => {
     const outcome = evaluateEvents(s, makeMetrics({ paradoxActive: 1 }), 1, 0)
     const record = outcome.started.find((r) => r.event === 'paradox')
     expect(record?.causes).toContainEqual({ kind: 'crossing', tick: 80, crossing: 'knowledge' })
+  })
+
+  it('names the crossing behind the heaviest debt, however far outside the causal window it lies', () => {
+    // FIX: uma dívida só vira paradoxo depois de PARADOX_PATIENCE anos, que é mais que CAUSAL_WINDOW
+    const debts: Debt[] = [
+      { kind: 'doctrine', owed: 2, since: 5, origin: 'C' },
+      { kind: 'resource', owed: 9, since: 1, origin: 'B' },
+    ]
+    const paradox: Paradox = { kind: 'debt', since: 100, deadline: 300 }
+    const s = world(EVENTS, { debts, paradox, lastCrossing: { tick: 5, kind: 'doctrine' } })
+    expect(s.tick - 1).toBeGreaterThan(CAUSAL_WINDOW)
+    const outcome = evaluateEvents(s, makeMetrics({ paradoxActive: 1 }), 1, 0)
+    const record = outcome.started.find((r) => r.event === 'paradox')
+    expect(record?.causes).toContainEqual({ kind: 'crossing', tick: 1, crossing: 'resource' })
+    expect(record?.causes.filter((cause) => cause.kind === 'crossing')).toHaveLength(1)
+  })
+
+  it('names no crossing for a leap or circular paradox beyond the one the window already carries', () => {
+    const paradox: Paradox = { kind: 'circular', since: 100, deadline: 300 }
+    const debts: Debt[] = [{ kind: 'knowledge', owed: 9, since: 1, origin: 'B' }]
+    const s = world(EVENTS, { debts, paradox, lastCrossing: { tick: 100, kind: 'knowledge' } })
+    const outcome = evaluateEvents(s, makeMetrics({ paradoxActive: 1 }), 1, 0)
+    const record = outcome.started.find((r) => r.event === 'paradox')
+    expect(record?.causes).toContainEqual({ kind: 'crossing', tick: 100, crossing: 'knowledge' })
+    expect(record?.causes.filter((cause) => cause.kind === 'crossing')).toHaveLength(1)
   })
 
   it('traces a collapse back to the paradox that is still active when it fires', () => {

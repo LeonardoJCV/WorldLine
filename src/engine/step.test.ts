@@ -222,6 +222,12 @@ describe('paradox and collapse', () => {
     expect(result.state.paradox).toEqual({ kind: 'circular', since: 0, deadline: PARADOX_GRACE })
   })
 
+  it('installs nothing for people, flagged or not: they carry no debt to close a loop with', () => {
+    const flagged = step(state, world, 0, undefined, [at('people', [1e7], { circular: true })])
+    expect(flagged.state.paradox).toBeNull()
+    expect(flagged.state.debts).toEqual([])
+  })
+
   it('installs a debt paradox after PARADOX_PATIENCE years above the ratio', () => {
     const strained = {
       ...state,

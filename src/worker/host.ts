@@ -9,7 +9,7 @@ import {
   type CrossingKind,
   type Dose,
 } from '../engine/crossing.ts'
-import { circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
+import { bearsDebt, circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
@@ -396,16 +396,19 @@ export class SimulationHost {
       debtRatio(destinationState.debts, destinationState),
     )
     this.#afford(cost)
-    const circular = circularParadox(
-      originId,
-      destinationId,
-      this.#ledgers(
-        new Map([
-          [originId, originState.debts],
-          [destinationId, destinationState.debts],
-        ]),
-      ),
-    )
+    // FIX: gente não abre dívida, então também não fecha ciclo de dívida nenhum
+    const circular =
+      bearsDebt(kind) &&
+      circularParadox(
+        originId,
+        destinationId,
+        this.#ledgers(
+          new Map([
+            [originId, originState.debts],
+            [destinationId, destinationState.debts],
+          ]),
+        ),
+      )
 
     const crossing: Crossing = {
       tick: this.#now,

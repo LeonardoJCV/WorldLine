@@ -4,10 +4,7 @@ import { ECHO_TARGETS } from './echo.ts'
 import { NEVER, SECTORS, VARIABLES, type WorldState } from './state.ts'
 
 const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2 } as const
-// FIX: quantas EVENTS existiam antes da Tarefa 4; essas entradas de lastEnded sempre entram no
-// hash, mesmo em NEVER, para reproduzir os doze goldens antigos bit a bit. Um evento acrescentado
-// depois só entra quando de fato já disparou uma vez — do contrário toda a tabela crescer move
-// o fingerprint de qualquer mundo, tenha ele cruzado alguma travessia ou não
+// FIX: os eventos antigos sempre entram, mesmo em NEVER; os novos só depois de terem disparado uma vez
 const LEGACY_EVENT_COUNT = 11
 
 const FNV_OFFSET = 0x811c9dc5

@@ -1,4 +1,4 @@
-import type { Crossing } from './crossing.ts'
+import type { Crossing, CrossingKind } from './crossing.ts'
 import { EVENTS, holds, worldDerived, worldMetrics, type Metrics } from './events.ts'
 import {
   DEBT_EPSILON,
@@ -46,8 +46,13 @@ export interface ParadoxResolution {
   readonly strain: number
 }
 
+// FEAT: gente nunca abre dívida (D7), e sem dívida nenhum paradoxo sobrevive ao ano em que nasce
+export function bearsDebt(kind: CrossingKind): kind is DebtKind {
+  return kind !== 'people'
+}
+
 export function debtOf(crossing: Crossing): Debt | null {
-  if (crossing.kind === 'people') return null
+  if (!bearsDebt(crossing.kind)) return null
   const debt: Debt = {
     kind: crossing.kind,
     owed: crossing.cost,
@@ -63,11 +68,26 @@ export function debtOf(crossing: Crossing): Debt | null {
 export function addDebt(debts: readonly Debt[], entry: Debt): readonly Debt[] {
   const existing = debts.find((debt) => debt.kind === entry.kind && debt.origin === entry.origin)
   if (!existing) return [...debts, entry]
+  // FIX: a dívida somada segue a alocação do presente mais recente, que é a que o mundo passa a rodar
   return debts.map((debt) =>
     debt === existing
-      ? { ...debt, owed: debt.owed + entry.owed, since: Math.min(debt.since, entry.since) }
+      ? {
+          ...debt,
+          owed: debt.owed + entry.owed,
+          since: Math.min(debt.since, entry.since),
+          ...(entry.allocation ? { allocation: entry.allocation } : {}),
+        }
       : debt,
   )
+}
+
+// FEAT: a dívida que mais pesa hoje, para um paradoxo poder nomear a travessia que a abriu
+export function heaviestDebt(debts: readonly Debt[]): Debt | null {
+  let heaviest: Debt | null = null
+  for (const debt of debts) {
+    if (!heaviest || debt.owed > heaviest.owed) heaviest = debt
+  }
+  return heaviest
 }
 
 export function totalOwed(debts: readonly Debt[]): number {
@@ -103,10 +123,9 @@ export function repay(
     REPAY_SCALE.knowledge *
     researchShare *
     Math.sqrt(Math.max(0, s.economy)) *
-    (1 - s.technology / 100)
-  // FIX: foodProduction e energyTarget são funções da capacidade/mão-de-obra/indústria do próprio
-  // mundo — não do estoque de comida ou energia, que é exatamente o que uma travessia de recurso
-  // alimenta pelos ecos. Usar d.foodAvailable ou s.energy faria o presente quitar a si mesmo.
+    // FIX: acima de 100 a tecnologia é transitória e o ganho viraria negativo, engordando a dívida
+    Math.max(0, 1 - s.technology / 100)
+  // FIX: produção do próprio mundo, não estoque: é o estoque que a travessia de recurso alimenta
   const foodSurplus = Math.max(0, d.foodProduction - s.population)
   const resourceGain = REPAY_SCALE.resource * (foodSurplus + d.energyTarget)
 
@@ -132,13 +151,10 @@ function overshoot(amount: number, have: number): boolean {
   return amount > PARADOX_LEAP * have
 }
 
-// FIX: comida e energia são estoques que um mundo vivendo do que colhe carrega perto de zero, e
-// contra eles qualquer ajuda parecia desmedida; a grandeza honesta é o que o mundo produz num ano,
-// a mesma que a quitação de recurso já usa. Tecnologia e gente não são estoques desse feitio.
+// FIX: recurso se mede pelo que o mundo produz num ano, não pelo estoque que ele carrega perto de zero
 function magnitudeLeap(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
   const amounts = crossing.amounts
   if (crossing.kind === 'knowledge') return overshoot(amounts[0] ?? 0, s.technology)
-  if (crossing.kind === 'people') return overshoot(amounts[0] ?? 0, s.population)
   if (crossing.kind === 'resource') {
     const d = worldDerived(s, world)
     return (
@@ -163,8 +179,7 @@ function landed(s: WorldState, crossing: Crossing): WorldState {
   return s
 }
 
-// FIX: só é salto de era o presente que sozinho vence TODAS as condições ainda não cumpridas do
-// evento daquela era; vencer uma delas enquanto outra segue séculos longe não adianta a história
+// FIX: só salta a era o presente que sozinho vence TODAS as condições ainda não cumpridas dela
 function eraLeap(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
   if (crossing.kind === 'doctrine') return false
   let before: Metrics | null = null
@@ -181,6 +196,7 @@ function eraLeap(crossing: Crossing, s: WorldState, world: WorldConfig): boolean
 }
 
 export function leapParadox(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
+  if (!bearsDebt(crossing.kind)) return false
   return magnitudeLeap(crossing, s, world) || eraLeap(crossing, s, world)
 }
 

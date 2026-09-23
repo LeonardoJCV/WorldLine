@@ -670,6 +670,33 @@ describe('SimulationHost: crossings', () => {
     expect(world(sent, 'B')?.paradox?.kind).toBe('circular')
   })
 
+  it('never flags people, even between two worlds that already owe each other', () => {
+    const { host, sent } = pair()
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'B',
+      destination: 'A',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'A')?.debts.length).toBeGreaterThan(0)
+    host.handle({
+      type: 'cross',
+      requestId: 3,
+      origin: 'A',
+      destination: 'B',
+      kind: 'people',
+      dose: 1,
+    })
+    expect(last(sent, 'crossed')?.crossing.circular).toBeUndefined()
+    host.handle({ type: 'step', years: 1 })
+    // FEAT: gente não abre dívida, então o ciclo segue como estava e nenhum paradoxo nasce
+    expect(world(sent, 'B')?.paradox).toBeNull()
+    expect(world(sent, 'B')?.debts).toEqual([])
+  })
+
   it('rebuilds a multiverse with crossings from open', () => {
     const { host, sent } = setup()
     const arrival = {
