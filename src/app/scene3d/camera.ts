@@ -51,7 +51,7 @@ export function yearAtPointer(p: Point, a: Point, b: Point, from: number, to: nu
 }
 
 export interface ScreenTarget {
-  readonly kind: 'world' | 'event' | 'enter' | 'micro'
+  readonly kind: 'world' | 'event' | 'enter' | 'micro' | 'crossing'
   readonly key: string
   readonly x: number
   readonly y: number

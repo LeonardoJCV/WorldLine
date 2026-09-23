@@ -69,7 +69,7 @@ export interface SceneWorld {
 
 export interface SceneMarker {
   readonly key: string
-  readonly kind: 'event' | 'decision' | 'fork' | 'micro'
+  readonly kind: 'event' | 'decision' | 'fork' | 'micro' | 'crossing'
   readonly position: Vec3
 }
 
@@ -306,6 +306,8 @@ export function createCurrentScene(
     decision: new OctahedronGeometry(0.08),
     fork: new SphereGeometry(0.09, 16, 12),
     micro: new OctahedronGeometry(0.12),
+    // FEAT: menor que o micro, mesma família quente, marca as duas pontas de um cruzamento
+    crossing: new OctahedronGeometry(0.075),
   }
   const markerMaterial = {
     event: new MeshBasicMaterial({ color: 0xe6e4f5 }),
@@ -313,6 +315,7 @@ export function createCurrentScene(
     decision: new MeshBasicMaterial({ color: 0x6a5a94 }),
     fork: new MeshBasicMaterial({ color: 0x9a8fc4 }),
     micro: new MeshBasicMaterial({ color: 0xf2d9a8 }),
+    crossing: new MeshBasicMaterial({ color: 0xe0975a }),
   }
 
   const cursorPlane = new Mesh(

@@ -1,4 +1,5 @@
 import { FOCUS_RADIUS, type ScreenTarget, type Vec3 } from './camera.ts'
+import type { CrossingArc } from './crossings.ts'
 import type { LensTarget } from '../surface/lens.ts'
 import { MICRO_KINDS, type MicroEvent, type MicroKind } from '../surface/micro.ts'
 import type { Site } from '../surface/sites.ts'
@@ -18,7 +19,7 @@ export interface TargetWorld {
 
 export interface TargetMarker {
   readonly key: string
-  readonly kind: 'event' | 'decision' | 'fork' | 'micro'
+  readonly kind: 'event' | 'decision' | 'fork' | 'micro' | 'crossing'
   readonly position: Vec3
 }
 
@@ -61,7 +62,7 @@ export function screenTargets(
     }
   }
   for (const marker of markers) {
-    if (marker.kind !== 'event' && marker.kind !== 'micro') continue
+    if (marker.kind !== 'event' && marker.kind !== 'micro' && marker.kind !== 'crossing') continue
     const p = project(marker.position)
     if (p.visible)
       list.push({ kind: marker.kind, key: marker.key, x: p.x, y: p.y, radius: EVENT_PICK })
@@ -81,4 +82,10 @@ export function microTarget(key: string, sites: readonly Site[]): LensTarget | n
   if (tag !== 'micro' || !place || !Number.isInteger(when)) return null
   if (!(MICRO_KINDS as readonly string[]).includes(kind ?? '')) return null
   return { dir: place.dir, year: when, site: index, kind: kind as MicroKind }
+}
+
+// FEAT: a chave do alvo é a mesma chave do arco; achar a travessia é só uma busca por igualdade
+export function crossingTarget(key: string, arcs: readonly CrossingArc[]): CrossingArc | null {
+  if (!key.startsWith('crossing:')) return null
+  return arcs.find((arc) => arc.key === key) ?? null
 }

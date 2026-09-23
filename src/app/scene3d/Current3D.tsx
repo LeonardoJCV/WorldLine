@@ -26,6 +26,7 @@ import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import { streamClick } from '../views/cross.ts'
+import { CrossingCard } from './CrossingCard.tsx'
 import { crossingArcs, echoAxisWindows, type CrossingArc, type CrossingWorld } from './crossings.ts'
 import {
   eraOffsets,
@@ -40,7 +41,7 @@ import {
 import { axisPoint, buildPath, headPoint, type PathData } from './path.ts'
 import type { CurrentScene, SceneEcho, SceneMarker, SceneWorld } from './scene.ts'
 import { SAMPLES, axisOffsets, resample } from './space.ts'
-import { MICRO_WINDOW, microKey, microTarget, screenTargets } from './targets.ts'
+import { crossingTarget, MICRO_WINDOW, microKey, microTarget, screenTargets } from './targets.ts'
 import './scene3d.css'
 
 interface Fetched {
@@ -459,6 +460,21 @@ export function Current3D({
     [crossingWorlds, fetched],
   )
 
+  // FEAT: cada travessia marca as duas pontas do arco, com a mesma chave do arco
+  const crossingMarkers = useMemo<SceneMarker[]>(
+    () =>
+      arcs.flatMap((arc) => [
+        { key: arc.key, kind: 'crossing' as const, position: arc.from },
+        { key: arc.key, kind: 'crossing' as const, position: arc.to },
+      ]),
+    [arcs],
+  )
+
+  const sceneMarkers = useMemo<SceneMarker[]>(
+    () => [...markers, ...crossingMarkers],
+    [markers, crossingMarkers],
+  )
+
   const echoes = useMemo<SceneEcho[]>(() => {
     if (!fetched) return []
     const idToKey = new Map(sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.key]))
@@ -483,11 +499,17 @@ export function Current3D({
 
   useEffect(() => {
     const selectedKey = selected === null ? null : String(selected)
-    latest.current = { ...latest.current, markers, arcs, echoes, selected: selectedKey }
-    sceneRef.current?.setMarkers(markers, selectedKey)
+    latest.current = {
+      ...latest.current,
+      markers: sceneMarkers,
+      arcs,
+      echoes,
+      selected: selectedKey,
+    }
+    sceneRef.current?.setMarkers(sceneMarkers, selectedKey)
     sceneRef.current?.setCrossings(arcs)
     sceneRef.current?.setEchoes(echoes)
-  }, [markers, arcs, echoes, selected])
+  }, [sceneMarkers, arcs, echoes, selected])
 
   const cursorPoint = useMemo<Vec3 | null>(() => {
     if (cursor === null || !focusPath || !fetched) return null
@@ -574,7 +596,7 @@ export function Current3D({
 
   const targets = (): ScreenTarget[] => {
     const scene = sceneRef.current
-    return scene ? screenTargets(sceneWorlds, markers, (point) => scene.project(point)) : []
+    return scene ? screenTargets(sceneWorlds, sceneMarkers, (point) => scene.project(point)) : []
   }
 
   const dive = (open: () => void) => {
@@ -598,6 +620,28 @@ export function Current3D({
   const microTitle = (key: string): string => {
     const target = sites?.seed === seed ? microTarget(key, sites.sites) : null
     return target ? describeMicro(target) : ''
+  }
+
+  const [openCrossingKey, setOpenCrossingKey] = useState<string | null>(null)
+  const openArc = openCrossingKey ? crossingTarget(openCrossingKey, arcs) : null
+  const observedYear = observed?.tick ?? present
+
+  const closeCrossing = () => {
+    setOpenCrossingKey(null)
+    canvasRef.current?.focus()
+  }
+
+  const describeCrossing = (arc: CrossingArc): string =>
+    t('crossing.item', {
+      kind: t(`cross.kind.${arc.kind}`),
+      origin: arc.origin,
+      destination: arc.destination,
+      year: formatYear(arc.year),
+    })
+
+  const crossingTitle = (key: string): string => {
+    const arc = crossingTarget(key, arcs)
+    return arc ? describeCrossing(arc) : ''
   }
 
   const yearAt = useCallback(
@@ -690,6 +734,11 @@ export function Current3D({
       inert={paused}
       data-micro={microList.length}
       data-arcs={arcs.length}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !openArc) return
+        event.preventDefault()
+        closeCrossing()
+      }}
     >
       <canvas
         ref={canvasRef}
@@ -739,6 +788,10 @@ export function Current3D({
             openMicro(hit.key)
             return
           }
+          if (hit?.kind === 'crossing') {
+            setOpenCrossingKey(hit.key)
+            return
+          }
           event.currentTarget.setPointerCapture(event.pointerId)
           if (hit?.kind === 'enter') {
             // FEAT: entra no planeta só no clique; arrastar a partir dele varre o tempo
@@ -778,12 +831,14 @@ export function Current3D({
           event.currentTarget.title =
             hover?.kind === 'micro'
               ? microTitle(hover.key)
-              : hover?.kind === 'world' && state.mode === 'cross'
-                ? streamClick(state.mode, hover.key as WorldlineId, state.focus, state.worlds) ===
-                  'origin'
-                  ? t('cross.origin', { id: hover.key })
-                  : t('worlds.focus', { id: hover.key })
-                : ''
+              : hover?.kind === 'crossing'
+                ? crossingTitle(hover.key)
+                : hover?.kind === 'world' && state.mode === 'cross'
+                  ? streamClick(state.mode, hover.key as WorldlineId, state.focus, state.worlds) ===
+                    'origin'
+                    ? t('cross.origin', { id: hover.key })
+                    : t('worlds.focus', { id: hover.key })
+                  : ''
         }}
         onPointerUp={(event: PointerEvent<HTMLCanvasElement>) => {
           const press = pressRef.current
@@ -823,6 +878,17 @@ export function Current3D({
           ))}
         </ul>
       )}
+      {arcs.length > 0 && (
+        <ul className="scene3d__crossings" aria-label={t('crossing.list')}>
+          {arcs.map((arc) => (
+            <li key={arc.key}>
+              <button type="button" onClick={() => setOpenCrossingKey(arc.key)}>
+                {describeCrossing(arc)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="scene3d__labels" aria-hidden="true">
         {labels.map((label) => (
           <span
@@ -849,6 +915,7 @@ export function Current3D({
           {t('scene.recenter')}
         </button>
       </div>
+      {openArc && <CrossingCard arc={openArc} observed={observedYear} onClose={closeCrossing} />}
     </div>
   )
 }

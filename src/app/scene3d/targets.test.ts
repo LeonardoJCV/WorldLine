@@ -2,9 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { FOCUS_RADIUS, pickTarget, type Vec3 } from './camera.ts'
+import type { CrossingArc } from './crossings.ts'
 import { buildPath, headPoint } from './path.ts'
 import type { Site } from '../surface/sites.ts'
-import { EVENT_PICK, microKey, microTarget, screenTargets, type TargetWorld } from './targets.ts'
+import {
+  crossingTarget,
+  EVENT_PICK,
+  microKey,
+  microTarget,
+  screenTargets,
+  type TargetWorld,
+} from './targets.ts'
 
 function series(): RangeResult {
   const out = {} as Record<Variable, Float32Array>
@@ -96,6 +104,42 @@ describe('microTarget', () => {
     )
     expect(targets).toEqual([
       { kind: 'micro', key: 'micro:1724:fire:3', x: 500, y: 300, radius: EVENT_PICK },
+    ])
+  })
+})
+
+describe('crossingTarget', () => {
+  const arcs: CrossingArc[] = [
+    {
+      key: 'crossing:B:120:knowledge',
+      kind: 'knowledge',
+      year: 120,
+      from: [0, 0, 0],
+      to: [1, 0, 0],
+      origin: 'A',
+      destination: 'B',
+      cost: 3,
+      amounts: [4],
+    },
+  ]
+
+  it('finds the arc a crossing marker key refers to', () => {
+    expect(crossingTarget('crossing:B:120:knowledge', arcs)).toEqual(arcs[0])
+  })
+
+  it('rejects other keys and crossings not in the list', () => {
+    expect(crossingTarget('micro:120:fire:0', arcs)).toBeNull()
+    expect(crossingTarget('crossing:B:999:knowledge', arcs)).toBeNull()
+  })
+
+  it('turns visible crossing markers into pick targets', () => {
+    const targets = screenTargets(
+      [],
+      [{ key: 'crossing:B:120:knowledge', kind: 'crossing', position: [0, 0, 0] }],
+      project,
+    )
+    expect(targets).toEqual([
+      { kind: 'crossing', key: 'crossing:B:120:knowledge', x: 500, y: 300, radius: EVENT_PICK },
     ])
   })
 })

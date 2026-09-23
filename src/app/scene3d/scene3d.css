@@ -29,7 +29,8 @@
 }
 
 .scene3d__hint,
-.scene3d__micros {
+.scene3d__micros,
+.scene3d__crossings {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -39,6 +40,58 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.scene3d__card {
+  position: absolute;
+  /* FIX: acima do minimap (bottom 10px, altura 36px, z-index 3), senão ele desenha por cima da ficha */
+  z-index: 4;
+  left: var(--gutter);
+  bottom: 56px;
+  width: min(320px, 90%);
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--nebula);
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--starlight);
+  font-size: var(--text-sm);
+}
+
+.scene3d__card h2 {
+  margin: 0 28px 10px 0;
+  font-size: var(--text-lg);
+}
+
+.scene3d__card p {
+  margin: 6px 0 0;
+}
+
+.scene3d__card-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .scene3d__card {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 45%;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
 }
 
 .scene3d__labels {

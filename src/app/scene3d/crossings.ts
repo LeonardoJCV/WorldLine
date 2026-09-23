@@ -6,7 +6,7 @@ import type { Vec3 } from './camera.ts'
 export const ECHO_YEARS = 30
 export const MAX_ARCS = 12
 
-const ECHO_KINDS: readonly CrossingKind[] = ['knowledge', 'resource']
+export const ECHO_KINDS: readonly CrossingKind[] = ['knowledge', 'resource']
 
 export interface CrossingWorld {
   readonly id: string
@@ -23,6 +23,7 @@ export interface CrossingArc {
   readonly origin: string
   readonly destination: string
   readonly cost: number
+  readonly amounts: readonly number[]
 }
 
 export interface EchoWindow {
@@ -65,6 +66,7 @@ export function crossingArcs(
         origin: crossing.origin.world,
         destination: world.id,
         cost: crossing.cost,
+        amounts: crossing.amounts,
       })
     }
   }
