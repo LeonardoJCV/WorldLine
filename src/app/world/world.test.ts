@@ -89,6 +89,7 @@ const crossing = fc
     }),
     world: fc.constantFrom(...WORLDLINE_IDS),
     leaving: fc.boolean(),
+    circular: fc.boolean(),
     allocation,
   })
   .map((draw): Crossing => {
@@ -102,6 +103,7 @@ const crossing = fc
       cost: draw.cost,
       direction: draw.kind === 'people' && draw.leaving ? 'out' : 'in',
       ...(doctrine ? { allocation: draw.allocation } : {}),
+      ...(draw.circular ? { circular: true } : {}),
     }
   })
 
@@ -356,6 +358,49 @@ describe('multiverse link', () => {
     sent.advance(600)
     opened.advance(600)
     expect(opened.hashAt(600)).toBe(sent.hashAt(600))
+  })
+
+  it('carries the circular flag, so a world that collapsed from a loop reopens collapsed', () => {
+    // FEAT: pesquisa zerada nunca quita o presente, e o ciclo marca o paradoxo no ano zero
+    const idle: Decision[] = [
+      { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+    ]
+    const plain: Crossing = {
+      tick: 0,
+      kind: 'knowledge',
+      dose: 3,
+      amounts: [10],
+      origin: { world: 'B', tick: 0 },
+      cost: 9,
+      direction: 'in',
+    }
+    const loop: Crossing = { ...plain, circular: true }
+    const value: MultiverseLink = {
+      version: MODEL_VERSION,
+      seed: 482913,
+      tick: 0,
+      decisions: idle,
+      branches: [],
+      crossings: [loop],
+    }
+    const back = decodeMultiverse(encodeMultiverse(value))
+    expect(back).toEqual(value)
+    const file = parseWorldFile(serializeWorld({ name: 'Loop', link: value }))
+    expect(file?.link).toEqual(value)
+
+    const sent = new Worldline(value.seed, idle, null, [loop])
+    const opened = new Worldline(value.seed, idle, null, back?.crossings ?? [])
+    const dropped = new Worldline(value.seed, idle, null, [plain])
+    sent.advance(600)
+    opened.advance(600)
+    dropped.advance(600)
+    const year = sent.present.tick
+    expect(sent.present.status).toBe('collapsed')
+    expect(opened.present.tick).toBe(year)
+    expect(opened.present.status).toBe('collapsed')
+    // FIX: sem a bandeira o mundo reaberto colapsava noutro ano, com outra impressão digital
+    expect(opened.hashAt(year)).toBe(sent.hashAt(year))
+    expect(dropped.present.tick).not.toBe(year)
   })
 
   it('round-trips any crossing log', () => {

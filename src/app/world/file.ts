@@ -57,6 +57,7 @@ function toCrossing(value: unknown): Crossing | null {
   if (!Array.isArray(value.amounts) || value.amounts.some((a) => typeof a !== 'number')) return null
   const allocation = value.allocation === undefined ? null : toAllocation(value.allocation)
   if (value.allocation !== undefined && allocation === null) return null
+  if (value.circular !== undefined && typeof value.circular !== 'boolean') return null
   return {
     tick: value.tick,
     kind: value.kind as CrossingKind,
@@ -66,6 +67,7 @@ function toCrossing(value: unknown): Crossing | null {
     cost: value.cost,
     direction: value.direction,
     ...(allocation === null ? {} : { allocation }),
+    ...(value.circular === true ? { circular: true } : {}),
   }
 }
 

@@ -48,9 +48,10 @@ function validDecisions(decisions: unknown, from: number): boolean {
 
 function validCrossing(value: unknown, from: number): boolean {
   if (typeof value !== 'object' || value === null) return false
-  const { tick, kind, dose, direction, cost, origin, amounts, allocation } =
+  const { tick, kind, dose, direction, cost, origin, amounts, allocation, circular } =
     value as Partial<Crossing>
   if (!Number.isInteger(tick) || (tick ?? -1) < from) return false
+  if (circular !== undefined && typeof circular !== 'boolean') return false
   if (!CROSSING_KINDS.some((known) => known === kind)) return false
   if (!DOSES.some((known) => known === dose)) return false
   if (direction !== 'in' && direction !== 'out') return false
@@ -211,7 +212,8 @@ function writeCrossings(view: DataView, at: number, crossings: readonly Crossing
     view.setUint16(cursor, crossing.tick)
     view.setUint8(cursor + 2, CROSSING_KINDS.indexOf(crossing.kind))
     view.setUint8(cursor + 3, crossing.dose)
-    view.setUint8(cursor + 4, crossing.direction === 'out' ? 1 : 0)
+    // FEAT: o byte da direção sobrava: o bit 1 carrega o ciclo, e um link antigo o lê como ausente
+    view.setUint8(cursor + 4, (crossing.direction === 'out' ? 1 : 0) | (crossing.circular ? 2 : 0))
     view.setUint8(cursor + 5, crossing.cost)
     view.setUint8(cursor + 6, worldIndex(crossing.origin.world))
     view.setUint16(cursor + 7, crossing.origin.tick)
@@ -250,6 +252,7 @@ function readCrossings(view: DataView, at: number): { crossings: Crossing[]; nex
     SECTORS.forEach((sector, k) => {
       allocation[sector] = shares === 0 ? 0 : view.getUint8(at2 + k)
     })
+    const flags = view.getUint8(cursor + 4)
     crossings.push({
       tick: view.getUint16(cursor),
       kind,
@@ -260,8 +263,9 @@ function readCrossings(view: DataView, at: number): { crossings: Crossing[]; nex
         tick: view.getUint16(cursor + 7),
       },
       cost: view.getUint8(cursor + 5),
-      direction: view.getUint8(cursor + 4) === 0 ? 'in' : 'out',
+      direction: (flags & 1) === 0 ? 'in' : 'out',
       ...(shares === 0 ? {} : { allocation: allocation as Allocation }),
+      ...((flags & 2) === 0 ? {} : { circular: true }),
     })
     cursor = at2 + shares
   }

@@ -15,8 +15,7 @@ export interface Crossing {
   readonly cost: number
   readonly direction: 'in' | 'out'
   readonly allocation?: Allocation
-  // FEAT: marcado pelo hospedeiro quando a travessia fecha um ciclo entre mundos; a engine nunca
-  // conhece as outras worldlines, e não entra no hash porque o paradoxo que instala já entra
+  // FEAT: entrada marcada pelo hospedeiro quando a travessia fecha um ciclo; a engine não vê outros mundos
   readonly circular?: boolean
 }
 
