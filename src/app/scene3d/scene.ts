@@ -38,6 +38,7 @@ import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
 import { terrainTexture } from '../planet/terrainTexture.ts'
 import { PLANET_LIGHT, type PlanetPalette, type PlanetState } from '../planet/uniforms.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
+import { ARC_LIFT, ARC_PARTICLES, createArc, type Arc } from './arc.ts'
 import {
   approach,
   FOCUS_RADIUS,
@@ -48,6 +49,7 @@ import {
   RAIL_OFFSET,
   type Vec3,
 } from './camera.ts'
+import type { CrossingArc } from './crossings.ts'
 import { axisPoint, type PathData } from './path.ts'
 import { starField } from './stars.ts'
 import { createStream, particleCounts, type Stream } from './streams.ts'
@@ -89,6 +91,7 @@ export interface Projected {
 export interface CurrentScene {
   setWorlds(worlds: readonly SceneWorld[]): void
   setMarkers(markers: readonly SceneMarker[], selected: string | null): void
+  setCrossings(arcs: readonly CrossingArc[]): void
   setCursor(point: Vec3 | null): void
   measure(): void
   resize(width: number, height: number, dpr: number): void
@@ -240,6 +243,52 @@ export function createCurrentScene(
     entries.delete(key)
   }
 
+  const arcs = new Map<string, Arc>()
+
+  function hashKey(key: string): number {
+    let hash = 0
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
+    return hash
+  }
+
+  // FIX: ARC_LIFT sozinho some atrás do planeta maior; soma-se uma folga que limpa o raio dele
+  const ARC_CLEARANCE = FOCUS_RADIUS + ARC_LIFT + 2.5
+
+  function arcControl(from: Vec3, to: Vec3): Vec3 {
+    // FIX: só a componente radial (y,z) afasta o controle; no presente as duas pontas têm o mesmo ano
+    const sum: readonly [number, number] = [from[1] + to[1], from[2] + to[2]]
+    const length = Math.hypot(...sum)
+    const dir: readonly [number, number] = length > 0 ? [sum[0] / length, sum[1] / length] : [1, 0]
+    return [
+      (from[0] + to[0]) / 2,
+      (from[1] + to[1]) / 2 + dir[0] * ARC_CLEARANCE,
+      (from[2] + to[2]) / 2 + dir[1] * ARC_CLEARANCE,
+    ]
+  }
+
+  function setCrossings(list: readonly CrossingArc[]): void {
+    const seen = new Set<string>()
+    for (const item of list) {
+      seen.add(item.key)
+      let arc = arcs.get(item.key)
+      if (!arc) {
+        arc = createArc(options.tier, ARC_PARTICLES[options.tier], options.seed + hashKey(item.key))
+        arc.setPixelRatio(dpr)
+        scene.add(arc.object)
+        arcs.set(item.key, arc)
+      }
+      arc.setEnds(item.from, item.to, arcControl(item.from, item.to))
+    }
+    for (const key of [...arcs.keys()]) {
+      if (seen.has(key)) continue
+      const arc = arcs.get(key)
+      if (!arc) continue
+      scene.remove(arc.object)
+      arc.dispose()
+      arcs.delete(key)
+    }
+  }
+
   const markerGroup = new Group()
   scene.add(markerGroup)
   const markerGeometry = {
@@ -384,6 +433,7 @@ export function createCurrentScene(
       entry.stream.setTime(time)
       entry.body.tick(options.still ? 0 : dt, time, light)
     }
+    for (const arc of arcs.values()) arc.setTime(time)
     renderFrame()
   }
   renderer.setAnimationLoop(frame)
@@ -392,6 +442,7 @@ export function createCurrentScene(
     scene,
     setWorlds,
     setMarkers,
+    setCrossings,
     setCursor,
     measure() {
       if (!options.onMeasured || measuring) return
@@ -424,6 +475,7 @@ export function createCurrentScene(
         reach = nextReach
       }
       for (const entry of entries.values()) entry.stream.setPixelRatio(dpr)
+      for (const arc of arcs.values()) arc.setPixelRatio(dpr)
     },
     recenter() {
       camera.position.set(
@@ -504,6 +556,11 @@ export function createCurrentScene(
       }
       controls.dispose()
       for (const key of [...entries.keys()]) remove(key)
+      for (const arc of arcs.values()) {
+        scene.remove(arc.object)
+        arc.dispose()
+      }
+      arcs.clear()
       guideMaterial.dispose()
       stars.geometry.dispose()
       ;(stars.material as PointsMaterial).dispose()

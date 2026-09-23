@@ -117,6 +117,18 @@ describe('crossingArcs', () => {
     const expected = crossings.slice(count - MAX_ARCS).map((c) => c.tick)
     expect(years).toEqual(expected)
   })
+
+  it('keeps the same relative order among crossings that share a year when MAX_ARCS trims them', () => {
+    const count = MAX_ARCS + 3
+    const crossings = Array.from({ length: count }, (_, i) =>
+      crossing({ tick: 50, cost: i, origin: { world: 'A', tick: i } }),
+    )
+    const worlds = [world('A', [], path(0, 100, 0)), world('B', crossings, path(0, 100, 1))]
+    const arcs = crossingArcs(worlds, 0, 100)
+    expect(arcs).toHaveLength(MAX_ARCS)
+    // FIX: sort é estável; entre travessias do mesmo ano, o corte descarta as três mais antigas
+    expect(arcs.map((a) => a.cost)).toEqual(crossings.slice(count - MAX_ARCS).map((c) => c.cost))
+  })
 })
 
 describe('echoWindows', () => {

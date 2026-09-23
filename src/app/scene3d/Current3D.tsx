@@ -26,6 +26,7 @@ import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import { streamClick } from '../views/cross.ts'
+import { crossingArcs, type CrossingArc, type CrossingWorld } from './crossings.ts'
 import {
   eraOffsets,
   FOCUS_RADIUS,
@@ -90,6 +91,7 @@ export function Current3D({
     size: { width: number; height: number }
     worlds: readonly SceneWorld[]
     markers: readonly SceneMarker[]
+    arcs: readonly CrossingArc[]
     selected: string | null
     cursorPoint: Vec3 | null
     paused: boolean
@@ -97,6 +99,7 @@ export function Current3D({
     size: { width, height },
     worlds: [],
     markers: [],
+    arcs: [],
     selected: null,
     cursorPoint: null,
     paused,
@@ -178,12 +181,14 @@ export function Current3D({
           size,
           worlds: current,
           markers,
+          arcs,
           selected: selectedKey,
           cursorPoint,
         } = latest.current
         scene.resize(size.width, size.height, window.devicePixelRatio || 1)
         scene.setWorlds(current)
         scene.setMarkers(markers, selectedKey)
+        scene.setCrossings(arcs)
         scene.setCursor(cursorPoint)
         // FIX: um link aberto direto no planeta não pode deixar a Corrente renderizando por baixo
         scene.pause(latest.current.paused)
@@ -390,6 +395,11 @@ export function Current3D({
 
   const focusPath = sceneWorlds.find((world) => world.focused)?.path ?? null
 
+  const pathsById = useMemo(
+    () => new Map(sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.path])),
+    [sceneWorlds],
+  )
+
   const markers = useMemo<SceneMarker[]>(() => {
     if (!fetched) return []
     const span = Math.max(1, fetched.to - fetched.from)
@@ -421,9 +431,6 @@ export function Current3D({
         if (point) list.push({ key: microKey(e), kind: 'micro', position: point })
       }
     }
-    const pathsById = new Map(
-      sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.path]),
-    )
     for (const world of worlds) {
       if (world.info.parent === null) continue
       const parentPath = pathsById.get(world.info.parent)
@@ -432,7 +439,21 @@ export function Current3D({
       if (point) list.push({ key: `fork:${world.info.id}`, kind: 'fork', position: point })
     }
     return list
-  }, [fetched, focusPath, events, decisions, micro, sceneWorlds, worlds])
+  }, [fetched, focusPath, events, decisions, micro, pathsById, worlds])
+
+  const crossingWorlds = useMemo<CrossingWorld[]>(
+    () =>
+      worlds.flatMap((world) => {
+        const path = pathsById.get(world.info.id)
+        return path ? [{ id: world.info.id, crossings: world.crossings, path }] : []
+      }),
+    [worlds, pathsById],
+  )
+
+  const arcs = useMemo<CrossingArc[]>(
+    () => (fetched ? crossingArcs(crossingWorlds, fetched.from, fetched.to) : []),
+    [crossingWorlds, fetched],
+  )
 
   const microList = useMemo(
     () =>
@@ -448,9 +469,10 @@ export function Current3D({
 
   useEffect(() => {
     const selectedKey = selected === null ? null : String(selected)
-    latest.current = { ...latest.current, markers, selected: selectedKey }
+    latest.current = { ...latest.current, markers, arcs, selected: selectedKey }
     sceneRef.current?.setMarkers(markers, selectedKey)
-  }, [markers, selected])
+    sceneRef.current?.setCrossings(arcs)
+  }, [markers, arcs, selected])
 
   const cursorPoint = useMemo<Vec3 | null>(() => {
     if (cursor === null || !focusPath || !fetched) return null
@@ -647,7 +669,13 @@ export function Current3D({
   }, [yearAt])
 
   return (
-    <div className="scene3d" style={{ width, height }} inert={paused} data-micro={microList.length}>
+    <div
+      className="scene3d"
+      style={{ width, height }}
+      inert={paused}
+      data-micro={microList.length}
+      data-arcs={arcs.length}
+    >
       <canvas
         ref={canvasRef}
         className="scene3d__canvas"
