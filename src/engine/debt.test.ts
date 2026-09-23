@@ -12,10 +12,11 @@ import {
   type Debt,
   type Paradox,
 } from './debt.ts'
-import { PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
+import { PARADOX_GRACE, PARADOX_LEAP, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
 import type { Derived } from './rules.ts'
 import { Era, type Allocation } from './state.ts'
 import type { Crossing } from './crossing.ts'
+import { worldDerived } from './events.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
 
 const GIFTED_ALLOCATION: Allocation = {
@@ -229,14 +230,38 @@ describe('leapParadox — magnitude, per kind', () => {
     expect(leapParadox(proportional, state, TEST_WORLD)).toBe(false)
   })
 
-  it('checks a resource crossing against food and energy independently, in parcel order [food, energy]', () => {
+  it('checks a resource crossing against what the world makes in a year, parcel by parcel', () => {
+    // FIX: comida e energia são medidas contra a produção do ano, não contra o estoque
     const state = makeState({ food: 100, energy: 10, eras: Era.agricultural | Era.industrial })
-    const tooMuchFood = makeCrossing({ kind: 'resource', dose: 1, amounts: [301, 5] })
-    const tooMuchEnergy = makeCrossing({ kind: 'resource', dose: 1, amounts: [50, 31] })
-    const proportional = makeCrossing({ kind: 'resource', dose: 1, amounts: [200, 20] })
+    const d = worldDerived(state, TEST_WORLD)
+    const over = (value: number) => PARADOX_LEAP * value * 1.01
+    const under = (value: number) => PARADOX_LEAP * value * 0.99
+    const tooMuchFood = makeCrossing({
+      kind: 'resource',
+      dose: 1,
+      amounts: [over(d.foodProduction), under(d.energyTarget)],
+    })
+    const tooMuchEnergy = makeCrossing({
+      kind: 'resource',
+      dose: 1,
+      amounts: [under(d.foodProduction), over(d.energyTarget)],
+    })
+    const proportional = makeCrossing({
+      kind: 'resource',
+      dose: 1,
+      amounts: [under(d.foodProduction), under(d.energyTarget)],
+    })
     expect(leapParadox(tooMuchFood, state, TEST_WORLD)).toBe(true)
     expect(leapParadox(tooMuchEnergy, state, TEST_WORLD)).toBe(true)
     expect(leapParadox(proportional, state, TEST_WORLD)).toBe(false)
+  })
+
+  it('does not call a bag of food a leap just because the world ate its whole reserve', () => {
+    // FIX: um mundo que vive do que colhe carrega estoque perto de zero; qualquer ajuda parecia
+    // três vezes "o que ele tem", e um saco de comida num mundo faminto é o caso menos paradoxal
+    const hungry = makeState({ food: 0, energy: 0, eras: Era.agricultural | Era.industrial })
+    const bag = makeCrossing({ kind: 'resource', dose: 1, amounts: [1000, 0.1] })
+    expect(leapParadox(bag, hungry, TEST_WORLD)).toBe(false)
   })
 
   it('fires for people when the migration is more than PARADOX_LEAP times the population the world has', () => {

@@ -1,5 +1,5 @@
 import type { Crossing } from './crossing.ts'
-import { EVENTS, holds, worldMetrics, type Metrics } from './events.ts'
+import { EVENTS, holds, worldDerived, worldMetrics, type Metrics } from './events.ts'
 import {
   DEBT_EPSILON,
   DEBT_POP_UNIT,
@@ -132,12 +132,18 @@ function overshoot(amount: number, have: number): boolean {
   return amount > PARADOX_LEAP * have
 }
 
-function magnitudeLeap(crossing: Crossing, s: WorldState): boolean {
+// FIX: comida e energia são estoques que um mundo vivendo do que colhe carrega perto de zero, e
+// contra eles qualquer ajuda parecia desmedida; a grandeza honesta é o que o mundo produz num ano,
+// a mesma que a quitação de recurso já usa. Tecnologia e gente não são estoques desse feitio.
+function magnitudeLeap(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
   const amounts = crossing.amounts
   if (crossing.kind === 'knowledge') return overshoot(amounts[0] ?? 0, s.technology)
   if (crossing.kind === 'people') return overshoot(amounts[0] ?? 0, s.population)
   if (crossing.kind === 'resource') {
-    return overshoot(amounts[0] ?? 0, s.food) || overshoot(amounts[1] ?? 0, s.energy)
+    const d = worldDerived(s, world)
+    return (
+      overshoot(amounts[0] ?? 0, d.foodProduction) || overshoot(amounts[1] ?? 0, d.energyTarget)
+    )
   }
   return false
 }
@@ -175,7 +181,7 @@ function eraLeap(crossing: Crossing, s: WorldState, world: WorldConfig): boolean
 }
 
 export function leapParadox(crossing: Crossing, s: WorldState, world: WorldConfig): boolean {
-  return magnitudeLeap(crossing, s) || eraLeap(crossing, s, world)
+  return magnitudeLeap(crossing, s, world) || eraLeap(crossing, s, world)
 }
 
 export function circularParadox(

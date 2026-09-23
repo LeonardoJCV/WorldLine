@@ -307,11 +307,16 @@ export function computeMetrics(s: WorldState, d: Derived): Metrics {
   }
 }
 
-// FEAT: as grandezas do mundo tal como os eventos as leem, para quem precisa perguntar "o que
-// aconteceria neste estado" sem repetir o encadeamento de derive
-export function worldMetrics(s: WorldState, world: WorldConfig): Metrics {
+// FEAT: o que o mundo produz neste ano, para quem precisa perguntar "o que aconteceria neste
+// estado" sem repetir o encadeamento de derive; reusa o mesmo sorteio de colheita do ano
+export function worldDerived(s: WorldState, world: WorldConfig): Derived {
   const mods = collectModifiers(s.active)
-  return computeMetrics(s, derive(s, world, mods, uniform(world.seed, s.tick, Channel.harvest)))
+  return derive(s, world, mods, uniform(world.seed, s.tick, Channel.harvest))
+}
+
+// FEAT: as grandezas do mundo tal como os eventos as leem
+export function worldMetrics(s: WorldState, world: WorldConfig): Metrics {
+  return computeMetrics(s, worldDerived(s, world))
 }
 
 export function collectModifiers(
