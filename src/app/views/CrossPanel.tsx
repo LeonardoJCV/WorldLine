@@ -193,7 +193,8 @@ export function CrossPanel() {
       </div>
       {quote !== null && world !== null && (
         <div className="cross__quote">
-          <p className="cross__price" role="status">
+          {/* FIX: com o tempo correndo o preço muda a cada quadro; só anuncia quando dá para agir */}
+          <p className="cross__price" {...(playing ? {} : { role: 'status' as const })}>
             {t('cross.price', { cost: quote.cost, credit })}
           </p>
           <p className="cross__carries">
