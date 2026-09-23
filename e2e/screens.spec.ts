@@ -331,6 +331,54 @@ test('current echo', async ({ page }) => {
   await page.screenshot({ path: 'screens/current-echo.png' })
 })
 
+test('current echo zoomed', async ({ page }) => {
+  await useGraphics(page, 'high')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  for (let i = 0; i < 6; i++) await history.press('Shift+ArrowRight')
+  await expect(page.getByRole('button', { name: /Branch from year/ })).toBeEnabled()
+  await page.getByRole('slider', { name: /Industry/ }).fill('95')
+  await page.getByRole('button', { name: /Branch from year/ }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  const canvas = page.locator('.scene3d__canvas')
+  const present = Number(await canvas.getAttribute('aria-valuemax'))
+  const target = Math.round(present / 2)
+  await history.focus()
+  await history.press('Home')
+  for (let i = 0; i < Math.floor(target / 10); i++) await history.press('Shift+ArrowRight')
+  for (let i = 0; i < target % 10; i++) await history.press('ArrowRight')
+  const year = await page.getByTestId('year').textContent()
+  await page.getByRole('button', { name: `Cross in year ${year}` }).click()
+  await expect(page.getByRole('button', { name: 'Focus on worldline C' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await expect(page.locator('.scene3d')).not.toHaveAttribute('data-arcs', '0', { timeout: 10_000 })
+  // FEAT: cursor pousa perto do fim da janela de eco, dentro dela, e vira o foco do zoom
+  const echoYear = target + 20
+  await history.focus()
+  await history.press('Home')
+  for (let i = 0; i < Math.floor(echoYear / 10); i++) await history.press('Shift+ArrowRight')
+  for (let i = 0; i < echoYear % 10; i++) await history.press('ArrowRight')
+  // FEAT: zoom fechado o bastante para o início da janela (o ano da travessia) sair da tela
+  for (let i = 0; i < 30; i++) await history.press('+')
+  await page.waitForTimeout(1000)
+  await page.screenshot({ path: 'screens/current-echo-zoomed.png' })
+})
+
 test('observatory 3d mobile', async ({ page }) => {
   await useGraphics(page, 'low')
   await page.setViewportSize({ width: 390, height: 844 })

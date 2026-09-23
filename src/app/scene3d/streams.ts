@@ -81,9 +81,9 @@ void main() {
     20.0
   );
   vColor = aColor;
-  // FEAT: eco = brilho extra que entra suave no início da janela e decai suave até o fim
+  // FIX: testa a sentinela, não o sinal — uma janela começada antes da borda visível é negativa e válida
   float echoBoost = 0.0;
-  if (uEchoFrom >= 0.0) {
+  if (uEchoFrom != ${NO_ECHO}.0) {
     float edge = max(uEchoTo - uEchoFrom, 0.0001) * ${ECHO_EDGE_FRACTION};
     float enter = smoothstep(uEchoFrom - edge, uEchoFrom, u);
     float decay = 1.0 - smoothstep(uEchoFrom, uEchoTo, u);

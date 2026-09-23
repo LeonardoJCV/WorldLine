@@ -31,6 +31,12 @@ export interface EchoWindow {
   readonly to: number
 }
 
+export interface EchoAxisWindow {
+  readonly world: string
+  readonly from: number
+  readonly to: number
+}
+
 export function crossingArcs(
   worlds: readonly CrossingWorld[],
   from: number,
@@ -78,6 +84,25 @@ export function echoWindows(
     }
   }
   return windows
+}
+
+export function echoAxisWindows(
+  worlds: readonly Pick<CrossingWorld, 'id' | 'crossings'>[],
+  from: number,
+  to: number,
+): EchoAxisWindow[] {
+  const span = Math.max(1, to - from)
+  // FEAT: um mundo com mais de uma janela sobreposta só acende a mais recente
+  const recent = new Map<string, EchoWindow>()
+  for (const window of echoWindows(worlds)) {
+    const current = recent.get(window.world)
+    if (!current || window.from > current.from) recent.set(window.world, window)
+  }
+  return [...recent.values()].map((window) => ({
+    world: window.world,
+    from: (window.from - from) / span,
+    to: (window.to - from) / span,
+  }))
 }
 
 export function assimilationLeft(

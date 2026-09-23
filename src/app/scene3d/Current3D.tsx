@@ -26,7 +26,7 @@ import type { TerrainMap } from '../surface/terrainClient.ts'
 import { currentKey } from '../current/keys.ts'
 import { resolveView, zoomView } from '../current/view.ts'
 import { streamClick } from '../views/cross.ts'
-import { crossingArcs, echoWindows, type CrossingArc, type CrossingWorld } from './crossings.ts'
+import { crossingArcs, echoAxisWindows, type CrossingArc, type CrossingWorld } from './crossings.ts'
 import {
   eraOffsets,
   FOCUS_RADIUS,
@@ -461,21 +461,12 @@ export function Current3D({
 
   const echoes = useMemo<SceneEcho[]>(() => {
     if (!fetched) return []
-    const span = Math.max(1, fetched.to - fetched.from)
     const idToKey = new Map(sceneWorlds.map((world) => [world.key.split(':')[0] ?? '', world.key]))
-    // FEAT: se um mundo tiver mais de uma janela de eco sobreposta, só a mais recente acende
-    const recent = new Map<string, { from: number; to: number }>()
-    for (const window of echoWindows(crossingWorlds)) {
+    // FEAT: from/to seguem sem clamp; o shader decide sozinho quanto da janela ainda está acesa
+    return echoAxisWindows(crossingWorlds, fetched.from, fetched.to).flatMap((window) => {
       const key = idToKey.get(window.world)
-      if (!key) continue
-      const current = recent.get(key)
-      if (!current || window.from > current.from) recent.set(key, window)
-    }
-    return [...recent].map(([key, window]) => ({
-      key,
-      from: (window.from - fetched.from) / span,
-      to: (window.to - fetched.from) / span,
-    }))
+      return key ? [{ key, from: window.from, to: window.to }] : []
+    })
   }, [crossingWorlds, fetched, sceneWorlds])
 
   const microList = useMemo(

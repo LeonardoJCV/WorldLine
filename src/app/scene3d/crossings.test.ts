@@ -9,6 +9,7 @@ import {
   MAX_ARCS,
   assimilationLeft,
   crossingArcs,
+  echoAxisWindows,
   echoWindows,
   type CrossingWorld,
 } from './crossings.ts'
@@ -155,6 +156,57 @@ describe('echoWindows', () => {
       { world: 'B', from: 50, to: 50 + ECHO_YEARS },
       { world: 'B', from: 60, to: 60 + ECHO_YEARS },
     ])
+  })
+})
+
+describe('echoAxisWindows', () => {
+  it('converts a window fully inside the visible range to u with (year - from) / span', () => {
+    const worlds = [world('B', [crossing({ tick: 50 })], path(0, 200, 1))]
+    const windows = echoAxisWindows(worlds, 0, 200)
+    expect(windows).toEqual([{ world: 'B', from: 50 / 200, to: (50 + ECHO_YEARS) / 200 }])
+  })
+
+  it('gives a negative from when the window starts before the visible range, without dropping it', () => {
+    const worlds = [world('B', [crossing({ tick: 90 })], path(100, 300, 1))]
+    const windows = echoAxisWindows(worlds, 100, 300)
+    expect(windows).toHaveLength(1)
+    expect(windows[0]?.from).toBeCloseTo((90 - 100) / 200, 6)
+    expect(windows[0]?.from).toBeLessThan(0)
+    expect(windows[0]?.to).toBeCloseTo((90 + ECHO_YEARS - 100) / 200, 6)
+  })
+
+  it('gives a to greater than 1 when the window ends after the visible range', () => {
+    const worlds = [world('B', [crossing({ tick: 90 })], path(0, 100, 1))]
+    const windows = echoAxisWindows(worlds, 0, 100)
+    expect(windows).toHaveLength(1)
+    expect(windows[0]?.to).toBeCloseTo((90 + ECHO_YEARS) / 100, 6)
+    expect(windows[0]?.to).toBeGreaterThan(1)
+  })
+
+  it('returns nothing when no crossing echoes', () => {
+    const worlds = [
+      world(
+        'B',
+        [
+          crossing({ kind: 'doctrine', tick: 50, amounts: [] }),
+          crossing({ kind: 'people', tick: 50, direction: 'out' }),
+        ],
+        path(0, 200, 1),
+      ),
+    ]
+    expect(echoAxisWindows(worlds, 0, 200)).toEqual([])
+  })
+
+  it('keeps only the most recent window when two echoing crossings overlap on the same world', () => {
+    const worlds = [
+      world(
+        'B',
+        [crossing({ tick: 10 }), crossing({ tick: 25, kind: 'resource', amounts: [1, 2] })],
+        path(0, 200, 1),
+      ),
+    ]
+    const windows = echoAxisWindows(worlds, 0, 200)
+    expect(windows).toEqual([{ world: 'B', from: 25 / 200, to: (25 + ECHO_YEARS) / 200 }])
   })
 })
 
