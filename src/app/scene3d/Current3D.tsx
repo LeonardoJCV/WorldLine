@@ -9,8 +9,8 @@ import {
 } from 'react'
 import { EVENTS } from '../../engine/events.ts'
 import type { WorldlineId } from '../../worker/protocol.ts'
-import { useT } from '../i18n/index.ts'
-import { formatYear } from '../i18n/format.ts'
+import { useLocale, useT } from '../i18n/index.ts'
+import { embedLabel, formatYear } from '../i18n/format.ts'
 import { chooseTier } from '../graphics/settings.ts'
 import { graphicsStore, useGraphics, useTier } from '../graphics/store.ts'
 import { planetPalette, planetState } from '../planet/uniforms.ts'
@@ -85,6 +85,7 @@ export function Current3D({
   readonly paused?: boolean
 }) {
   const t = useT()
+  const locale = useLocale()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<CurrentScene | null>(null)
   const [fetched, setFetched] = useState<Fetched | null>(null)
@@ -624,6 +625,8 @@ export function Current3D({
 
   const [openCrossingKey, setOpenCrossingKey] = useState<string | null>(null)
   const openArc = openCrossingKey ? crossingTarget(openCrossingKey, arcs) : null
+  // FIX: a travessia que saiu da janela visível fecha a chave de vez, senão ela reabre sozinha ao voltar
+  if (openCrossingKey && !openArc) setOpenCrossingKey(null)
   const observedYear = observed?.tick ?? present
 
   const closeCrossing = () => {
@@ -633,7 +636,7 @@ export function Current3D({
 
   const describeCrossing = (arc: CrossingArc): string =>
     t('crossing.item', {
-      kind: t(`cross.kind.${arc.kind}`),
+      kind: embedLabel(locale, t(`cross.kind.${arc.kind}`)),
       origin: arc.origin,
       destination: arc.destination,
       year: formatYear(arc.year),

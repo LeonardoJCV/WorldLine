@@ -22,6 +22,11 @@ export function formatCompact(value: number, locale: Locale): string {
   return format.format(value)
 }
 
+// FIX: rótulos como cross.kind.* são Title Case para botões avulsos; embutidos numa frase em inglês pedem minúscula
+export function embedLabel(locale: Locale, label: string): string {
+  return locale === 'en' ? label.charAt(0).toLowerCase() + label.slice(1) : label
+}
+
 export function formatDecimal(value: number, locale: Locale, digits = 1): string {
   const key = `${locale}:${digits}`
   let format = decimal.get(key)

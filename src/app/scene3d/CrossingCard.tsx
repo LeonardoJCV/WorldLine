@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { formatCompact, formatYear } from '../i18n/format.ts'
+import { embedLabel, formatCompact, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { assimilationLeft, ECHO_KINDS, ECHO_YEARS, type CrossingArc } from './crossings.ts'
 
@@ -38,7 +38,7 @@ export function CrossingCard({
         ×
       </button>
       <h2 id="scene3d-crossing-title">
-        {t('crossing.card', { kind: t(`cross.kind.${arc.kind}`) })}
+        {t('crossing.card', { kind: embedLabel(locale, t(`cross.kind.${arc.kind}`)) })}
       </h2>
       <p>
         {t('crossing.route', {

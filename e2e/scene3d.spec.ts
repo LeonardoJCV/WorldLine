@@ -268,3 +268,43 @@ test('opens the crossing card from the keyboard and returns focus to the canvas 
   await expect(dialog).toHaveCount(0)
   await expect(page.locator('.scene3d__canvas')).toBeFocused()
 })
+
+test('does not reopen the crossing card or steal focus once its arc drops out of view and back', async ({
+  page,
+}) => {
+  test.slow()
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Knowledge' }).click()
+  await page.getByRole('button', { name: 'A little' }).click()
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await expect(page.locator('.scene3d')).not.toHaveAttribute('data-arcs', '0', { timeout: 10_000 })
+
+  const list = page.getByRole('list', { name: 'Crossings on the currents' })
+  await expect(list.getByRole('button').first()).toBeAttached({ timeout: 10_000 })
+  const crossing = list.getByRole('button').first()
+  await crossing.focus()
+  await crossing.press('Enter')
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeFocused()
+
+  // FEAT: avança bem além do ano da travessia e depois aproxima o zoom no presente, empurrando-a para fora da janela
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(1500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  for (let i = 0; i < 30; i++) await history.press('+')
+  await expect(page.locator('.scene3d')).toHaveAttribute('data-arcs', '0', { timeout: 10_000 })
+  await expect(dialog).toHaveCount(0)
+
+  // FEAT: a travessia reentra na janela ao mostrar a história inteira de novo, mas a ficha não reabre sozinha
+  await page.getByRole('button', { name: 'Show all' }).click()
+  await expect(page.locator('.scene3d')).not.toHaveAttribute('data-arcs', '0', { timeout: 10_000 })
+  await expect(dialog).toHaveCount(0)
+  await expect(dialog).not.toBeVisible()
+})

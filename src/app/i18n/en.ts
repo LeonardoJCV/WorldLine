@@ -172,7 +172,7 @@ export const en = {
   'micro.revolt': 'Revolt in {city}',
   'crossing.card': 'Crossing of {kind}',
   'crossing.route': 'From {origin} to {destination}, year {year}',
-  'crossing.cost': 'Cost {cost} of credit',
+  'crossing.cost': 'Cost: {cost} credit',
   'crossing.left': 'About {value} still being assimilated',
   'crossing.spent': 'Fully assimilated',
   'crossing.close': 'Close',

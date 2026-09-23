@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { en } from './en.ts'
 import {
+  embedLabel,
   formatChange,
   formatCompact,
   formatComparison,
@@ -127,5 +128,10 @@ describe('interaction formatting', () => {
 
   it('formats compact conditions', () => {
     expect(formatCondition('population', 4_200_000, 'en')).toBe('4.2M')
+  })
+
+  it('lowercases a Title Case label for embedding in an English sentence, but not in pt-BR', () => {
+    expect(embedLabel('en', 'Knowledge')).toBe('knowledge')
+    expect(embedLabel('pt-BR', 'Conhecimento')).toBe('Conhecimento')
   })
 })

@@ -132,6 +132,12 @@ describe('crossingTarget', () => {
     expect(crossingTarget('crossing:B:999:knowledge', arcs)).toBeNull()
   })
 
+  it('rejects a key with the right prefix but a malformed tail', () => {
+    expect(crossingTarget('crossing:', arcs)).toBeNull()
+    expect(crossingTarget('crossing:B:120', arcs)).toBeNull()
+    expect(crossingTarget('crossing:B:abc:knowledge', arcs)).toBeNull()
+  })
+
   it('turns visible crossing markers into pick targets', () => {
     const targets = screenTargets(
       [],

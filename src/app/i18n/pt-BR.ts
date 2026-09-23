@@ -170,7 +170,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'micro.revolt': 'Revolta em {city}',
   'crossing.card': 'Travessia de {kind}',
   'crossing.route': 'De {origin} para {destination}, ano {year}',
-  'crossing.cost': 'Custa {cost} de crédito',
+  'crossing.cost': 'Custo: {cost} de crédito',
   'crossing.left': 'Cerca de {value} ainda sendo assimilado',
   'crossing.spent': 'Totalmente assimilado',
   'crossing.close': 'Fechar',
