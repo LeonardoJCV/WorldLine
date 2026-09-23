@@ -64,7 +64,33 @@ describe('crossingArcs', () => {
     expect(arcs).toHaveLength(1)
     expect(arcs[0]?.destination).toBe('B')
     expect(arcs[0]?.origin).toBe('A')
-    expect(arcs[0]?.key).toBe('crossing:B:50:knowledge')
+    expect(arcs[0]?.key).toBe('crossing:B:50:knowledge:A:0')
+  })
+
+  it('gives each of two same-kind crossings landing on the same destination in the same tick its own key', () => {
+    // FIX: cobre o caso que o key antigo (destino:ano:tipo) não distinguia — origens diferentes e a mesma origem
+    const worlds = [
+      world('A', [], path(0, 100, 0)),
+      world('C', [], path(0, 100, 1)),
+      world(
+        'B',
+        [
+          crossing({ origin: { world: 'A', tick: 40 } }),
+          crossing({ origin: { world: 'C', tick: 40 } }),
+          crossing({ origin: { world: 'A', tick: 41 } }),
+        ],
+        path(0, 100, 2),
+      ),
+    ]
+    const arcs = crossingArcs(worlds, 0, 100)
+    expect(arcs).toHaveLength(3)
+    const keys = arcs.map((arc) => arc.key)
+    expect(new Set(keys).size).toBe(3)
+    expect(keys).toEqual([
+      'crossing:B:50:knowledge:A:0',
+      'crossing:B:50:knowledge:C:1',
+      'crossing:B:50:knowledge:A:2',
+    ])
   })
 
   it('places both ends via axisPoint at the origin and destination u', () => {

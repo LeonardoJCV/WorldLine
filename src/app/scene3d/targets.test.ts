@@ -109,9 +109,10 @@ describe('microTarget', () => {
 })
 
 describe('crossingTarget', () => {
+  // FIX: destino+ano+tipo se repete quando duas travessias do mesmo tipo chegam juntas; a chave carrega origem e ordinal
   const arcs: CrossingArc[] = [
     {
-      key: 'crossing:B:120:knowledge',
+      key: 'crossing:B:120:knowledge:A:0',
       kind: 'knowledge',
       year: 120,
       from: [0, 0, 0],
@@ -121,31 +122,48 @@ describe('crossingTarget', () => {
       cost: 3,
       amounts: [4],
     },
+    {
+      key: 'crossing:B:120:knowledge:C:1',
+      kind: 'knowledge',
+      year: 120,
+      from: [0, 0, 0],
+      to: [2, 0, 0],
+      origin: 'C',
+      destination: 'B',
+      cost: 5,
+      amounts: [7],
+    },
   ]
 
   it('finds the arc a crossing marker key refers to', () => {
-    expect(crossingTarget('crossing:B:120:knowledge', arcs)).toEqual(arcs[0])
+    expect(crossingTarget('crossing:B:120:knowledge:A:0', arcs)).toEqual(arcs[0])
+  })
+
+  it('tells apart two crossings that share destination, tick and kind by their own key', () => {
+    expect(crossingTarget(arcs[0]?.key ?? '', arcs)).toEqual(arcs[0])
+    expect(crossingTarget(arcs[1]?.key ?? '', arcs)).toEqual(arcs[1])
+    expect(crossingTarget(arcs[0]?.key ?? '', arcs)).not.toEqual(arcs[1])
   })
 
   it('rejects other keys and crossings not in the list', () => {
     expect(crossingTarget('micro:120:fire:0', arcs)).toBeNull()
-    expect(crossingTarget('crossing:B:999:knowledge', arcs)).toBeNull()
+    expect(crossingTarget('crossing:B:999:knowledge:A:0', arcs)).toBeNull()
   })
 
   it('rejects a key with the right prefix but a malformed tail', () => {
     expect(crossingTarget('crossing:', arcs)).toBeNull()
-    expect(crossingTarget('crossing:B:120', arcs)).toBeNull()
-    expect(crossingTarget('crossing:B:abc:knowledge', arcs)).toBeNull()
+    expect(crossingTarget('crossing:B:120:knowledge:A', arcs)).toBeNull()
+    expect(crossingTarget('crossing:B:abc:knowledge:A:0', arcs)).toBeNull()
   })
 
   it('turns visible crossing markers into pick targets', () => {
     const targets = screenTargets(
       [],
-      [{ key: 'crossing:B:120:knowledge', kind: 'crossing', position: [0, 0, 0] }],
+      [{ key: 'crossing:B:120:knowledge:A:0', kind: 'crossing', position: [0, 0, 0] }],
       project,
     )
     expect(targets).toEqual([
-      { kind: 'crossing', key: 'crossing:B:120:knowledge', x: 500, y: 300, radius: EVENT_PICK },
+      { kind: 'crossing', key: 'crossing:B:120:knowledge:A:0', x: 500, y: 300, radius: EVENT_PICK },
     ])
   })
 })

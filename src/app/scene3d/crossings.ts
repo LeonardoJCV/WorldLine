@@ -46,6 +46,8 @@ export function crossingArcs(
   const span = Math.max(1, to - from)
   const byId = new Map(worlds.map((world) => [world.id, world] as const))
   const arcs: CrossingArc[] = []
+  // FIX: destino+ano+tipo não é único (duas travessias do mesmo tipo podem chegar juntas, até da mesma origem)
+  const ordinals = new Map<string, number>()
   for (const world of worlds) {
     if (!world.path.visible) continue
     for (const crossing of world.crossings) {
@@ -57,8 +59,11 @@ export function crossingArcs(
       const start = axisPoint(originWorld.path, (crossing.origin.tick - from) / span)
       const end = axisPoint(world.path, (crossing.tick - from) / span)
       if (!start || !end) continue
+      const group = `${world.id}:${crossing.tick}:${crossing.kind}`
+      const ordinal = ordinals.get(group) ?? 0
+      ordinals.set(group, ordinal + 1)
       arcs.push({
-        key: `crossing:${world.id}:${crossing.tick}:${crossing.kind}`,
+        key: `crossing:${world.id}:${crossing.tick}:${crossing.kind}:${crossing.origin.world}:${ordinal}`,
         kind: crossing.kind,
         year: crossing.tick,
         from: start,
