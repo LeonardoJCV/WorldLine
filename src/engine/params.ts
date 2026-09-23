@@ -78,18 +78,22 @@ export const PARAMS = {
 } as const
 
 export const REPAY_SCALE: Readonly<Record<'knowledge' | 'resource' | 'doctrine', number>> = {
-  knowledge: 0.08,
+  knowledge: 0.4,
   resource: 0.0000004,
-  doctrine: 0.05,
+  doctrine: 0.1,
 }
 export const DEBT_EPSILON = 1e-6
+// FEAT: gente por unidade de tamanho do mundo, na conta da dívida relativa
+export const DEBT_POP_UNIT = 1e6
+// FEAT: piso do tamanho do mundo, para um mundo jovem não afundar sob um presente comum
+export const DEBT_SIZE_FLOOR = 20
 // FEAT: peso do termo da dívida no alvo de estabilidade
 export const DEBT_WEIGHT = 0.35
 // FEAT: dívida relativa que começa a contar para o paradoxo de dívida grande demais
-export const PARADOX_RATIO = 0.6
+export const PARADOX_RATIO = 0.35
 // FEAT: anos seguidos acima do limite antes de instalar o paradoxo de dívida
-export const PARADOX_PATIENCE = 40
+export const PARADOX_PATIENCE = 80
 // FEAT: "presente cedo demais": múltiplo do que o mundo tem naquela grandeza
 export const PARADOX_LEAP = 3
 // FEAT: prazo, em anos, para quitar antes do colapso
-export const PARADOX_GRACE = 120
+export const PARADOX_GRACE = 200

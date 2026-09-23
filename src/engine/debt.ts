@@ -2,6 +2,8 @@ import type { Crossing } from './crossing.ts'
 import { EVENTS } from './events.ts'
 import {
   DEBT_EPSILON,
+  DEBT_POP_UNIT,
+  DEBT_SIZE_FLOOR,
   PARADOX_GRACE,
   PARADOX_LEAP,
   PARADOX_PATIENCE,
@@ -94,9 +96,15 @@ export function totalOwed(debts: readonly Debt[]): number {
   return total
 }
 
+// FEAT: o "tamanho do mundo" da spec é a produção inteira — riqueza por pessoa vezes gente —,
+// não a economia sozinha, que satura perto de 10 e é sempre menor que o custo de uma travessia
+export function worldSize(s: WorldState): number {
+  return (Math.max(0, s.economy) * Math.max(0, s.population)) / DEBT_POP_UNIT
+}
+
 export function debtRatio(debts: readonly Debt[], s: WorldState): number {
-  // FIX: economia nunca fica negativa de verdade, mas a razão não pode explodir se ficar perto de zero
-  return totalOwed(debts) / (Math.max(0, s.economy) + DEBT_EPSILON)
+  // FIX: o piso impede que um mundo recém-nascido tenha razão infinita por ser pequeno
+  return totalOwed(debts) / (DEBT_SIZE_FLOOR + worldSize(s))
 }
 
 // FEAT: nunca deixa a quitação passar de zero, mesmo que o ganho do ano supere o que falta
@@ -154,18 +162,26 @@ function magnitudeLeap(crossing: Crossing, s: WorldState): boolean {
   return false
 }
 
+// FIX: só é salto quem atravessa o limiar; um mundo que já passou daquela grandeza e não alcançou
+// a era está preso por outra condição, e receber mais da mesma grandeza não adianta a história
+function crossesGate(have: number, arriving: number, gate: number): boolean {
+  return have <= gate && have + arriving > gate
+}
+
 function eraLeap(crossing: Crossing, s: WorldState): boolean {
   const gates = getEraGates()
   if (crossing.kind === 'knowledge') {
-    const nextTech = s.technology + (crossing.amounts[0] ?? 0)
+    const arriving = crossing.amounts[0] ?? 0
     return (
-      (!hasEra(s, Era.agricultural) && nextTech > gates.agricultural) ||
-      (!hasEra(s, Era.industrial) && nextTech > gates.industrialTech)
+      (!hasEra(s, Era.agricultural) && crossesGate(s.technology, arriving, gates.agricultural)) ||
+      (!hasEra(s, Era.industrial) && crossesGate(s.technology, arriving, gates.industrialTech))
     )
   }
   if (crossing.kind === 'resource') {
-    const nextEnergy = s.energy + (crossing.amounts[1] ?? 0)
-    return !hasEra(s, Era.industrial) && nextEnergy > gates.industrialEnergy
+    return (
+      !hasEra(s, Era.industrial) &&
+      crossesGate(s.energy, crossing.amounts[1] ?? 0, gates.industrialEnergy)
+    )
   }
   // FEAT: doutrina e pessoas não têm uma grandeza ligada a um gatilho de era em events.ts
   return false
