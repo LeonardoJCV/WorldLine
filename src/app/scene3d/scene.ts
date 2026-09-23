@@ -38,7 +38,7 @@ import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
 import { terrainTexture } from '../planet/terrainTexture.ts'
 import { PLANET_LIGHT, type PlanetPalette, type PlanetState } from '../planet/uniforms.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
-import { ARC_LIFT, ARC_PARTICLES, createArc, type Arc } from './arc.ts'
+import { ARC_PARTICLES, createArc, type Arc } from './arc.ts'
 import {
   approach,
   FOCUS_RADIUS,
@@ -251,18 +251,21 @@ export function createCurrentScene(
     return hash
   }
 
-  // FIX: ARC_LIFT sozinho some atrás do planeta maior; soma-se uma folga que limpa o raio dele
-  const ARC_CLEARANCE = FOCUS_RADIUS + ARC_LIFT + 2.5
+  // FIX: piso garante uma curva legível quase coincidente; a parte proporcional cresce com o salto
+  const ARC_BOW_MIN = FOCUS_RADIUS + 5.5
+  const ARC_BOW_SCALE = 0.5
 
   function arcControl(from: Vec3, to: Vec3): Vec3 {
     // FIX: só a componente radial (y,z) afasta o controle; no presente as duas pontas têm o mesmo ano
     const sum: readonly [number, number] = [from[1] + to[1], from[2] + to[2]]
     const length = Math.hypot(...sum)
     const dir: readonly [number, number] = length > 0 ? [sum[0] / length, sum[1] / length] : [1, 0]
+    const separation = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2])
+    const magnitude = Math.max(ARC_BOW_MIN, separation * ARC_BOW_SCALE)
     return [
       (from[0] + to[0]) / 2,
-      (from[1] + to[1]) / 2 + dir[0] * ARC_CLEARANCE,
-      (from[2] + to[2]) / 2 + dir[1] * ARC_CLEARANCE,
+      (from[1] + to[1]) / 2 + dir[0] * magnitude,
+      (from[2] + to[2]) / 2 + dir[1] * magnitude,
     ]
   }
 

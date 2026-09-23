@@ -13,7 +13,6 @@ import type { Tier } from '../graphics/settings.ts'
 import type { Vec3 } from './camera.ts'
 
 export const ARC_SPEED = 0.35
-export const ARC_LIFT = 0.6
 export const ARC_JITTER = 0.05
 export const ARC_POINT_SIZE = 3.4
 export const ARC_COLOR = 0xf2d9a8
