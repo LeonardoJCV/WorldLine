@@ -29,7 +29,8 @@ export function AllocationPanel() {
       : current
   const [draft, setDraft] = useState<Allocation>(base)
   const { decide, branch, setCursor } = simulation.getState()
-  const ended = status === 'extinct' || present >= HORIZON
+  // FIX: colapso encerra a realidade como a extinção; o botão precisa morrer com ela
+  const ended = status !== 'running' || present >= HORIZON
   const blocked = inPast
     ? full
       ? t('allocation.limit')

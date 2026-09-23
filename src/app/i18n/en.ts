@@ -23,6 +23,7 @@ export const en = {
   'locale.switch': 'Português',
   'ended.extinction': 'This civilisation went extinct.',
   'ended.horizon': 'The simulation reached its horizon.',
+  'ended.collapse': 'This history collapsed under a paradox it could not repay.',
   'error.simulation': 'The simulation stopped: {message}',
   'variable.population': 'Population',
   'variable.food': 'Food reserve',

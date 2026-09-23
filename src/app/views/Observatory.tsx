@@ -135,9 +135,7 @@ export function Observatory({
             {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
               <p>{t('link.version', { version: linkVersion })}</p>
             )}
-            {ended !== null && (
-              <p>{t(ended === 'extinction' ? 'ended.extinction' : 'ended.horizon')}</p>
-            )}
+            {ended !== null && <p>{t(`ended.${ended}`)}</p>}
             {error !== null && <p>{t('error.simulation', { message: error })}</p>}
           </div>
         </div>

@@ -82,6 +82,10 @@ describe('worldEnded', () => {
     expect(worldEnded(snapshot({}, 'extinct'))).toBe(true)
   })
 
+  it('counts a collapsed worldline as ended, so it is never offered as an end of a crossing', () => {
+    expect(worldEnded(snapshot({}, 'collapsed'))).toBe(true)
+  })
+
   it('counts a worldline that reached the horizon as ended', () => {
     expect(worldEnded(snapshot({}, 'running', HORIZON))).toBe(true)
   })

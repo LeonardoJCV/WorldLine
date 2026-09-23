@@ -20,9 +20,9 @@ export function DOSES_FOR(kind: CrossingKind): readonly Dose[] {
   return kind === 'doctrine' ? [1] : DOSES
 }
 
-// FEAT: uma realidade acabou quando se extinguiu ou quando chegou ao horizonte
+// FEAT: uma realidade acabou quando se extinguiu, colapsou ou chegou ao horizonte
 export function worldEnded(present: Snapshot): boolean {
-  return present.status === 'extinct' || present.tick >= HORIZON
+  return present.status !== 'running' || present.tick >= HORIZON
 }
 
 export interface OriginCandidate {
