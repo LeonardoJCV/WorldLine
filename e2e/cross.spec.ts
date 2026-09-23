@@ -140,6 +140,23 @@ test('says why a crossing cannot happen', async ({ page }) => {
   await expect(open).toHaveAttribute('aria-describedby', 'cross-reason')
 })
 
+test('draws the crossing line on the 2D current without console errors', async ({ page }) => {
+  test.slow()
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  page.on('pageerror', (error) => errors.push(error.message))
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await expect(page.getByText('Knowledge arrived from A.')).toBeVisible()
+  await page.waitForTimeout(1000)
+  expect(errors).toEqual([])
+})
+
 test('keeps the crossing after a reload from the link', async ({ page }) => {
   test.slow()
   await worldAtYear(page, 5)

@@ -240,6 +240,12 @@ test('opens the planet at a microevent reached from the keyboard', async ({ page
   await expect(page.getByRole('dialog').getByRole('heading')).toHaveText(text)
 })
 
+test('starts with no crossings on the currents', async ({ page }) => {
+  await page.goto('/?seed=482913')
+  await expect(page.locator('.scene3d')).toHaveAttribute('data-arcs', '0')
+  await expect(page.getByRole('list', { name: 'Crossings on the currents' })).toHaveCount(0)
+})
+
 test('opens the crossing card from the keyboard and returns focus to the canvas on Escape', async ({
   page,
 }) => {
@@ -252,17 +258,21 @@ test('opens the crossing card from the keyboard and returns focus to the canvas 
   await page.getByRole('button', { name: 'A little' }).click()
   await page.getByRole('button', { name: 'Open the crossing' }).click()
   await page.getByRole('button', { name: 'Observe' }).click()
-  await expect(page.locator('.scene3d')).not.toHaveAttribute('data-arcs', '0', { timeout: 10_000 })
+  await expect(page.locator('.scene3d')).toHaveAttribute('data-arcs', '1', { timeout: 10_000 })
 
   const list = page.getByRole('list', { name: 'Crossings on the currents' })
-  await expect(list.getByRole('button').first()).toBeAttached({ timeout: 10_000 })
-  const crossing = list.getByRole('button').first()
+  const crossing = list.getByRole('button', {
+    name: 'knowledge from A to B, year 0005',
+    exact: true,
+  })
+  await expect(crossing).toBeAttached({ timeout: 10_000 })
   await crossing.focus()
   await crossing.press('Enter')
 
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeFocused()
   await expect(dialog.getByText('From A to B, year 0005')).toBeVisible()
+  await expect(dialog.getByText(/^Cost: \d+ credit$/)).toBeVisible()
 
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
