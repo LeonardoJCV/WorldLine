@@ -1,5 +1,6 @@
+import { debtRatio } from './debt.ts'
 import { clamp, pow, smoothstep } from './math.ts'
-import { PARAMS as K } from './params.ts'
+import { DEBT_WEIGHT, PARAMS as K } from './params.ts'
 import { Era, VARIABLES, hasEra, type WorldConfig, type WorldState } from './state.ts'
 
 export interface Modifiers {
@@ -149,12 +150,14 @@ export function integrate(s: WorldState, d: Derived, mods: Modifiers): WorldStat
   const population = Math.max(0, s.population * (1 + d.birthRate - d.deathRate))
   // FIX: um mundo esvaziado por uma partida não tem crescimento a medir
   const growth = s.population > 0 ? (population - s.population) / s.population : 0
+  // FEAT: o termo da dívida entra no mesmo clamp dos outros, então ela não empurra o alvo fora de 0..1
   const stabilityTarget =
     100 *
       clamp(
         (K.stabilityFood * Math.min(d.foodSecurity, 1.2)) / 1.2 +
           K.stabilityGrowth * clamp(0.5 + 20 * growth, 0, 1) +
-          (K.stabilityEnvironment * s.environment) / 100,
+          (K.stabilityEnvironment * s.environment) / 100 -
+          DEBT_WEIGHT * clamp(debtRatio(s.debts, s), 0, 1),
         0,
         1,
       ) +

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Crossing, CrossingKind } from './crossing.ts'
+import type { Debt } from './debt.ts'
 import { EVENTS } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
@@ -129,5 +130,59 @@ describe('crossings', () => {
 
   it('changes nothing when there is no crossing', () => {
     expect(step(state, world, 0, undefined, [])).toEqual(step(state, world, 0))
+  })
+})
+
+describe('debt', () => {
+  const at = (kind: CrossingKind, amounts: number[], extra: Partial<Crossing> = {}): Crossing => ({
+    tick: state.tick,
+    kind,
+    dose: 1,
+    amounts,
+    origin: { world: 'B', tick: 100 },
+    cost: 3,
+    direction: 'in',
+    ...extra,
+  })
+
+  it('a knowledge crossing enters the debt the same year it arrives', () => {
+    const result = step(state, world, 0, undefined, [at('knowledge', [10])])
+    expect(result.state.debts).toHaveLength(1)
+    const debt = result.state.debts[0]
+    expect(debt?.kind).toBe('knowledge')
+    expect(debt?.origin).toBe('B')
+    expect(debt?.since).toBe(state.tick)
+    expect(debt?.owed).toBeGreaterThan(0)
+    expect(debt?.owed).toBeLessThanOrEqual(3)
+  })
+
+  it('never charges people with a debt', () => {
+    const result = step(state, world, 0, undefined, [at('people', [1000])])
+    expect(result.state.debts).toEqual([])
+  })
+
+  it('shrinks on its own when the world researches; stays put when it does not', () => {
+    const debts: readonly Debt[] = [{ kind: 'knowledge', owed: 5, since: 0, origin: 'B' }]
+    const researching = {
+      ...state,
+      debts,
+      allocation: { agriculture: 20, industry: 20, research: 60, conservation: 0 },
+    }
+    const idle = {
+      ...state,
+      debts,
+      allocation: { agriculture: 60, industry: 20, research: 0, conservation: 20 },
+    }
+    const afterResearch = step(researching, world, 0)
+    const afterIdle = step(idle, world, 0)
+    expect(afterResearch.state.debts[0]?.owed ?? 0).toBeLessThan(5)
+    expect(afterIdle.state.debts[0]?.owed).toBe(5)
+  })
+
+  it('leaves a debt-free world exactly as it was before the debt existed', () => {
+    const result = step(state, world, 0)
+    expect(result.state.debts).toEqual([])
+    expect(result.state.paradox).toBeNull()
+    expect(step(state, world, 0, undefined, [])).toEqual(result)
   })
 })

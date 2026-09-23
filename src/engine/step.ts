@@ -1,4 +1,5 @@
 import type { Crossing } from './crossing.ts'
+import { addDebt, debtOf, debtRatio, repay, resolveParadox } from './debt.ts'
 import { addEcho, assimilate } from './echo.ts'
 import { collectModifiers, computeMetrics, evaluateEvents, type EventRecord } from './events.ts'
 import { Channel, uniform } from './rng.ts'
@@ -33,6 +34,16 @@ function applyCrossings(s: WorldState, crossings: readonly Crossing[]): WorldSta
   return state
 }
 
+// FEAT: cada travessia de conhecimento, recurso ou doutrina abre dívida no mesmo ano em que chega
+function applyDebts(s: WorldState, crossings: readonly Crossing[]): WorldState {
+  let debts = s.debts
+  for (const crossing of crossings) {
+    const debt = debtOf(crossing)
+    if (debt) debts = addDebt(debts, debt)
+  }
+  return debts === s.debts ? s : { ...s, debts }
+}
+
 export function step(
   s: WorldState,
   world: WorldConfig,
@@ -59,13 +70,21 @@ export function step(
     : s
   const crossed = applyCrossings(decided, crossings)
   const assimilated = assimilate(crossed)
-  const current: WorldState = { ...crossed, ...assimilated }
+  const owing = applyDebts({ ...crossed, ...assimilated }, crossings)
 
   // Efeitos de eventos novos só entram no ano seguinte
-  const mods = collectModifiers(current.active)
-  const derived = derive(current, world, mods, uniform(world.seed, s.tick, Channel.harvest))
-  const outcome = evaluateEvents(current, computeMetrics(current, derived), world.seed, nextRecord)
-  const integrated = integrate(current, derived, mods)
+  const mods = collectModifiers(owing.active)
+  const derived = derive(owing, world, mods, uniform(world.seed, s.tick, Channel.harvest))
+
+  // FIX: a quitação usa a produção do próprio ano, então só corre depois do derive
+  const repaid = repay(owing.debts, owing, derived, s.tick)
+  const ratio = debtRatio(repaid, owing)
+  // FEAT: o contador de anos acima do limite ainda não mora no estado (Tarefa 5 decide onde); placeholder inerte
+  const resolution = resolveParadox(owing.paradox, repaid, ratio, 0, s.tick)
+  const settled: WorldState = { ...owing, debts: repaid, paradox: resolution.paradox }
+
+  const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, nextRecord)
+  const integrated = integrate(settled, derived, mods)
 
   return {
     state: {

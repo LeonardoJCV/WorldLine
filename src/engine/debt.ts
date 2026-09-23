@@ -49,9 +49,20 @@ function eraGate(
   return condition?.value ?? Number.POSITIVE_INFINITY
 }
 
-const AGRICULTURAL_TECH_GATE = eraGate('agricultural_revolution', 'technology')
-const INDUSTRIAL_TECH_GATE = eraGate('industrial_revolution', 'technology')
-const INDUSTRIAL_ENERGY_GATE = eraGate('industrial_revolution', 'energy')
+// FIX: adiado para a primeira chamada, não para a carga do módulo — rules.ts passou a importar
+// debt.ts (Tarefa 3), fechando um ciclo com events.ts que deixaria EVENTS indefinido nesse ponto
+let eraGates: { agricultural: number; industrialTech: number; industrialEnergy: number } | null =
+  null
+function getEraGates() {
+  if (!eraGates) {
+    eraGates = {
+      agricultural: eraGate('agricultural_revolution', 'technology'),
+      industrialTech: eraGate('industrial_revolution', 'technology'),
+      industrialEnergy: eraGate('industrial_revolution', 'energy'),
+    }
+  }
+  return eraGates
+}
 
 export function debtOf(crossing: Crossing): Debt | null {
   if (crossing.kind === 'people') return null
@@ -144,16 +155,17 @@ function magnitudeLeap(crossing: Crossing, s: WorldState): boolean {
 }
 
 function eraLeap(crossing: Crossing, s: WorldState): boolean {
+  const gates = getEraGates()
   if (crossing.kind === 'knowledge') {
     const nextTech = s.technology + (crossing.amounts[0] ?? 0)
     return (
-      (!hasEra(s, Era.agricultural) && nextTech > AGRICULTURAL_TECH_GATE) ||
-      (!hasEra(s, Era.industrial) && nextTech > INDUSTRIAL_TECH_GATE)
+      (!hasEra(s, Era.agricultural) && nextTech > gates.agricultural) ||
+      (!hasEra(s, Era.industrial) && nextTech > gates.industrialTech)
     )
   }
   if (crossing.kind === 'resource') {
     const nextEnergy = s.energy + (crossing.amounts[1] ?? 0)
-    return !hasEra(s, Era.industrial) && nextEnergy > INDUSTRIAL_ENERGY_GATE
+    return !hasEra(s, Era.industrial) && nextEnergy > gates.industrialEnergy
   }
   // FEAT: doutrina e pessoas não têm uma grandeza ligada a um gatilho de era em events.ts
   return false

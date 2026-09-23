@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Debt } from './debt.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
 import { Era, VARIABLES } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
@@ -136,5 +137,31 @@ describe('integrate', () => {
     } catch (error) {
       expect(error).toMatchObject({ variable: 'population', tick: 42 })
     }
+  })
+
+  it('pulls the stability target down under debt, and is untouched with an empty list', () => {
+    const s = makeState()
+    const derived = derive(s, TEST_WORLD, neutral, calm)
+    const withoutDebt = integrate(s, derived, neutral)
+    const debts: readonly Debt[] = [{ kind: 'knowledge', owed: 20, since: 0, origin: 'B' }]
+    const withDebt = integrate({ ...s, debts }, derived, neutral)
+    expect(withDebt.stability).toBeLessThan(withoutDebt.stability)
+    expect(integrate({ ...s, debts: [] }, derived, neutral).stability).toBe(withoutDebt.stability)
+  })
+
+  it('penalizes by ratio, not by the absolute owed amount: a bigger economy carries the same debt more lightly', () => {
+    const debts: readonly Debt[] = [{ kind: 'knowledge', owed: 50, since: 0, origin: 'B' }]
+    const penaltyAt = (economy: number) => {
+      const s = makeState({ economy })
+      const derived = derive(s, TEST_WORLD, neutral, calm)
+      const withoutDebt = integrate(s, derived, neutral)
+      const withDebt = integrate({ ...s, debts }, derived, neutral)
+      return withoutDebt.stability - withDebt.stability
+    }
+    const smallPenalty = penaltyAt(1)
+    const bigPenalty = penaltyAt(50)
+    expect(smallPenalty).toBeGreaterThan(0)
+    expect(bigPenalty).toBeGreaterThan(0)
+    expect(bigPenalty).toBeLessThan(smallPenalty)
   })
 })
