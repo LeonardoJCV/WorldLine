@@ -1,4 +1,5 @@
 import type { Crossing, CrossingKind, Dose } from '../engine/crossing.ts'
+import type { Debt, Paradox } from '../engine/debt.ts'
 import { EVENTS, type EventId, type EventRecord } from '../engine/events.ts'
 import {
   VARIABLES,
@@ -51,11 +52,14 @@ export interface WorldProgress {
   readonly events: readonly EventUpdate[]
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
+  readonly debts: readonly Debt[]
+  readonly paradox: Paradox | null
 }
 
 export type Series = Readonly<Record<Variable, Float32Array>>
 
-export type EndReason = 'horizon' | 'extinction'
+// FEAT: um mundo colapsado terminou, mas não do mesmo jeito que um extinto — o motivo é distinto
+export type EndReason = 'horizon' | 'extinction' | 'collapse'
 
 export type ToWorker =
   | {

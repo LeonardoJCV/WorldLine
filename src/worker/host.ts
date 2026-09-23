@@ -9,6 +9,7 @@ import {
   type CrossingKind,
   type Dose,
 } from '../engine/crossing.ts'
+import { circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
@@ -311,9 +312,23 @@ export class SimulationHost {
     )
   }
 
+  // FEAT: a engine nunca vê outras worldlines; o hospedeiro é quem monta o livro-razão do multiverso
+  #ledgers(
+    overrides: ReadonlyMap<WorldlineId, readonly Debt[]> = new Map(),
+  ): ReadonlyMap<string, readonly Debt[]> {
+    return new Map(
+      this.#entries.map((entry) => [
+        entry.info.id,
+        overrides.get(entry.info.id) ?? entry.worldline.present.debts,
+      ]),
+    )
+  }
+
   #living(entry: Entry, role: string): void {
     if (entry.worldline.ended) {
-      const state = entry.worldline.present.status === 'extinct' ? 'extinct' : 'past the horizon'
+      const status = entry.worldline.present.status
+      const state =
+        status === 'extinct' ? 'extinct' : status === 'collapsed' ? 'collapsed' : 'past the horizon'
       throw new RangeError(`the ${role} worldline ${entry.info.id} is ${state}`)
     }
   }
@@ -373,8 +388,24 @@ export class SimulationHost {
 
     const originState = origin.worldline.stateAt(this.#now)
     const destinationState = destination.worldline.stateAt(this.#now)
-    const cost = crossingCost(kind, dose, causalDistance(originState, destinationState))
+    // FEAT: alcançar um mundo devedor custa mais; o ciclo é do hospedeiro, a dívida da engine
+    const cost = crossingCost(
+      kind,
+      dose,
+      causalDistance(originState, destinationState),
+      debtRatio(destinationState.debts, destinationState),
+    )
     this.#afford(cost)
+    const circular = circularParadox(
+      originId,
+      destinationId,
+      this.#ledgers(
+        new Map([
+          [originId, originState.debts],
+          [destinationId, destinationState.debts],
+        ]),
+      ),
+    )
 
     const crossing: Crossing = {
       tick: this.#now,
@@ -385,6 +416,7 @@ export class SimulationHost {
       cost,
       direction: 'in',
       ...(kind === 'doctrine' ? { allocation: originState.allocation } : {}),
+      ...(circular ? { circular: true } : {}),
     }
     // FEAT: o custo é cobrado uma vez só, na chegada
     // FIX: na partida, origin é a outra ponta da travessia, ou seja, para onde a gente foi
@@ -428,8 +460,24 @@ export class SimulationHost {
 
     const originState = origin.worldline.stateAt(tick)
     const parentState = parent.worldline.stateAt(tick)
-    const cost = crossingCost(kind, dose, causalDistance(originState, parentState))
+    const cost = crossingCost(
+      kind,
+      dose,
+      causalDistance(originState, parentState),
+      debtRatio(parentState.debts, parentState),
+    )
     this.#afford(cost)
+    // FIX: o ciclo é julgado pela dívida que o mundo pai tinha no ano da bifurcação, não na sua atual
+    const circular = circularParadox(
+      originId,
+      parentId,
+      this.#ledgers(
+        new Map([
+          [originId, originState.debts],
+          [parentId, parentState.debts],
+        ]),
+      ),
+    )
 
     const crossing: Crossing = {
       tick,
@@ -440,6 +488,7 @@ export class SimulationHost {
       cost,
       direction: 'in',
       ...(kind === 'doctrine' ? { allocation: originState.allocation } : {}),
+      ...(circular ? { circular: true } : {}),
     }
     const id = this.#freeId()
     const line = this.#grow(this.#seed, parent, tick, [], this.#now, [crossing])
@@ -599,6 +648,8 @@ export class SimulationHost {
         origin: { ...c.origin },
         ...(c.allocation ? { allocation: { ...c.allocation } } : {}),
       })),
+      debts: worldline.present.debts,
+      paradox: worldline.present.paradox,
     }
   }
 
@@ -606,9 +657,12 @@ export class SimulationHost {
     if (this.#entries.length === 0) return
     let ended: EndReason | null = null
     if (this.#allEnded()) {
+      // FEAT: colapso é motivo próprio de fim — não é o mesmo destino que a extinção
       ended = this.#entries.some((entry) => entry.worldline.present.status === 'running')
         ? 'horizon'
-        : 'extinction'
+        : this.#entries.some((entry) => entry.worldline.present.status === 'collapsed')
+          ? 'collapse'
+          : 'extinction'
     }
     this.#send({
       type: 'progress',

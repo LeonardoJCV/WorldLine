@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react'
 import { formatYear } from '../app/i18n/format.ts'
 import { useT } from '../app/i18n/index.ts'
-import { runGoldenChecks, type GoldenResult } from './check.ts'
+import {
+  runCollapseCheck,
+  runGoldenChecks,
+  type CollapseResult,
+  type GoldenResult,
+} from './check.ts'
 
 export function VerifyPage() {
   const t = useT()
   const [results, setResults] = useState<readonly GoldenResult[] | null>(null)
+  const [collapse, setCollapse] = useState<CollapseResult | null>(null)
 
   useEffect(() => {
-    const timer = setTimeout(() => setResults(runGoldenChecks()), 50)
+    const timer = setTimeout(() => {
+      setResults(runGoldenChecks())
+      setCollapse(runCollapseCheck())
+    }, 50)
     return () => clearTimeout(timer)
   }, [])
 
@@ -55,6 +64,43 @@ export function VerifyPage() {
                 <td>{result.ok ? t('verify.match') : t('verify.mismatch')}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      )}
+      <h2 className="verify__title">{t('verify.collapse.title')}</h2>
+      <p className="verify__lead">{t('verify.collapse.lead')}</p>
+      <p className="verify__status" role="status">
+        {collapse === null
+          ? t('verify.collapse.running')
+          : collapse.ok
+            ? t('verify.collapse.passed')
+            : t('verify.collapse.mismatch')}
+      </p>
+      {collapse && (
+        <table className="verify__table">
+          <thead>
+            <tr>
+              <th scope="col">{t('verify.seed')}</th>
+              <th scope="col">{t('verify.decisions')}</th>
+              <th scope="col">{t('verify.year')}</th>
+              <th scope="col">{t('verify.expected')}</th>
+              <th scope="col">{t('verify.computed')}</th>
+              <th scope="col">{t('verify.result')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-ok={collapse.ok}>
+              <td>{collapse.seed}</td>
+              <td>{t('verify.collapse.script')}</td>
+              <td>{formatYear(collapse.year)}</td>
+              <td>
+                <code>{collapse.hash}</code>
+              </td>
+              <td>
+                <code>{collapse.computed}</code>
+              </td>
+              <td>{collapse.ok ? t('verify.match') : t('verify.mismatch')}</td>
+            </tr>
           </tbody>
         </table>
       )}

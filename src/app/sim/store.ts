@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
+import type { Debt, Paradox } from '../../engine/debt.ts'
 import type { EventRecord } from '../../engine/events.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
@@ -27,6 +28,8 @@ export interface WorldView {
   readonly events: readonly EventRecord[]
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
+  readonly debts: readonly Debt[]
+  readonly paradox: Paradox | null
 }
 
 export interface SimulationState {
@@ -40,6 +43,8 @@ export interface SimulationState {
   readonly speed: Speed
   readonly ended: EndReason | null
   readonly events: readonly EventRecord[]
+  readonly debts: readonly Debt[]
+  readonly paradox: Paradox | null
   readonly error: string | null
   readonly cursor: number | null
   readonly inspected: Snapshot | null
@@ -84,8 +89,14 @@ function upsert(
 function focused(worlds: readonly WorldView[], focus: WorldlineId) {
   const world = worlds.find((candidate) => candidate.info.id === focus)
   return world
-    ? { present: world.present, events: world.events, decisions: world.decisions }
-    : { present: null, events: [], decisions: [] }
+    ? {
+        present: world.present,
+        events: world.events,
+        decisions: world.decisions,
+        debts: world.debts,
+        paradox: world.paradox,
+      }
+    : { present: null, events: [], decisions: [], debts: [], paradox: null }
 }
 
 function messageOf(error: unknown): string {
@@ -108,6 +119,8 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     speed: 16,
     ended: null,
     events: [],
+    debts: [],
+    paradox: null,
     error: null,
     cursor: null,
     inspected: null,
@@ -133,6 +146,8 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         playing: false,
         ended: null,
         events: [],
+        debts: [],
+        paradox: null,
         error: null,
         cursor: null,
         inspected: null,
@@ -288,6 +303,8 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
             events: upsert(old?.events ?? [], update.events),
             decisions: update.decisions,
             crossings: update.crossings,
+            debts: update.debts,
+            paradox: update.paradox,
           }
         })
         const current = store.getState().focus

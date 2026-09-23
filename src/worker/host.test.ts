@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { crossingAmounts } from '../engine/crossing.ts'
+import { crossingAmounts, crossingCost } from '../engine/crossing.ts'
+import { debtRatio } from '../engine/debt.ts'
+import { causalDistance } from '../engine/distance.ts'
 import { HORIZON } from '../engine/params.ts'
-import type { Allocation } from '../engine/state.ts'
+import type { Allocation, WorldState } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
 import { SimulationHost } from './host.ts'
 import type { FromWorker, WorldlineId } from './protocol.ts'
@@ -98,6 +100,36 @@ describe('SimulationHost: a single worldline', () => {
     host.handle({ type: 'step', years: 3000 })
     expect(last(sent, 'progress')?.ended).toBe('extinction')
     expect(world(sent, 'A')?.present.status).toBe('extinct')
+  })
+
+  it('reports collapse as its own end reason, distinct from extinction', () => {
+    const { host, sent } = setup()
+    // FEAT: um presente de conhecimento nunca quitado por um mundo que não pesquisa é o roteiro
+    // calibrado na Tarefa 6 para colapsar sempre — a dívida entra pré-fabricada, como no golden 'crossed'
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 0,
+      root: [
+        { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+      ],
+      branches: [],
+      crossings: [
+        {
+          tick: 0,
+          kind: 'knowledge',
+          dose: 3,
+          amounts: [10],
+          origin: { world: 'B', tick: 0 },
+          cost: 9,
+          direction: 'in',
+        },
+      ],
+    })
+    host.handle({ type: 'step', years: 280 })
+    expect(world(sent, 'A')?.present.status).toBe('collapsed')
+    expect(world(sent, 'A')?.paradox).toMatchObject({ kind: 'debt' })
+    expect(last(sent, 'progress')?.ended).toBe('collapse')
   })
 
   it('streams event records and later closes them', () => {
@@ -547,6 +579,95 @@ describe('SimulationHost: crossings', () => {
     expect(last(sent, 'crossed')?.crossing.allocation).toEqual(starved)
     host.handle({ type: 'step', years: 1 })
     expect(world(sent, 'B')?.present.allocation).toEqual(starved)
+  })
+
+  it('reports the debts a crossing opens, on the world that carries them', () => {
+    const { host, sent } = pair()
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'A',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    host.handle({ type: 'step', years: 1 })
+    const b = world(sent, 'B')
+    expect(b?.debts).toHaveLength(1)
+    expect(b?.debts[0]).toMatchObject({ kind: 'knowledge', origin: 'A' })
+    expect(b?.debts[0]?.owed).toBeGreaterThan(0)
+    expect(b?.paradox).toBeNull()
+    expect(world(sent, 'A')?.debts).toEqual([])
+  })
+
+  it('charges the destination debt ratio into the cost of the next crossing', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 1000 })
+    // FEAT: mais realidades vivas dão mais crédito, sem mexer no mundo B nem na sua dívida
+    for (let i = 0; i < 5; i++) {
+      host.handle({ type: 'branch', requestId: i, parent: 'A', tick: 100, allocation: balanced })
+    }
+    host.handle({
+      type: 'cross',
+      requestId: 20,
+      origin: 'A',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 2,
+    })
+    host.handle({ type: 'step', years: 1 })
+    const debts = world(sent, 'B')?.debts ?? []
+    expect(debts.length).toBeGreaterThan(0)
+    const a = world(sent, 'A')?.present.values
+    const b = world(sent, 'B')?.present.values
+    expect(a).toBeDefined()
+    expect(b).toBeDefined()
+    const ratio = debtRatio(debts, {
+      economy: b?.economy ?? 0,
+      population: b?.population ?? 0,
+    } as WorldState)
+    expect(ratio).toBeGreaterThan(0)
+    const distance = a && b ? causalDistance(a, b) : 0
+    const debtFree = crossingCost('resource', 3, distance)
+    const expected = crossingCost('resource', 3, distance, ratio)
+    // FIX: um mundo sem dívida pagaria menos por essa mesma travessia
+    expect(expected).toBeGreaterThan(debtFree)
+    host.handle({
+      type: 'cross',
+      requestId: 21,
+      origin: 'A',
+      destination: 'B',
+      kind: 'resource',
+      dose: 3,
+    })
+    expect(last(sent, 'crossed')?.crossing.cost).toBe(expected)
+  })
+
+  it('flags the crossing that closes a loop between two worlds, and the engine turns it into a circular paradox', () => {
+    const { host, sent } = pair()
+    host.handle({
+      type: 'cross',
+      requestId: 2,
+      origin: 'B',
+      destination: 'A',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    expect(last(sent, 'crossed')?.crossing.circular).toBeUndefined()
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'A')?.debts.length).toBeGreaterThan(0)
+    host.handle({
+      type: 'cross',
+      requestId: 3,
+      origin: 'A',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    expect(last(sent, 'crossed')?.crossing.circular).toBe(true)
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'B')?.paradox?.kind).toBe('circular')
   })
 
   it('rebuilds a multiverse with crossings from open', () => {

@@ -138,6 +138,13 @@ export const en = {
   'verify.script.steady': 'None',
   'verify.script.shifting': 'Three shifts',
   'verify.script.crossed': 'Three shifts, four arrivals',
+  'verify.collapse.title': 'Collapse',
+  'verify.collapse.lead':
+    'A history can also end early, not just fade out: a world that takes on a debt it never repays crosses a deadline it cannot meet, and collapses. This page re-runs that one world here, in your browser, and checks both the year it collapses and its fingerprint against the values recorded in the repository — proof that a collapse, exactly when and how it happens, is as reproducible as any history that simply reaches its end.',
+  'verify.collapse.running': 'Running the collapsing world…',
+  'verify.collapse.passed': 'The collapse and its fingerprint match in this browser.',
+  'verify.collapse.mismatch': 'The collapse or its fingerprint differ in this browser.',
+  'verify.collapse.script': 'A debt never repaid',
   'verify.back': 'Open WORLDLINE',
   'worlds.title': 'Worldlines',
   'worlds.root': 'Original',

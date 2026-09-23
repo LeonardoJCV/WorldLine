@@ -247,6 +247,33 @@ describe('simulation store', () => {
     expect(state.credit).toBe(before + 4 - crossing.cost)
   })
 
+  it('carries the debts and the paradox a world receives, for each worldline and for the focus', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const store = createSimulationStore(client)
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    await client.cross('A', id, 'knowledge', 1)
+    store.getState().step(1)
+    await flush()
+    const state = store.getState()
+    const b = state.worlds.find((w) => w.info.id === id)
+    expect(b?.debts.length).toBeGreaterThan(0)
+    expect(b?.debts[0]).toMatchObject({ kind: 'knowledge' })
+    expect(b?.paradox).toBeNull()
+    expect(state.worlds.find((w) => w.info.id === 'A')?.debts).toEqual([])
+    store.getState().setFocus(id)
+    expect(store.getState().debts).toEqual(b?.debts)
+    expect(store.getState().paradox).toBeNull()
+  })
+
   it('opens a crossing in the present from the chosen origin', async () => {
     const { store } = setup()
     store.getState().create(482913)

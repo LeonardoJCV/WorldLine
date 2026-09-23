@@ -34,6 +34,8 @@ const worlds: WorldView[] = [
     events: [],
     crossings: [fromC],
     decisions: [early],
+    debts: [],
+    paradox: null,
   },
   {
     info: { id: 'C', parent: 'A', fork: 40, generation: 3 },
@@ -41,6 +43,8 @@ const worlds: WorldView[] = [
     events: [],
     crossings: [inherited, own, orphan],
     decisions: [early, late],
+    debts: [],
+    paradox: null,
   },
   {
     info: { id: 'B', parent: 'C', fork: 60, generation: 4 },
@@ -48,6 +52,8 @@ const worlds: WorldView[] = [
     events: [],
     crossings: [],
     decisions: [early, late],
+    debts: [],
+    paradox: null,
   },
 ]
 

@@ -136,6 +136,13 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'verify.script.steady': 'Nenhuma',
   'verify.script.shifting': 'Três mudanças',
   'verify.script.crossed': 'Três mudanças, quatro chegadas',
+  'verify.collapse.title': 'Colapso',
+  'verify.collapse.lead':
+    'Uma história também pode terminar cedo, não só se apagar: um mundo que assume uma dívida que nunca quita atravessa um prazo que não consegue cumprir, e colapsa. Esta página refaz esse mundo aqui, no seu navegador, e confere tanto o ano em que ele colapsa quanto sua impressão digital com os valores registrados no repositório — prova de que um colapso, exatamente quando e como acontece, é tão reprodutível quanto qualquer história que simplesmente chega ao fim.',
+  'verify.collapse.running': 'Executando o mundo que colapsa…',
+  'verify.collapse.passed': 'O colapso e sua impressão digital conferem neste navegador.',
+  'verify.collapse.mismatch': 'O colapso ou sua impressão digital diferem neste navegador.',
+  'verify.collapse.script': 'Uma dívida nunca quitada',
   'verify.back': 'Abrir o WORLDLINE',
   'worlds.title': 'Realidades',
   'worlds.root': 'Original',
