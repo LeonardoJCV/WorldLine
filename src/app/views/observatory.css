@@ -195,6 +195,61 @@
   margin: 0;
 }
 
+/* FEAT: enquanto o paradoxo dura, o aviso toma a faixa inteira, acima de tudo o que se pode fazer */
+.notices:has(.paradox) {
+  flex: 1 1 100%;
+  order: -1;
+}
+
+.paradox {
+  padding: 10px 14px;
+  border: 1px solid;
+  border-inline-start-width: 5px;
+  border-radius: var(--radius);
+  color: var(--starlight);
+}
+
+.paradox[data-state='warning'] {
+  display: grid;
+  gap: 2px;
+  border-color: var(--v-energy);
+  background: rgb(201 80 30 / 0.16);
+}
+
+.paradox[data-state='relief'] {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-color: var(--v-environment);
+  background: rgb(31 165 138 / 0.14);
+  font-weight: 600;
+}
+
+.paradox__headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-stretch: 87%;
+}
+
+.paradox__mark {
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.paradox__deadline {
+  font-size: clamp(1.125rem, 2.2vw, 1.5rem);
+  font-weight: 700;
+  font-stretch: 112%;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.paradox__repay {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
 @media (max-width: 720px) {
   .topbar {
     grid-template-columns: minmax(0, 1fr);

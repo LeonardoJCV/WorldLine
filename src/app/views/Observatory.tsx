@@ -18,6 +18,7 @@ import { AllocationPanel } from './AllocationPanel.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
 import { CrossPanel } from './CrossPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
+import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
 import { useElementSize } from './useElementSize.ts'
@@ -132,6 +133,7 @@ export function Observatory({
         <div className="band__footer">
           <WorldActions />
           <div className="notices" role="status">
+            <ParadoxNotice />
             {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
               <p>{t('link.version', { version: linkVersion })}</p>
             )}

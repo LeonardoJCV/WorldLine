@@ -65,6 +65,13 @@ export const en = {
   'debt.hint.production': 'Its own harvests and energy pay this down.',
   'debt.hint.doctrine': 'Keeping the borrowed allocation pays this down.',
   'debt.hint.mixed': 'Its own work pays this down.',
+  'paradox.debt': 'This history no longer holds: it depends on more than it ever produced.',
+  'paradox.leap': 'This history no longer holds: it received what its age could not yet hold.',
+  'paradox.circular':
+    'This history no longer holds: two worlds owe each other what neither produced.',
+  'paradox.deadline': 'Collapses in {years} years unless {value} of debt is cleared.',
+  'paradox.lastYear': 'Collapses next year unless {value} of debt is cleared.',
+  'paradox.resolved': 'The debt was cleared. The history holds again.',
   'events.title': 'Events',
   'events.empty': 'No events yet. Let time run to see what emerges.',
   'events.ongoing': 'ongoing',

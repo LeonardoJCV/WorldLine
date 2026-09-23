@@ -63,6 +63,14 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'debt.hint.production': 'As próprias colheitas e a energia quitam essa dívida.',
   'debt.hint.doctrine': 'Manter a alocação emprestada quita essa dívida.',
   'debt.hint.mixed': 'O próprio trabalho quita essa dívida.',
+  'paradox.debt': 'Esta história não se sustenta mais: depende de mais do que jamais produziu.',
+  'paradox.leap':
+    'Esta história não se sustenta mais: recebeu o que sua época ainda não podia conter.',
+  'paradox.circular':
+    'Esta história não se sustenta mais: dois mundos devem um ao outro o que nenhum produziu.',
+  'paradox.deadline': 'Colapsa em {years} anos, a menos que {value} de dívida seja quitado.',
+  'paradox.lastYear': 'Colapsa no ano que vem, a menos que {value} de dívida seja quitado.',
+  'paradox.resolved': 'A dívida foi quitada. A história se sustenta de novo.',
   'events.title': 'Eventos',
   'events.empty': 'Nenhum evento ainda. Deixe o tempo correr para ver o que surge.',
   'events.ongoing': 'em curso',

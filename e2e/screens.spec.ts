@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { useGraphics } from './stage.ts'
-import { pickOrigin } from './support.ts'
+import { installParadox, pickOrigin, runToParadox } from './support.ts'
 
 test.skip(!process.env.SCREENS, 'screenshots are captured on demand')
 
@@ -174,6 +174,26 @@ test('state debt', async ({ page }) => {
   await page.waitForTimeout(300)
   await panel.screenshot({ path: 'screens/state-debt.png' })
 })
+
+for (const viewport of VIEWPORTS) {
+  test(`paradox notice ${viewport.name}`, async ({ page }) => {
+    test.slow()
+    await useGraphics(page, '2d')
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await installParadox(page)
+    await runToParadox(page)
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBe(0)
+    const notice = page.locator('.paradox')
+    await notice.scrollIntoViewIfNeeded()
+    await expect(notice).toBeInViewport()
+    await page.waitForTimeout(300)
+    const name = viewport.name === 'desktop' ? 'paradox-notice' : 'paradox-notice-mobile'
+    await page.screenshot({ path: `screens/${name}.png` })
+  })
+}
 
 test('cross panel mobile', async ({ page }) => {
   await enterCross(page, 390, 844)
