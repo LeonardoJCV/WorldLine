@@ -383,12 +383,20 @@
   /* FIX: o rodapé do palco é do zoom e do minimapa, que nunca podem ser cortados */
   padding: var(--space-5) var(--gutter) 108px;
   pointer-events: none;
+  /* FEAT: a coluna larga do modo entra e sai sem empurrar o resto da tela de um salto */
+  transition: grid-template-columns var(--motion-slow) var(--ease);
 }
 
 /* FIX: o painel do modo pede mais largura que o de estado, e só ele estica a coluna */
 .hud:has(.card--allocation),
 .hud:has(.card--cross) {
   grid-template-columns: minmax(280px, 34rem) minmax(80px, 1fr) minmax(230px, 21rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud {
+    transition: none;
+  }
 }
 
 /* FIX: com o planeta aberto, o rodapé do palco é dos controles da superfície */
@@ -420,6 +428,26 @@
 .hud__left > .card--cross {
   flex-shrink: 0;
   max-height: 100%;
+}
+
+/* FEAT: o painel do modo chega com um leve desvanecer, não de um só golpe */
+.card--allocation,
+.card--cross {
+  animation: card-in var(--motion-slow) var(--ease) both;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--allocation,
+  .card--cross {
+    animation: none;
+  }
 }
 
 /* FIX: aberto, o estado guarda altura para rolar por dentro; nunca vira um cartão de altura zero com o foco preso lá */
@@ -501,10 +529,25 @@
 
 .card {
   display: grid;
-  grid-template-rows: auto;
-  grid-auto-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
+  overflow: hidden;
+  /* FEAT: a altura do cartão anima por uma pista de grade — funciona mesmo com o conteúdo já fora do DOM */
+  transition:
+    grid-template-rows var(--motion-fast) var(--ease),
+    gap var(--motion-fast) var(--ease);
+}
+
+.card[data-collapsed='true'] {
+  grid-template-rows: auto minmax(0, 0fr);
+  gap: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
 }
 
 .card__title {
@@ -1161,7 +1204,7 @@ button.causal__node:hover {
   border-radius: 18px 18px 0 0;
   box-shadow: 0 -14px 30px rgb(4 4 16 / 0.45);
   pointer-events: auto;
-  transition: height 220ms ease;
+  transition: height var(--motion-slow) var(--ease);
 }
 
 .sheet[data-state='hidden'] {

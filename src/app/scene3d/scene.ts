@@ -384,7 +384,8 @@ export function createCurrentScene(
   let samples: number[] = []
   let time = 0
 
-  const DIVE_MS = 900
+  // FEAT: mergulho na escala das fichas de movimento — 4x --motion-slow (240ms)
+  const DIVE_MS = 960
   let dive: { from: Vector3; to: Vector3; look: Vec3; start: number; done: () => void } | null =
     null
   let divePromise: Promise<void> | null = null
@@ -392,7 +393,8 @@ export function createCurrentScene(
   let saved: Vector3 | null = null
   let focusHead: Vec3 | null = null
   let paused = false
-  const ease = (t: number) => t * t * (3 - 2 * t)
+  // FEAT: mesma curva das fichas (--ease: ease-out) — início rápido, chegada suave
+  const ease = (t: number) => 1 - (1 - t) * (1 - t)
 
   function renderFrame(): void {
     if (composer) composer.render()

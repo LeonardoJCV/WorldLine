@@ -12,6 +12,24 @@ test('opens the planet from the currents and returns', async ({ page }) => {
   await expect(stage(page)).toHaveAttribute('data-lens', 'current')
 })
 
+test('with motion turned down the dive lands without waiting for the flight', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/?seed=482913')
+  const enter = page.getByRole('button', { name: 'View planet' })
+  await expect(enter).toBeVisible()
+  const start = Date.now()
+  await enter.click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet')
+  // FEAT: sem o voo da câmera nem o desvanecer da superfície, o mergulho chega quase na hora
+  expect(Date.now() - start).toBeLessThan(500)
+  const duration = await page
+    .locator('.surface')
+    .evaluate((node) => getComputedStyle(node).animationDuration)
+  expect(Number.parseFloat(duration)).toBeLessThan(0.05)
+  await page.getByRole('button', { name: 'Back to the currents' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'current')
+})
+
 test('survives a rapid double-click into the planet', async ({ page }) => {
   const errors: string[] = []
   page.on('console', (message) => {

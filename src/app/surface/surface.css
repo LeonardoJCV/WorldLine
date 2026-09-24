@@ -3,11 +3,11 @@
   inset: 0;
   z-index: 2;
   background: var(--void);
-  animation: surface-in 400ms ease-out both;
+  animation: surface-in var(--motion-slow) var(--ease) both;
 }
 
 .surface--leaving {
-  animation: surface-out 300ms ease-in both;
+  animation: surface-out var(--motion-slow) var(--ease) both;
 }
 
 @keyframes surface-in {

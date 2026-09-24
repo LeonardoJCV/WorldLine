@@ -463,6 +463,43 @@ test('with motion turned down the sheet changes height without sliding', async (
   expect(moment.ratio).toBeCloseTo(0.85, 1)
 })
 
+test('with motion turned down a card still folds, just without a height transition', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await observe(page)
+  const card = page.locator('.card--events')
+  const tall = (await card.boundingBox())?.height ?? 0
+  const duration = await card.evaluate((node) => getComputedStyle(node).transitionDuration)
+  expect(Number.parseFloat(duration)).toBeLessThan(0.05)
+  await page.getByRole('button', { name: 'Collapse Events' }).click()
+  await expect(page.locator('.panel.events')).toHaveCount(0)
+  const short = (await card.boundingBox())?.height ?? 0
+  // FEAT: sem transição a altura muda igual; só o encolher suave é que some
+  expect(short).toBeLessThan(tall / 2)
+})
+
+test('with motion turned down switching mode still widens the column, just without a transition', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await observe(page)
+  const hud = page.locator('.hud')
+  const hudDuration = await hud.evaluate((node) => getComputedStyle(node).transitionDuration)
+  expect(Number.parseFloat(hudDuration)).toBeLessThan(0.05)
+  const before = await hud.evaluate((node) => getComputedStyle(node).gridTemplateColumns)
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const allocation = page.locator('.card--allocation')
+  await expect(allocation).toBeVisible()
+  const animationDuration = await allocation.evaluate(
+    (node) => getComputedStyle(node).animationDuration,
+  )
+  expect(Number.parseFloat(animationDuration)).toBeLessThan(0.05)
+  const after = await hud.evaluate((node) => getComputedStyle(node).gridTemplateColumns)
+  // FEAT: a coluna larga chega na hora; o que se desliga é o deslocar suave do resto da tela
+  expect(after).not.toBe(before)
+})
+
 function floorBoxes(page: Page) {
   return page.evaluate(() => {
     const rect = (selector: string) => {
