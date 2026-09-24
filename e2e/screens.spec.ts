@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { useGraphics } from './stage.ts'
-import { installParadox, pickOrigin, runToParadox } from './support.ts'
+import { installParadox, pickOrigin, runToCollapse, runToParadox } from './support.ts'
 
 test.skip(!process.env.SCREENS, 'screenshots are captured on demand')
 
@@ -194,6 +194,18 @@ for (const viewport of VIEWPORTS) {
     await page.screenshot({ path: `screens/${name}.png` })
   })
 }
+
+test('worlds collapsed', async ({ page }) => {
+  test.slow()
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installParadox(page)
+  await runToCollapse(page)
+  const strip = page.locator('.worlds')
+  await strip.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(300)
+  await strip.screenshot({ path: 'screens/worlds-collapsed.png' })
+})
 
 test('cross panel mobile', async ({ page }) => {
   await enterCross(page, 390, 844)

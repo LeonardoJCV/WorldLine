@@ -86,6 +86,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
               // FIX: suaviza os saltos entre amostras (mesmo raio do minimapa)
               values: movingAverage(result.values, 3),
               extinct: world.present.status === 'extinct',
+              collapsed: world.present.status === 'collapsed',
             })),
         ),
       ).then(
@@ -115,6 +116,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       tracks.map((track) => ({
         id: track.id,
         extinct: track.extinct,
+        collapsed: track.collapsed,
         points: companionPoints(track, companionSide(track.id), shownFrom, shownTo, frame),
       })),
     [tracks, shownFrom, shownTo, frame],

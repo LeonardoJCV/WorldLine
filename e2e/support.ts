@@ -65,3 +65,11 @@ export async function runToParadox(page: Page) {
   await expect(page.locator('.paradox[data-state="warning"]')).toBeVisible({ timeout: 60_000 })
   await page.getByRole('button', { name: 'Pause' }).click()
 }
+
+// FEAT: mesmo roteiro do paradoxo, correndo além do prazo em ×16 para dar tempo de pausar no colapso
+export async function runToCollapse(page: Page) {
+  await runToParadox(page)
+  await page.getByRole('button', { name: 'Play' }).click()
+  await expect(page.getByText(/collapsed in \d+/)).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+}

@@ -43,7 +43,7 @@ test('warns that a history is about to break, and lets go once the debt is clear
     'This history no longer holds: it depends on more than it ever produced.',
   )
   const deadline = notice.locator('.paradox__deadline')
-  await expect(deadline).toHaveText(/^Collapses in \d+ years unless 10 of debt is cleared\.$/)
+  await expect(deadline).toHaveText(/^Collapses in \d+ years unless 10 in debt is cleared\.$/)
   await expect(notice).toContainText('Its own research pays this down.')
 
   // FEAT: o prazo cai ano após ano sem a região viva repetir o aviso uma única vez

@@ -135,6 +135,21 @@ describe('surfaceModel', () => {
     expect(model.fauna).toBe(1)
   })
 
+  it('keeps the city alive but empties the harbours after a collapse', () => {
+    const industrial = { eras: Era.agricultural | Era.industrial }
+    const running = surfaceModel(
+      input({ ...industrial, status: 'running' }, { economy: 9, energy: 9 }),
+    )
+    const collapsed = surfaceModel(
+      input({ ...industrial, status: 'collapsed' }, { economy: 9, energy: 9 }),
+    )
+    expect(collapsed.cities.every((c) => c.state === 'alive')).toBe(true)
+    expect(collapsed.electric).toBeGreaterThan(0)
+    expect(collapsed.economy).toBeGreaterThan(0)
+    expect(running.boats).toBeGreaterThan(0)
+    expect(collapsed.boats).toBe(0)
+  })
+
   it('survives NaN population with history peak', () => {
     const model = surfaceModel(
       input(

@@ -251,6 +251,7 @@ describe('companion tracks', () => {
     to: 100,
     values: Float32Array.from([0, 0.25, 0.5]),
     extinct: false,
+    collapsed: false,
   }
 
   it('spreads the track from the axis in proportion to the distance', () => {

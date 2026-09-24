@@ -35,6 +35,7 @@ export interface DrawInput {
     readonly id: string
     readonly points: Float32Array
     readonly extinct: boolean
+    readonly collapsed: boolean
   }[]
   readonly crossings: readonly CrossingLine[]
 }
@@ -194,8 +195,8 @@ function drawCompanions(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   for (const track of input.companions) {
     const count = track.points.length / 2
     if (count < 2) continue
-    // FIX: tracejado marca a trilha extinta
-    ctx.setLineDash(track.extinct ? [4, 4] : [])
+    // FIX: tracejado fino marca a extinção; ponto-e-traço marca o colapso, sem depender de cor
+    ctx.setLineDash(track.extinct ? [4, 4] : track.collapsed ? [9, 3, 2, 3] : [])
     ctx.beginPath()
     for (let i = 0; i < count; i++) {
       const x = track.points[i * 2] ?? 0

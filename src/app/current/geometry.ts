@@ -207,6 +207,7 @@ export interface CompanionTrack {
   readonly to: number
   readonly values: Float32Array
   readonly extinct: boolean
+  readonly collapsed: boolean
 }
 
 // FIX: lado fixo por worldline, não pela posição no array

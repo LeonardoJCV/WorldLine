@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { causalDistance } from '../../engine/distance.ts'
 import type { WorldlineId } from '../../worker/protocol.ts'
-import { formatDecimal, formatYear } from '../i18n/format.ts'
+import { formatCompact, formatDecimal, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import type { WorldView } from '../sim/store.ts'
 import { crossOrigins } from './cross.ts'
+import { debtView } from './debt.ts'
 
 function distanceToOrigin(world: WorldView, worlds: readonly WorldView[]): number | null {
   const origin = worlds.find((candidate) => candidate.info.id === world.info.parent)
@@ -35,9 +36,13 @@ export function WorldsStrip() {
         {worlds.map((world) => {
           const { id, parent, fork } = world.info
           const extinct = world.present.status === 'extinct'
+          const collapsed = world.present.status === 'collapsed'
           const distance = distanceToOrigin(world, worlds)
           const isOrigin = id === crossOrigin
           const canPickOrigin = usable.some((candidate) => candidate.info.id === id)
+          // FEAT: o total já vem pronto do motor; a tira só decide se mostra o selo, não quanto se deve
+          const debt = debtView(world.debts, world.previousDebts)
+          const inParadox = world.paradox !== null
           return (
             <li key={id} className="worlds__item">
               <button
@@ -57,6 +62,8 @@ export function WorldsStrip() {
                   </span>
                   {extinct ? (
                     <span>{t('worlds.extinct', { year: formatYear(world.present.tick) })}</span>
+                  ) : collapsed ? (
+                    <span>{t('worlds.collapsed', { year: formatYear(world.present.tick) })}</span>
                   ) : (
                     distance !== null && (
                       <span>
@@ -66,6 +73,21 @@ export function WorldsStrip() {
                   )}
                 </span>
               </button>
+              {debt && (
+                // FEAT: marca discreta — só a forma denuncia a dívida, o total mora no nome acessível
+                <span
+                  className="worlds__debt"
+                  role="img"
+                  aria-label={t('worlds.debt', { value: formatCompact(debt.total, locale) })}
+                >
+                  ◇
+                </span>
+              )}
+              {inParadox && (
+                <span className="worlds__paradoxMark">
+                  <span aria-hidden="true">▲</span> {t('worlds.paradox')}
+                </span>
+              )}
               {canPickOrigin && (
                 <button
                   type="button"

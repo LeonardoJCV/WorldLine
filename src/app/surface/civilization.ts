@@ -31,6 +31,7 @@ export interface SurfaceModel {
   readonly burnt: boolean
   readonly unrest: boolean
   readonly extinct: boolean
+  readonly collapsed: boolean
 }
 
 export interface CivilizationInput {
@@ -96,6 +97,8 @@ function foundedAt(history: CivilizationInput['history'], threshold: number): nu
 export function surfaceModel(input: CivilizationInput): SurfaceModel {
   const { values, allocation, sites } = input
   const extinct = input.status === 'extinct'
+  // FEAT: colapso não mata a população — só corta o mundo do resto: o cais fica vazio, o litoral segue
+  const collapsed = input.status === 'collapsed'
   const population = extinct
     ? 0
     : Number.isFinite(values.population)
@@ -155,7 +158,7 @@ export function surfaceModel(input: CivilizationInput): SurfaceModel {
     farm: extinct ? 0 : clamp01(0.15 + 1.1 * (allocation.agriculture / 100)),
     livestock: extinct ? 0 : clamp01((allocation.agriculture / 100) * 1.4) * (dry ? 0.4 : 1),
     fauna: extinct ? 1 : environment * (1 - 0.6 * clamp01(population / 50_000_000)),
-    boats: extinct || !coastal ? 0 : clamp01(values.economy / 15),
+    boats: extinct || collapsed || !coastal ? 0 : clamp01(values.economy / 15),
     factories:
       extinct || !industrious
         ? 0
@@ -168,6 +171,7 @@ export function surfaceModel(input: CivilizationInput): SurfaceModel {
     burnt,
     unrest,
     extinct,
+    collapsed,
   }
 }
 
@@ -217,6 +221,6 @@ export function packLife(model: SurfaceModel, time: number): LifeUniforms {
     city2,
     life: [model.forest, model.livestock, model.fauna, model.boats],
     life2: [model.factories, model.mines, model.dry ? 1 : 0, model.burnt ? 1 : 0],
-    life3: [model.unrest ? 1 : 0, model.extinct ? 1 : 0, time, 0],
+    life3: [model.unrest ? 1 : 0, model.extinct ? 1 : 0, time, model.collapsed ? 1 : 0],
   }
 }

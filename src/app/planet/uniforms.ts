@@ -80,11 +80,15 @@ export function planetPalette(seed: number): PlanetPalette {
 export function planetState(snapshot: Snapshot): PlanetState {
   const { values } = snapshot
   const extinct = snapshot.status === 'extinct' ? 1 : 0
+  // FEAT: colapso não mata ninguém — luzes e vegetação seguem; a bruma fechada marca a história presa
+  const collapsed = snapshot.status === 'collapsed'
   const clean = 0.85 * smoothstep(40, 90, values.technology)
   return {
     vegetation: extinct ? 0 : unit(values.environment / 100),
     lights: extinct ? 0 : unit((Math.log10(Math.max(values.population, 1)) - 5) / 3),
-    haze: unit((values.energy / 12) * (1 - clean) + (1 - values.environment / 100) * 0.3),
+    haze: collapsed
+      ? 1
+      : unit((values.energy / 12) * (1 - clean) + (1 - values.environment / 100) * 0.3),
     ring: (snapshot.eras & Era.industrial) !== 0 ? 1 : 0,
     satellites:
       values.technology > 70
@@ -94,6 +98,6 @@ export function planetState(snapshot: Snapshot): PlanetState {
     blight: snapshot.active.includes('ecological_crisis') ? 1 : 0,
     unrest: snapshot.active.includes('civil_unrest') ? 1 : 0,
     extinct,
-    clouds: extinct ? 0.15 : 0.3 + 0.5 * unit(values.environment / 100),
+    clouds: extinct ? 0.15 : collapsed ? 0.95 : 0.3 + 0.5 * unit(values.environment / 100),
   }
 }

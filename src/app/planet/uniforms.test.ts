@@ -111,6 +111,18 @@ describe('planetState', () => {
     expect(state.vegetation).toBe(0)
   })
 
+  it('keeps lights and vegetation after a collapse, but seals the sky instead', () => {
+    const running = planetState(snapshot({ population: 5e7, environment: 80 }))
+    const state = planetState(
+      snapshot({ population: 5e7, environment: 80 }, { status: 'collapsed' }),
+    )
+    expect(state.extinct).toBe(0)
+    expect(state.lights).toBe(running.lights)
+    expect(state.vegetation).toBe(running.vegetation)
+    expect(state.haze).toBe(1)
+    expect(state.clouds).toBeGreaterThan(running.clouds)
+  })
+
   it('treats non-finite values as absent', () => {
     expect(planetState(snapshot({ population: Number.NaN })).lights).toBe(0)
   })
