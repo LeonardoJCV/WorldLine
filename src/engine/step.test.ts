@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import type { Colony } from './colony.ts'
 import type { Crossing, CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
-import { EVENTS } from './events.ts'
+import { EVENTS, worldMetrics } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
-import { PARADOX_GRACE, PARADOX_PATIENCE } from './params.ts'
+import { COLONY_UPKEEP, PARADOX_GRACE, PARADOX_PATIENCE, PARAMS } from './params.ts'
 import { step } from './step.ts'
-import { VARIABLES } from './state.ts'
+import { Era, VARIABLES, type Allocation, type WorldState } from './state.ts'
+import { colonisable, system } from './system.ts'
+import { TEST_WORLD, makeState } from './testing.ts'
 
 const { world, state } = genesis(482913)
 const shift = { agriculture: 20, industry: 50, research: 20, conservation: 10 }
@@ -292,5 +295,105 @@ describe('paradox and collapse', () => {
 
   it('refuses to advance a collapsed world', () => {
     expect(() => step({ ...state, status: 'collapsed' }, world, 0)).toThrow()
+  })
+})
+
+describe('colonies', () => {
+  const free = system(TEST_WORLD.seed).filter(colonisable)
+  const best = free.reduce((a, b) => (b.habitability > a.habitability ? b : a))
+  const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
+    makeState({
+      eras: Era.space,
+      energy: 14,
+      technology: 95,
+      economy: 9,
+      population: 4e6,
+      food: 8e6,
+      ...overrides,
+    })
+  const settled = (support: number): Colony[] =>
+    free.map((body) => ({ body: body.index, founded: -50, population: 5000, support }))
+
+  it('founds the first colony the year the world has energy to spare', () => {
+    const result = step(spacefaring(), TEST_WORLD, 0)
+    expect(result.state.colonies).toHaveLength(1)
+    expect(result.state.colonies[0]?.founded).toBe(0)
+    expect(result.state.colonies[0]?.body).toBe(best.index)
+  })
+
+  it('founds nothing in the very year the era opens: the door comes first', () => {
+    const opening = step(spacefaring({ eras: 0 }), TEST_WORLD, 0)
+    expect(opening.started.map((r) => r.event)).toContain('space_era')
+    expect(opening.state.colonies).toEqual([])
+    expect(opening.state.eras & Era.space).toBe(Era.space)
+  })
+
+  it('runs the year exactly as a grounded world would when there is nothing to spare', () => {
+    const grounded = step({ ...state, eras: 0 }, world, 0)
+    const reached = step({ ...state, eras: Era.space }, world, 0)
+    expect(reached.state.colonies).toEqual([])
+    expect({ ...reached.state, eras: grounded.state.eras }).toEqual(grounded.state)
+  })
+
+  it('charges the home world for every colony that cannot support itself', () => {
+    const dear = step(spacefaring({ colonies: settled(0) }), TEST_WORLD, 0)
+    const cheap = step(spacefaring({ colonies: settled(1) }), TEST_WORLD, 0)
+    expect(dear.state.energy).toBeLessThan(cheap.state.energy)
+    expect(cheap.state.energy - dear.state.energy).toBeCloseTo(
+      COLONY_UPKEEP * free.length * (1 - PARAMS.rE),
+      6,
+    )
+  })
+
+  it('loses a colony that falls under the floor and leaves the world alone', () => {
+    const dying: Colony = { body: best.index, founded: -50, population: 200, support: 0 }
+    const result = step(spacefaring({ energy: 9.5, colonies: [dying] }), TEST_WORLD, 0)
+    expect(result.state.colonies).toEqual([])
+  })
+
+  it('takes people off the planet, and the planet is emptier for it', () => {
+    const sized = (population: number): Colony[] =>
+      free.map((body) => ({ body: body.index, founded: -50, population, support: 1 }))
+    const few = step(spacefaring({ colonies: sized(300) }), TEST_WORLD, 0)
+    const many = step(spacefaring({ colonies: sized(5e6) }), TEST_WORLD, 0)
+    expect(many.state.energy).toBe(few.state.energy)
+    expect(many.state.population).toBeLessThan(few.state.population)
+  })
+})
+
+describe('leaving the planet, end to end', () => {
+  const SPACER: Allocation = { agriculture: 20, industry: 50, research: 30, conservation: 0 }
+  const YEARS = 3000
+
+  function run(grounded: boolean): { world: typeof world; state: WorldState } {
+    const born = genesis(482913)
+    let current: WorldState = { ...born.state, allocation: SPACER }
+    let records = 0
+    for (let year = 0; year < YEARS && current.status === 'running'; year++) {
+      const input = grounded ? { ...current, eras: current.eras & ~Era.space } : current
+      const result = step(input, born.world, records)
+      records += result.started.length
+      current = result.state
+    }
+    return { world: born.world, state: current }
+  }
+
+  const spaced = run(false)
+  const stuck = run(true)
+
+  it('reaches the space era and founds a colony', () => {
+    expect(spaced.state.eras & Era.space).toBe(Era.space)
+    expect(spaced.state.colonies.length).toBeGreaterThan(0)
+    expect(stuck.state.colonies).toEqual([])
+  })
+
+  it('leaves fewer people on the home world than the same world that never left', () => {
+    expect(spaced.state.population).toBeLessThan(stuck.state.population)
+  })
+
+  it('shows the relief in the crowding the engine already measures', () => {
+    const left = worldMetrics(spaced.state, spaced.world).crowding
+    const stayed = worldMetrics(stuck.state, stuck.world).crowding
+    expect(left).toBeLessThan(stayed)
   })
 })

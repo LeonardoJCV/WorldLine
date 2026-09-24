@@ -109,7 +109,7 @@ export function derive(
   }
 }
 
-export function integrate(s: WorldState, d: Derived, mods: Modifiers): WorldState {
+export function integrate(s: WorldState, d: Derived, mods: Modifiers, migrated = 0): WorldState {
   const research = s.allocation.research / 100
   const conservation = s.allocation.conservation / 100
 
@@ -148,8 +148,10 @@ export function integrate(s: WorldState, d: Derived, mods: Modifiers): WorldStat
   )
 
   const population = Math.max(0, s.population * (1 + d.birthRate - d.deathRate))
-  // FIX: um mundo esvaziado por uma partida não tem crescimento a medir
-  const growth = s.population > 0 ? (population - s.population) / s.population : 0
+  // FIX: quem partiu já saiu da população, mas ainda contava no começo do ano; a base o traz de
+  // volta uma vez só, e um mundo vazio não tem crescimento a medir
+  const before = s.population + migrated
+  const growth = before > 0 ? (population - before) / before : 0
   // FEAT: o termo da dívida entra no mesmo clamp dos outros, então ela não empurra o alvo fora de 0..1
   const stabilityTarget =
     100 *

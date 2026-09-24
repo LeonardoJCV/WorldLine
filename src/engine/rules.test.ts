@@ -149,6 +149,28 @@ describe('integrate', () => {
     expect(integrate({ ...s, debts: [] }, derived, neutral).stability).toBe(withoutDebt.stability)
   })
 
+  it('never subtracts a departure twice: the migration is already out of the population', () => {
+    const s = makeState({ population: 998_000 })
+    const derived = derive(s, TEST_WORLD, neutral, calm)
+    const alone = integrate(s, derived, neutral)
+    const leaving = integrate(s, derived, neutral, 2000)
+    expect(leaving.population).toBe(alone.population)
+  })
+
+  it('reads a departure as the loss it is, so stability feels the world shrink', () => {
+    const s = makeState({ population: 998_000 })
+    const derived = derive(s, TEST_WORLD, neutral, calm)
+    const alone = integrate(s, derived, neutral)
+    const leaving = integrate(s, derived, neutral, 2000)
+    expect(leaving.stability).toBeLessThan(alone.stability)
+  })
+
+  it('reads no departure from an emptied world', () => {
+    const s = makeState({ population: 0 })
+    const derived = derive(s, TEST_WORLD, neutral, calm)
+    expect(integrate(s, derived, neutral, 0)).toEqual(integrate(s, derived, neutral))
+  })
+
   it('penalizes by ratio, not by the absolute owed amount: a bigger economy carries the same debt more lightly', () => {
     const debts: readonly Debt[] = [{ kind: 'knowledge', owed: 50, since: 0, origin: 'B' }]
     const penaltyAt = (economy: number) => {

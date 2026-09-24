@@ -1,3 +1,4 @@
+import { foundColony, tickColonies, type Colony } from './colony.ts'
 import type { Crossing } from './crossing.ts'
 import {
   addDebt,
@@ -14,7 +15,8 @@ import { collectModifiers, computeMetrics, evaluateEvents, type EventRecord } fr
 import { PARADOX_GRACE } from './params.ts'
 import { Channel, uniform } from './rng.ts'
 import { derive, integrate } from './rules.ts'
-import { changedSectors, type Decision, type WorldConfig, type WorldState } from './state.ts'
+import { Era, changedSectors, type Decision, type WorldConfig, type WorldState } from './state.ts'
+import { system } from './system.ts'
 
 export interface StepResult {
   readonly state: WorldState
@@ -72,6 +74,30 @@ function arrivingParadox(
   return null
 }
 
+interface Departure {
+  readonly state: WorldState
+  readonly migrated: number
+}
+
+// FEAT: a camada das colônias corre antes do derive, porque quem parte e o que as colônias cobram
+// mudam a população e a energia que o ano inteiro vai usar
+function colonise(s: WorldState, world: WorldConfig): Departure {
+  if ((s.eras & Era.space) === 0 && s.colonies.length === 0) return { state: s, migrated: 0 }
+  const bodies = system(world.seed)
+  const born = foundColony(s, bodies, s.tick)
+  const fleet: readonly Colony[] = born ? [...s.colonies, born] : s.colonies
+  const year = tickColonies(fleet, s, bodies)
+  return {
+    state: {
+      ...s,
+      colonies: year.colonies,
+      population: Math.max(0, s.population - year.migrated),
+      energy: Math.max(0, s.energy - year.energyCost),
+    },
+    migrated: year.migrated,
+  }
+}
+
 export function step(
   s: WorldState,
   world: WorldConfig,
@@ -99,26 +125,28 @@ export function step(
   const crossed = applyCrossings(decided, crossings)
   const assimilated = assimilate(crossed)
   const owing = applyDebts({ ...crossed, ...assimilated }, crossings)
+  const departure = colonise(owing, world)
+  const peopled = departure.state
 
   // Efeitos de eventos novos só entram no ano seguinte
-  const mods = collectModifiers(owing.active)
-  const derived = derive(owing, world, mods, uniform(world.seed, s.tick, Channel.harvest))
+  const mods = collectModifiers(peopled.active)
+  const derived = derive(peopled, world, mods, uniform(world.seed, s.tick, Channel.harvest))
 
   // FIX: a quitação usa a produção do próprio ano, então só corre depois do derive
-  const repaid = repay(owing.debts, owing, derived, s.tick)
-  const ratio = debtRatio(repaid, owing)
+  const repaid = repay(peopled.debts, peopled, derived, s.tick)
+  const ratio = debtRatio(repaid, peopled)
   // FEAT: um paradoxo em curso já tem prazo próprio; só um mundo livre recebe o da travessia
-  const standing = owing.paradox ?? arrivingParadox(decided, world, crossings)
-  const resolution = resolveParadox(standing, repaid, ratio, owing.strain, s.tick)
+  const standing = peopled.paradox ?? arrivingParadox(decided, world, crossings)
+  const resolution = resolveParadox(standing, repaid, ratio, peopled.strain, s.tick)
   const settled: WorldState = {
-    ...owing,
+    ...peopled,
     debts: repaid,
     paradox: resolution.paradox,
     strain: resolution.strain,
   }
 
   const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, nextRecord)
-  const integrated = integrate(settled, derived, mods)
+  const integrated = integrate(settled, derived, mods, departure.migrated)
 
   return {
     state: {
