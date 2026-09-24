@@ -96,7 +96,8 @@ test('scrubs the past with the pointer in 3D', async ({ page }) => {
   const current = page.getByRole('slider', { name: /Worldline history/ })
   const box = await current.boundingBox()
   if (!box) throw new Error('scene is not visible')
-  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.5)
+  // FIX: o clique pousa acima do eixo, onde nenhum cartão do painel de bordo cobre o palco
+  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.25)
   await expect(page.getByRole('button', { name: 'Return to the present' })).toBeVisible()
 })
 

@@ -72,7 +72,8 @@ test('scrubs the past with the pointer', async ({ page }) => {
   const box = await current.boundingBox()
   if (!box) throw new Error('current is not visible')
   const bar = await page.locator('.topbar').boundingBox()
-  await page.mouse.click(box.x + 40, box.y + box.height / 2)
+  // FIX: o clique pousa acima do eixo, onde nenhum cartão do painel de bordo cobre o palco
+  await page.mouse.click(box.x + 40, box.y + box.height * 0.25)
   await expect(page.getByRole('button', { name: 'Return to the present' })).toBeVisible()
   expect((await page.locator('.topbar').boundingBox())?.height).toBe(bar?.height)
   const year = Number(await page.getByTestId('year').textContent())

@@ -24,6 +24,20 @@ for (const viewport of VIEWPORTS) {
 }
 
 for (const viewport of VIEWPORTS) {
+  test(`hud ${viewport.name}`, async ({ page }) => {
+    await useGraphics(page, '2d')
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/?seed=482913')
+    await page.getByRole('button', { name: '×256' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await page.waitForTimeout(4000)
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await page.waitForTimeout(300)
+    await page.screenshot({ path: `screens/hud-${viewport.name}.png` })
+  })
+}
+
+for (const viewport of VIEWPORTS) {
   test(`genesis ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.goto('/')

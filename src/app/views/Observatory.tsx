@@ -115,10 +115,10 @@ export function Observatory({
           </>
         )}
       </main>
-      <footer className="band">
+      <footer className="hud">
         <WorldsStrip />
         <StatePanel focus={focus} onFocus={setFocus} />
-        <div className="band__main">
+        <div className="hud__main">
           {mode === 'intervene' ? (
             <AllocationPanel key={remount} />
           ) : mode === 'cross' ? (
@@ -130,7 +130,7 @@ export function Observatory({
             </>
           )}
         </div>
-        <div className="band__footer">
+        <div className="hud__footer">
           <WorldActions />
           <div className="notices" role="status">
             <ParadoxNotice />

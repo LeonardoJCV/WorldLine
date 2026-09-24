@@ -1,6 +1,7 @@
 .observatory {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* FEAT: só a barra superior reserva espaço; o resto da tela é do palco */
+  grid-template-rows: auto minmax(360px, 1fr);
   min-height: 100dvh;
   background:
     radial-gradient(120% 80% at 85% 50%, rgb(58 42 107 / 0.45), transparent 60%),
@@ -8,6 +9,8 @@
 }
 
 .topbar {
+  grid-row: 1;
+  grid-column: 1;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -181,8 +184,11 @@
 }
 
 .stage {
+  grid-row: 2;
+  grid-column: 1;
+  /* FIX: o palco empilha o que é seu por dentro, para a camada dos cartões ficar por cima de tudo */
+  z-index: 0;
   position: relative;
-  min-height: 360px;
   overflow: hidden;
 }
 
@@ -201,7 +207,12 @@
   order: -1;
 }
 
+/* FEAT: o mesmo tom do aviso, agora sobre um fundo escuro, porque atrás dele passa o palco */
 .paradox {
+  --paradox-warning:
+    linear-gradient(rgb(201 80 30 / 0.16), rgb(201 80 30 / 0.16)), rgb(10 11 30 / 0.78);
+  --paradox-relief:
+    linear-gradient(rgb(31 165 138 / 0.14), rgb(31 165 138 / 0.14)), rgb(10 11 30 / 0.78);
   padding: 10px 14px;
   border: 1px solid;
   border-inline-start-width: 5px;
@@ -213,7 +224,7 @@
   display: grid;
   gap: 2px;
   border-color: var(--v-energy);
-  background: rgb(201 80 30 / 0.16);
+  background: var(--paradox-warning);
 }
 
 .paradox[data-state='relief'],
@@ -226,13 +237,13 @@
 
 .paradox[data-state='relief'] {
   border-color: var(--v-environment);
-  background: rgb(31 165 138 / 0.14);
+  background: var(--paradox-relief);
 }
 
 /* FEAT: o fim tem o mesmo peso do aviso que o anunciou, e a mesma cor */
 .paradox[data-state='collapse'] {
   border-color: var(--v-energy);
-  background: rgb(201 80 30 / 0.16);
+  background: var(--paradox-warning);
 }
 
 .paradox__headline {
@@ -292,16 +303,47 @@
   display: block;
 }
 
-.band {
+/* FEAT: o painel de bordo flutua sobre o palco e só os cartões capturam o ponteiro */
+.hud {
+  grid-row: 2;
+  grid-column: 1;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
   gap: 16px 32px;
-  padding: 16px var(--gutter) 20px;
-  border-top: 1px solid rgb(58 42 107 / 0.6);
-  min-height: 220px;
+  /* FIX: o rodapé do palco continua sendo do minimapa */
+  padding: 16px var(--gutter) 52px;
+  pointer-events: none;
+}
+
+/* FIX: com o planeta aberto, o rodapé do palco é dos controles da superfície */
+.observatory:has(.stage[data-lens='planet']) .hud {
+  padding-bottom: 110px;
+}
+
+.hud .worlds,
+.hud .panel,
+.hud .world-actions,
+.hud .notices:not(:empty) {
+  pointer-events: auto;
+}
+
+/* FEAT: translucidez por cor, sem desfoque, para o palco aparecer atrás do cartão */
+.hud .worlds,
+.hud .panel,
+.hud .world-actions,
+.hud .notices > p:not(.paradox) {
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 12px;
+  background: rgb(10 11 30 / 0.78);
+  border: 1px solid rgb(58 42 107 / 0.55);
+  border-radius: var(--radius);
 }
 
 .worlds {
+  grid-row: 2;
   grid-column: 1 / -1;
 }
 
@@ -405,14 +447,24 @@
   font-size: 0.75rem;
 }
 
-.band__main {
+.hud__main {
+  grid-row: 3;
+  grid-column: 2;
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: end;
   gap: 24px;
   min-width: 0;
 }
 
-.band__footer {
+.hud .state {
+  grid-row: 3;
+  grid-column: 1;
+  align-self: end;
+}
+
+.hud__footer {
+  grid-row: 4;
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
@@ -596,10 +648,40 @@ button.state__row:hover,
   font-size: 0.75rem;
 }
 
+/* FIX: sem largura para duas colunas o painel de bordo volta a correr abaixo do palco; a folha do celular é outra tarefa */
 @media (max-width: 900px) {
-  .band,
-  .band__main {
+  .observatory {
+    grid-template-rows: auto minmax(360px, 1fr) auto;
+  }
+
+  .hud {
+    grid-row: 3;
+    z-index: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px var(--gutter) 20px;
+    border-top: 1px solid rgb(58 42 107 / 0.6);
+    pointer-events: auto;
+  }
+
+  .hud .worlds,
+  .hud .panel,
+  .hud .world-actions,
+  .hud .notices > p:not(.paradox) {
+    width: auto;
+    padding: 0;
+    background: none;
+    border: 0;
+  }
+
+  .hud .state {
+    align-self: auto;
+  }
+
+  .hud__main {
     grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
 }
 
@@ -683,7 +765,7 @@ button.causal__node:hover {
   font-size: 0.75rem;
 }
 
-.band__main > .allocation {
+.hud__main > .allocation {
   grid-column: 1 / -1;
 }
 
@@ -753,7 +835,7 @@ button.causal__node:hover {
   font-weight: 600;
 }
 
-.band__main > .cross {
+.hud__main > .cross {
   grid-column: 1 / -1;
 }
 
