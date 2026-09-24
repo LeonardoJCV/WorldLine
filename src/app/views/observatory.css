@@ -120,11 +120,13 @@
   visibility: hidden;
 }
 
-.graphics {
+.graphics,
+.setup {
   position: relative;
 }
 
-.graphics__toggle {
+.graphics__toggle,
+.setup__toggle {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -136,7 +138,8 @@
   cursor: pointer;
 }
 
-.graphics__menu {
+.graphics__menu,
+.setup__menu {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -149,6 +152,16 @@
   background: var(--nebula);
   border: 1px solid var(--haze);
   border-radius: var(--radius);
+}
+
+/* FEAT: atrás do ⋯ moram o nome, a semente e as escolhas de montagem, com folga para o dedo */
+.setup__menu {
+  gap: 10px;
+  justify-items: start;
+}
+
+.setup__menu .topbar__seed {
+  font-size: var(--text-base);
 }
 
 .graphics__menu legend {
@@ -274,9 +287,12 @@
   font-size: var(--text-sm);
 }
 
-@media (max-width: 720px) {
+/* FEAT: no celular a barra é só o ano e o que se toca enquanto se observa; o resto é uma linha atrás do ⋯ */
+@media (max-width: 900px) {
   .topbar {
     grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+    padding: 10px var(--gutter);
   }
 
   .topbar__controls {
@@ -284,8 +300,36 @@
   }
 
   .topbar__end {
-    width: 100%;
+    align-items: center;
     justify-content: space-between;
+    width: 100%;
+  }
+
+  .topbar__setup {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* FEAT: o ano continua o maior número da tela, agora deitado numa linha só */
+  .topbar__year {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .year {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  /* FIX: o sinal é estreito; o alvo não desce dos 44px que o dedo pede */
+  .transport__play,
+  .transport__step {
+    min-width: 44px;
   }
 }
 

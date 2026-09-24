@@ -353,6 +353,90 @@ test('the focus order follows the screen with the sheet open and with it hidden'
   expect(escaped).toBe(true)
 })
 
+const TOUCHED_WHILE_WATCHING = [
+  'Observe',
+  'Intervene',
+  'Cross',
+  'Play',
+  'Advance one year',
+  '×1',
+  '×4',
+  '×16',
+  '×64',
+  '×256',
+  'Max',
+] as const
+
+test('the phone bar leaves the screen to the universe and keeps every control one tap away', async ({
+  page,
+}) => {
+  await observeOnPhone(page)
+  const measures = await page.evaluate(() => {
+    const height = (selector: string) =>
+      document.querySelector(selector)?.getBoundingClientRect().height ?? 0
+    return { bar: height('.topbar'), stage: height('.stage'), view: innerHeight }
+  })
+  // FEAT: a barra cabe em menos de um quinto da tela; o resto é do universo
+  expect(measures.bar).toBeLessThan(measures.view * 0.2)
+  expect(measures.stage).toBeGreaterThan(measures.view * 0.8)
+
+  for (const name of TOUCHED_WHILE_WATCHING) {
+    const control = page.getByRole('button', { name, exact: true })
+    await expect(control).toBeInViewport()
+    const box = await control.boundingBox()
+    if (!box) throw new Error(`${name} did not render`)
+    expect(box.height).toBeGreaterThanOrEqual(33)
+    expect(box.width).toBeGreaterThanOrEqual(30)
+  }
+
+  // FEAT: o ano continua o maior número da barra
+  const year = await page.getByTestId('year').boundingBox()
+  if (!year) throw new Error('the year did not render')
+  expect(year.height).toBeGreaterThanOrEqual(36)
+})
+
+test('the phone bar keeps the setup behind one button, out of the DOM until asked', async ({
+  page,
+}) => {
+  await observeOnPhone(page)
+  await expect(page.getByTestId('seed')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'New world' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Português' })).toHaveCount(0)
+
+  const setup = page.getByRole('button', { name: 'World and language' })
+  await expect(setup).toHaveAttribute('aria-expanded', 'false')
+  await setup.click()
+  await expect(setup).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(page.getByRole('button', { name: 'New world' })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Português' })).toBeInViewport()
+
+  // FEAT: o Escape fecha e devolve o foco a quem abriu, como no menu de gráficos
+  await page.getByRole('button', { name: 'New world' }).focus()
+  await page.keyboard.press('Escape')
+  await expect(setup).toHaveAttribute('aria-expanded', 'false')
+  await expect(setup).toBeFocused()
+  await expect(page.getByTestId('seed')).toHaveCount(0)
+})
+
+test('the phone focus order walks the bar as it reads', async ({ page }) => {
+  await observeOnPhone(page)
+  await page.getByRole('button', { name: 'World and language' }).focus()
+  const order: string[] = []
+  for (let step = 0; step < 4; step++) {
+    await page.keyboard.press('Tab')
+    order.push(
+      await page.evaluate(
+        () =>
+          document.activeElement?.getAttribute('aria-label') ??
+          document.activeElement?.textContent ??
+          '',
+      ),
+    )
+  }
+  expect(order).toEqual(['Graphics', 'Observe', 'Intervene', 'Cross'])
+})
+
 test('with motion turned down the sheet changes height without sliding', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await observeOnPhone(page)

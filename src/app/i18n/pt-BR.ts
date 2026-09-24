@@ -129,6 +129,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'genesis.traits': 'Condições iniciais',
   'genesis.fertility': 'Fertilidade do solo',
   'nav.newWorld': 'Novo mundo',
+  'topbar.setup': 'Mundo e idioma',
   'link.version':
     'Este link foi criado com o modelo v{version}; o mundo pode diferir do que foi compartilhado.',
   'world.name': 'Mundo {seed}, ano {year}',

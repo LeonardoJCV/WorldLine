@@ -129,6 +129,7 @@ export const en = {
   'genesis.traits': 'Initial conditions',
   'genesis.fertility': 'Soil fertility',
   'nav.newWorld': 'New world',
+  'topbar.setup': 'World and language',
   'link.version':
     'This link was made with model v{version}; the world may differ from what was shared.',
   'world.name': 'World {seed}, year {year}',

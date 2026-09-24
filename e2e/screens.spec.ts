@@ -37,6 +37,20 @@ for (const viewport of VIEWPORTS) {
   })
 }
 
+test('hud phone bar', async ({ page }) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(4000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  // FEAT: com o menu aberto a captura mostra a barra curta e o que passou a morar atrás dela
+  await page.getByRole('button', { name: 'World and language' }).click()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'screens/hud-phone-bar.png' })
+})
+
 test('hud collapsed', async ({ page }) => {
   await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 900 })

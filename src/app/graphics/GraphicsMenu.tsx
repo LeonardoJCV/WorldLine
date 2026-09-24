@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useT } from '../i18n/index.ts'
+import { useDismiss } from '../views/useDismiss.ts'
 import { tierOf, GRAPHICS } from './settings.ts'
 import { graphicsStore, useGraphics } from './store.ts'
 
@@ -13,23 +14,7 @@ export function GraphicsMenu() {
   const measured = useGraphics((s) => s.measured)
   const autoTier = tierOf('auto', measured)
 
-  useEffect(() => {
-    if (!open) return
-    const onPointer = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false)
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setOpen(false)
-      if (root.current?.contains(document.activeElement)) toggle.current?.focus()
-    }
-    document.addEventListener('pointerdown', onPointer)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onPointer)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  useDismiss(open, setOpen, root, toggle)
 
   return (
     <div className="graphics" ref={root}>
