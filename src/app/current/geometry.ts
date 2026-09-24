@@ -196,7 +196,9 @@ export function eraLabelY(frame: Frame, row: number): number {
 }
 
 export function episodeY(frame: Frame, row: number): number {
-  return frame.centerY + frame.height * 0.2 + row * EPISODE_ROW_HEIGHT
+  const raw = frame.centerY + frame.height * 0.2 + Math.max(row, 0) * EPISODE_ROW_HEIGHT
+  // FIX: a fileira mais baixa não desce além do quadro reservado à faixa, onde mora o zoom
+  return Math.min(raw, frame.centerY + frame.height * 0.5 - 8)
 }
 
 export const COMPANION_SCALE = 0.4

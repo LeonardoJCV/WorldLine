@@ -6,6 +6,7 @@ import type { Series } from '../../worker/protocol.ts'
 import { PLANET_BODY } from '../planet/uniforms.ts'
 import {
   COMPANION_SCALE,
+  EPISODE_ROWS,
   ERA_ROWS,
   MAX_WIDTH,
   MIN_WIDTH,
@@ -241,6 +242,20 @@ describe('layoutEvents', () => {
       120,
     )
     expect(markers).toEqual([])
+  })
+})
+
+describe('episodeY', () => {
+  // FIX: a fileira mais baixa não pode passar do rodapé do quadro, onde mora o chão do palco
+  it('never leaves the bottom half of the frame, even on the last row of a short frame', () => {
+    const short: Frame = { left: 20, right: 820, centerY: 145.5, height: 75 }
+    const y = episodeY(short, EPISODE_ROWS - 1)
+    expect(y).toBeLessThanOrEqual(short.centerY + short.height * 0.5)
+  })
+
+  it('keeps stacking rows apart on a tall frame where the clamp never engages', () => {
+    expect(episodeY(frame, 1)).toBeGreaterThan(episodeY(frame, 0))
+    expect(episodeY(frame, 0)).toBe(frame.centerY + frame.height * 0.2)
   })
 })
 

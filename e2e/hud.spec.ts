@@ -44,6 +44,27 @@ test('the stage takes the whole screen below the top bar', async ({ page }) => {
   expect(hud.bottom).toBeLessThanOrEqual(stage.bottom + 1)
 })
 
+test('every card section announces its own title, not just "section"', async ({ page }) => {
+  await observe(page)
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const names = await page.evaluate(() =>
+    [...document.querySelectorAll('.hud .card')].map((card) => {
+      const labelledby = card.getAttribute('aria-labelledby')
+      const label = labelledby ? document.getElementById(labelledby)?.textContent : null
+      return { className: card.className, label }
+    }),
+  )
+  expect(names.length).toBeGreaterThan(0)
+  for (const { className, label } of names) {
+    expect(label, `${className} has no accessible name`).toBeTruthy()
+  }
+  // FIX: o nome do cartão é o do próprio título — cada cartão soa diferente para o leitor de tela
+  const state = names.find(({ className }) => className.includes('card--state'))
+  expect(state?.label).toMatch(/^State in year \d{4}$/)
+  const allocation = names.find(({ className }) => className.includes('card--allocation'))
+  expect(allocation?.label).toBe('Allocation of effort')
+})
+
 test('the canvas measures the whole stage', async ({ page }) => {
   await observe(page)
   const measures = await page.evaluate(() => {
@@ -602,6 +623,82 @@ test('the minimap and the zoom share the floor at tablet width instead of coveri
   expect(band.reach).toEqual([true, true, true])
 })
 
+// FIX: ZOOM_BAND e MAP_BAND em Observatory.tsx (e o corte em NARROW no mesmo arquivo e em
+// current/geometry.ts) são cópias à mão da mesma geometria que o CSS expressa em --floor e nos
+// dois media queries de largura; não há como um único lugar guiar os dois sem medir o DOM em
+// tempo real (mudaria o comportamento) ou sem uma ferramenta de build nova (fora do orçamento).
+// Estes dois testes falham se qualquer um dos lados se mover sem o outro.
+const ZOOM_BAND = 44
+const MAP_BAND = 92
+
+function floorReserve(page: Page, control: '.zoom' | '.minimap') {
+  return page.evaluate((selector) => {
+    const stage = document.querySelector('.stage')?.getBoundingClientRect()
+    const box = document.querySelector(selector)?.getBoundingClientRect()
+    const floor = parseFloat(
+      getComputedStyle(document.querySelector('.observatory') as Element).getPropertyValue(
+        '--floor',
+      ),
+    )
+    if (!stage || !box || Number.isNaN(floor)) return null
+    return stage.bottom - box.top - floor
+  }, control)
+}
+
+test('the reserved zoom band covers what the floor formula actually places on a narrow phone', async ({
+  page,
+}) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize(PHONE)
+  await page.goto('/?seed=482913')
+  await expect(page.locator('.zoom')).toBeVisible()
+  const reserve = await floorReserve(page, '.zoom')
+  if (reserve === null) throw new Error('the phone floor did not render')
+  expect(reserve).toBeLessThanOrEqual(ZOOM_BAND)
+})
+
+test('the reserved map band covers what the floor formula actually places at tablet width', async ({
+  page,
+}) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 800, height: 900 })
+  // FEAT: o minimapa só aparece depois de MIN_SPAN*2 anos de história para mostrar
+  await worldAtYear(page, 45)
+  await expect(page.locator('.minimap')).toBeVisible()
+  const reserve = await floorReserve(page, '.zoom')
+  if (reserve === null) throw new Error('the tablet floor did not render')
+  expect(reserve).toBeLessThanOrEqual(MAP_BAND)
+})
+
+test('the map/zoom split falls at the same width in the CSS breakpoint and the JS band switch', async ({
+  page,
+}) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 800, height: 900 })
+  await worldAtYear(page, 45)
+  await page.setViewportSize({ width: 715, height: 800 })
+  await expect(page.locator('.minimap')).toBeHidden()
+  await page.setViewportSize({ width: 725, height: 800 })
+  await expect(page.locator('.minimap')).toBeVisible()
+})
+
+test('landscape on a phone fills the viewport exactly, with no page scroll', async ({ page }) => {
+  await useGraphics(page, '2d')
+  // FIX: a fileira do palco não impõe mais um piso de 360px; a folha some, a tela não rola
+  for (const size of [
+    { width: 844, height: 390 },
+    { width: 812, height: 375 },
+    { width: 926, height: 428 },
+  ]) {
+    await page.setViewportSize(size)
+    await page.goto('/?seed=482913')
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    )
+    expect(overflow, `${size.width}x${size.height}`).toBe(0)
+  }
+})
+
 test('a short window makes the state panel scroll instead of erasing it', async ({ page }) => {
   await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 640 })
@@ -630,6 +727,33 @@ test('a short window makes the state panel scroll instead of erasing it', async 
   expect(squeeze.scroll).toBeGreaterThan(squeeze.client)
   expect(squeeze.card).toBeGreaterThanOrEqual(112)
   expect(squeeze.rowInside).toBe(true)
+})
+
+test('in cross mode it is the crossing card that yields, not the state above it', async ({
+  page,
+}) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 640 })
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await expect(page.locator('.panel.cross')).toBeVisible()
+  const squeeze = await page.evaluate(() => {
+    const statePanel = document.querySelector('.panel.state')
+    const stateCard = document.querySelector('.card--state')
+    const crossCard = document.querySelector('.card--cross')
+    if (!statePanel || !stateCard || !crossCard) return null
+    return {
+      stateFits: statePanel.scrollHeight <= statePanel.clientHeight + 1,
+      stateRows: statePanel.querySelectorAll('.state__row').length,
+      crossHeight: crossCard.getBoundingClientRect().height,
+    }
+  })
+  if (!squeeze) throw new Error('the cross rail did not render')
+  // FIX: o estado é a referência da comparação; quem cede altura agora é o cartão de cruzar
+  expect(squeeze.stateFits).toBe(true)
+  expect(squeeze.stateRows).toBeGreaterThan(0)
+  expect(squeeze.crossHeight).toBeGreaterThanOrEqual(112)
 })
 
 test('the cards are read before the floor the stage keeps for itself', async ({ page }) => {

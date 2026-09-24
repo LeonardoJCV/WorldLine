@@ -16,8 +16,13 @@ export function PanelCard({
   const collapsed = useCollapsed(id)
 
   return (
-    <section className={`card card--${id}`} data-collapsed={collapsed ? 'true' : 'false'}>
-      <h2 className="card__title">
+    // FIX: o cartão ganha nome acessível do próprio título, em vez de anunciar só "section"
+    <section
+      className={`card card--${id}`}
+      data-collapsed={collapsed ? 'true' : 'false'}
+      aria-labelledby={`card-${id}-title`}
+    >
+      <h2 className="card__title" id={`card-${id}-title`}>
         <button
           type="button"
           className="card__toggle"

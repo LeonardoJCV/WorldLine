@@ -1,8 +1,8 @@
 .observatory {
   position: relative;
   display: grid;
-  /* FEAT: só a barra superior reserva espaço; o resto da tela é do palco */
-  grid-template-rows: auto minmax(360px, 1fr);
+  /* FIX: sem piso fixo na fileira do palco, a tela nunca cresce além da viewport em paisagem no celular */
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 100dvh;
   background:
     radial-gradient(120% 80% at 85% 50%, rgb(58 42 107 / 0.45), transparent 60%),
@@ -424,10 +424,19 @@
 }
 
 /* FEAT: no aperto quem cede é a lista de referência; o painel em que se age continua inteiro */
-.hud__left > .card--allocation,
-.hud__left > .card--cross {
+.hud__left > .card--allocation {
   flex-shrink: 0;
   max-height: 100%;
+}
+
+/* FIX: no cruzamento é o próprio cartão de cruzar que cede; o estado é a referência da comparação */
+.hud__left > .card--cross {
+  min-height: 112px;
+  max-height: 100%;
+}
+
+.hud__left:has(> .card--cross) > .card--state {
+  flex-shrink: 0;
 }
 
 /* FEAT: o painel do modo chega com um leve desvanecer, não de um só golpe */
