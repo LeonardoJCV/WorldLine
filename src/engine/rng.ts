@@ -1,4 +1,4 @@
-export const Channel = { harvest: 1, genesis: 16, event: 64 } as const
+export const Channel = { harvest: 1, genesis: 16, event: 64, space: 256 } as const
 
 function fmix32(h: number): number {
   h ^= h >>> 16
