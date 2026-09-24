@@ -67,6 +67,11 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'debt.hint.production': 'As próprias colheitas e a energia quitam essa dívida.',
   'debt.hint.doctrine': 'Manter a alocação emprestada quita essa dívida.',
   'debt.hint.mixed': 'O próprio trabalho quita essa dívida.',
+  'colonies.title': 'Colônias',
+  'colonies.one': 'Uma em {body}',
+  'colonies.many': '{count}, a maior em {body}',
+  'colonies.self': 'autossuficiente',
+  'colonies.supported': 'ainda sustentada pelo mundo natal',
   'paradox.debt': 'Esta história não se sustenta mais: depende de mais do que jamais produziu.',
   'paradox.leap':
     'Esta história não se sustenta mais: recebeu o que sua época ainda não podia conter.',

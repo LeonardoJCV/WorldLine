@@ -222,6 +222,53 @@ test('state debt', async ({ page }) => {
   await panel.screenshot({ path: 'screens/state-debt.png' })
 })
 
+test('state colonies', async ({ page }) => {
+  test.setTimeout(120_000)
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  // FIX: com o presente ainda no ano 0 a régua não tem para onde voltar e "Home" não dispara o
+  // cursor; um passo antes dá à régua uma faixa de verdade para escolher o ano 0 como passado
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  const branch = page.getByRole('button', { name: 'Branch from year 0000' })
+  await expect(branch).toBeEnabled()
+  // FEAT: mesma alocação do roteiro dourado SPACEFARING, a única calibrada a abrir a era espacial
+  // perto do ano 1800 nesta semente (calibration.test.ts, "the quickest path to the sky")
+  await page.getByRole('slider', { name: /Agriculture/ }).fill('20')
+  await page.getByRole('slider', { name: /Research/ }).fill('30')
+  await page.getByRole('slider', { name: /Conservation/ }).fill('0')
+  await page.getByRole('slider', { name: /Industry/ }).fill('50')
+  await branch.click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await page.getByRole('button', { name: '×64' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await expect(page.locator('.state__colonies')).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+
+  // FEAT: uma dívida ao lado das colônias, para a captura mostrar as duas linhas convivendo
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Knowledge' }).click()
+  await page.getByRole('button', { name: 'A little' }).click()
+  await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await expect(page.getByText('Knowledge arrived from A.')).toBeVisible()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  // FIX: a dívida entra na engine só no passo que segue a chegada, não no ano em que a travessia abre
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+
+  const panel = page.locator('.panel.state')
+  await expect(panel.locator('.state__debt')).toBeVisible()
+  await expect(panel.locator('.state__colonies')).toBeVisible()
+  await panel.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(300)
+  await panel.screenshot({ path: 'screens/state-colonies.png' })
+})
+
 for (const viewport of VIEWPORTS) {
   test(`paradox notice ${viewport.name}`, async ({ page }) => {
     test.slow()

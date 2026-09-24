@@ -69,6 +69,11 @@ export const en = {
   'debt.hint.production': 'Its own harvests and energy pay this down.',
   'debt.hint.doctrine': 'Keeping the borrowed allocation pays this down.',
   'debt.hint.mixed': 'Its own work pays this down.',
+  'colonies.title': 'Colonies',
+  'colonies.one': 'One on {body}',
+  'colonies.many': '{count}, the largest on {body}',
+  'colonies.self': 'self-sufficient',
+  'colonies.supported': 'still supported from home',
   'paradox.debt': 'This history no longer holds: it depends on more than it ever produced.',
   'paradox.leap': 'This history no longer holds: it received what its age could not yet hold.',
   'paradox.circular':
