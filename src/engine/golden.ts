@@ -121,7 +121,7 @@ export const INHERITANCE_CASE: InheritanceCase = {
   seed: 482913,
   script: 'inherited',
   founded: 1803,
-  ended: 2229,
-  year: 2230,
-  hash: 'bc190222',
+  ended: 2283,
+  year: 2284,
+  hash: '63e17c2a',
 }

@@ -368,7 +368,7 @@ describe('colonies', () => {
     const sized = (population: number): Colony[] =>
       free.map((body) => ({ body: body.index, founded: -50, population, support: 1, record: 0 }))
     const few = step(spacefaring({ colonies: sized(300) }), TEST_WORLD, 0)
-    const many = step(spacefaring({ colonies: sized(5e6) }), TEST_WORLD, 0)
+    const many = step(spacefaring({ colonies: sized(2e4) }), TEST_WORLD, 0)
     expect(many.state.energy).toBe(few.state.energy)
     expect(many.state.population).toBeLessThan(few.state.population)
   })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   SPACE_ERA,
+  colonyCost,
   foundColony,
   heir,
   inherit,
@@ -149,7 +150,7 @@ describe('foundColony', () => {
 
 describe('tickColonies', () => {
   it('leaves an empty sky alone', () => {
-    expect(tickColonies([], world(), BODIES)).toEqual({ colonies: [], migrated: 0, energyCost: 0 })
+    expect(tickColonies([], world(), BODIES)).toEqual({ colonies: [], migrated: 0 })
   })
 
   it('grows support out of the world surplus and the body', () => {
@@ -213,13 +214,24 @@ describe('tickColonies', () => {
     )
   })
 
-  it('shrinks a colony that outgrew the body that holds it', () => {
+  it('shrinks a colony that outgrew the body that holds it, and sends it no one', () => {
     const holds = COLONY_CAPACITY * 0.05
     const packed = colony({ body: 1, support: 1, population: 4 * holds })
-    const { colonies } = tickColonies([packed], world({ energy: 1e4 }), BARREN)
+    const { colonies, migrated } = tickColonies([packed], world({ energy: 1e4 }), BARREN)
     // FEAT: a lotação manda no ano, e o pior que ela faz é o ritmo inteiro
-    expect(colonies[0]?.population).toBeLessThan(4 * holds)
-    expect(colonies[0]?.population).toBeGreaterThan(4 * holds * (1 - COLONY_GROWTH))
+    expect(colonies[0]?.population).toBeCloseTo(4 * holds * (1 - COLONY_GROWTH), 9)
+    expect(migrated).toBe(0)
+  })
+
+  it('never settles more people than the body holds, however big the home world is', () => {
+    const holds = COLONY_CAPACITY * 0.05
+    let colonies: readonly Colony[] = [colony({ body: 1, support: 1, population: 1000 })]
+    for (let year = 0; year < 2000; year++) {
+      colonies = tickColonies(colonies, world({ energy: 1e4, population: 5e7 }), BARREN).colonies
+      expect(colonies[0]?.population).toBeLessThanOrEqual(holds)
+    }
+    // FEAT: e ela encosta no teto do corpo, não em qualquer número que o mundo natal decida
+    expect(colonies[0]?.population).toBeGreaterThan(holds * 0.99)
   })
 
   it('loses a colony that falls below the floor, and never gets it back', () => {
@@ -227,27 +239,20 @@ describe('tickColonies', () => {
     const first = tickColonies([dying], world({ energy: 9 }), BARREN)
     expect(255 * (1 - COLONY_GROWTH * COLONY_HOLD)).toBeLessThan(COLONY_FLOOR)
     expect(first.colonies).toEqual([])
-    // FEAT: o ano em que ela morreu ainda foi pago
-    expect(first.energyCost).toBeCloseTo(COLONY_UPKEEP, 12)
+    // FEAT: a frota que sai do ano é a que o ano cobra, então a que morreu não cobra mais nada
+    expect(colonyCost(first.colonies)).toBe(0)
     const second = tickColonies(first.colonies, world({ energy: 1e6 }), BARREN)
     expect(second.colonies).toEqual([])
-    expect(second.energyCost).toBe(0)
   })
 
   it('charges energy while support is short and stops at one', () => {
-    expect(tickColonies([colony({ support: 0 })], world(), BODIES).energyCost).toBeCloseTo(
+    expect(colonyCost([colony({ support: 0 })])).toBeCloseTo(COLONY_UPKEEP, 12)
+    expect(colonyCost([colony({ support: 0.5 })])).toBeCloseTo(COLONY_UPKEEP / 2, 12)
+    expect(colonyCost([colony({ support: 1 })])).toBe(0)
+    expect(colonyCost([colony({ support: 0 }), colony({ body: 2, support: 1 })])).toBeCloseTo(
       COLONY_UPKEEP,
       12,
     )
-    expect(tickColonies([colony({ support: 0.5 })], world(), BODIES).energyCost).toBeCloseTo(
-      COLONY_UPKEEP / 2,
-      12,
-    )
-    expect(tickColonies([colony({ support: 1 })], world(), BODIES).energyCost).toBe(0)
-    expect(
-      tickColonies([colony({ support: 0 }), colony({ body: 2, support: 1 })], world(), BODIES)
-        .energyCost,
-    ).toBeCloseTo(COLONY_UPKEEP, 12)
   })
 
   it('moves people out of the home world and loses none of them', () => {

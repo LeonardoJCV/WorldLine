@@ -31,6 +31,7 @@ export interface Colony {
   readonly body: number
   readonly founded: number
   readonly population: number
+  // FEAT: 0..1, a parte do que a colônia precisa que ela mesma cobre — o mundo natal paga o resto
   readonly support: number
   // FEAT: o acontecimento que registrou a fundação, para a herança poder apontar de volta para ele
   readonly record: number
@@ -50,7 +51,6 @@ export interface ColonisingWorld extends HomeWorld {
 export interface ColonyTick {
   readonly colonies: readonly Colony[]
   readonly migrated: number
-  readonly energyCost: number
 }
 
 // FEAT: a energia é o que o mundo faz por ano, não um estoque, e só o que passa da base sai daqui
@@ -102,11 +102,10 @@ export function tickColonies(
   state: HomeWorld,
   bodies: readonly Body[],
 ): ColonyTick {
-  if (colonies.length === 0) return { colonies: [], migrated: 0, energyCost: 0 }
+  if (colonies.length === 0) return { colonies: [], migrated: 0 }
 
   // FEAT: o excedente é partido entre as colônias, e o custo delas não paga o sustento delas
   const share = spareEnergy(state) / colonies.length
-  const energyCost = colonyCost(colonies)
   const next: Colony[] = []
   let migrated = 0
   let room = Math.max(0, state.population)
@@ -114,8 +113,9 @@ export function tickColonies(
   for (const colony of colonies) {
     const body = bodies[colony.body]
     const reach = body === undefined ? 0 : body.habitability
-    const possible = clamp(COLONY_SUPPORT_HAB * reach + share / COLONY_SUPPORT_NEED, 0, 1)
-    const support = clamp(colony.support + COLONY_SUPPORT_RATE * (possible - colony.support), 0, 1)
+    // FEAT: o corpo e o que o mundo natal investe dizem até onde a colônia consegue se bastar
+    const reachable = clamp(COLONY_SUPPORT_HAB * reach + share / COLONY_SUPPORT_NEED, 0, 1)
+    const support = clamp(colony.support + COLONY_SUPPORT_RATE * (reachable - colony.support), 0, 1)
     // FIX: o corpo comporta só tanta gente; manda no ano quem estiver mais apertado, sustento ou lotação
     const holds = COLONY_CAPACITY * reach
     const vacancy = clamp(holds > 0 ? 1 - colony.population / holds : -1, -1, 1)
@@ -125,17 +125,19 @@ export function tickColonies(
 
     // FEAT: ninguém emigra para uma colônia que está minguando; a leva segue o sustento acima do apoio
     const pull = clamp((support - COLONY_HOLD) / (1 - COLONY_HOLD), 0, 1)
+    // FIX: a leva para no que resta do corpo, senão a lotação não seria lotação nenhuma
     const leaving = Math.min(
       COLONY_MIGRATION * Math.max(0, state.population) * pull,
       COLONY_INTAKE * colony.population,
       room,
+      Math.max(0, holds - grown),
     )
     room -= leaving
     migrated += leaving
     next.push({ ...colony, population: grown + leaving, support })
   }
 
-  return { colonies: next, migrated, energyCost }
+  return { colonies: next, migrated }
 }
 
 export function selfSufficient(colony: Colony): boolean {

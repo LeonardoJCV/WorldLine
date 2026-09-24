@@ -323,6 +323,8 @@ interface Left {
   readonly lost: number
   readonly selfAt: number
   readonly crowding: number
+  // FEAT: a superlotação de cada ano, porque o alívio da migração é um momento, não um fim de linha
+  readonly crowdings: readonly number[]
   readonly population: number
   readonly peakEnergy: number
 }
@@ -344,6 +346,7 @@ function leave(
   let selfAt = -1
   let peakEnergy = 0
   let fleet = new Set<string>()
+  const crowdings: number[] = []
   while (s.tick < SPACE_HORIZON && s.status === 'running') {
     const pending = decisions[decided]
     const due = pending?.tick === s.tick ? pending : undefined
@@ -370,6 +373,7 @@ function leave(
     for (const fresh of now) if (!fleet.has(fresh)) founded++
     if (selfAt < 0 && heir(s.colonies)) selfAt = s.tick
     fleet = now
+    crowdings.push(worldMetrics(s, origin.world).crowding)
   }
   return {
     eraAt,
@@ -377,6 +381,7 @@ function leave(
     lost,
     selfAt,
     crowding: worldMetrics(s, origin.world).crowding,
+    crowdings,
     population: s.population,
     peakEnergy,
   }
@@ -431,13 +436,19 @@ describe('space calibration', () => {
     expect(dropped.reduce((sum, run) => sum + run.lost, 0)).toBeGreaterThanOrEqual(3)
   })
 
-  it('the crowding relief is felt at home without emptying it', () => {
+  it('the crowding relief is felt at home while there is room out there, and closes when it runs out', () => {
     for (const seed of [7, 482913, 99991]) {
       const left = leave(seed, TURN)
       const stayed = leave(seed, TURN, [], true)
-      const relief = stayed.crowding - left.crowding
+      const years = Math.min(left.crowdings.length, stayed.crowdings.length)
+      let relief = 0
+      for (let year = 0; year < years; year++) {
+        relief = Math.max(relief, (stayed.crowdings[year] ?? 0) - (left.crowdings[year] ?? 0))
+      }
       expect(relief).toBeGreaterThan(0.005)
       expect(relief).toBeLessThan(0.05)
+      // FEAT: o corpo comporta só tanta gente, então a válvula fecha e o mundo natal volta a apertar
+      expect(stayed.crowding - left.crowding).toBeLessThan(0.001)
       // FEAT: o mundo natal continua apertado, e continua com quase toda a gente
       expect(left.crowding).toBeGreaterThan(0.8)
       expect(left.population).toBeGreaterThan(0.9 * stayed.population)
