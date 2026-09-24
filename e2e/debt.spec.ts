@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test'
 import { useGraphics } from './stage.ts'
-import { branchFromStart, pickOrigin, worldAtYear } from './support.ts'
+import {
+  branchFromStart,
+  installParadox,
+  pickOrigin,
+  runToCollapse,
+  runToParadox,
+  worldAtYear,
+} from './support.ts'
 
 test.beforeEach(async ({ page }) => {
   await useGraphics(page, '2d')
@@ -60,4 +67,61 @@ test('says the debt is being repaid once the world invests in paying it down', a
   await step.click()
   const debt = page.locator('.state__debt')
   await expect(debt).toContainText('being repaid')
+})
+
+test('lives through the whole arc of a debt: it shows while owed, warns of a paradox with its deadline, and clears once the right currency repays it', async ({
+  page,
+}) => {
+  test.slow()
+  await installParadox(page)
+  await runToParadox(page)
+
+  const debt = page.locator('.state__debt')
+  await expect(debt).toBeVisible()
+  await expect(debt).toContainText('Causal debt')
+  await expect(debt).toContainText('owed to A')
+  await expect(page.locator('.paradox[data-state="warning"]')).toBeVisible()
+
+  // FEAT: pesquisa é a moeda certa para uma dívida de conhecimento, o mesmo caminho que já leva ao alívio
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  await page.getByRole('slider', { name: /Research/ }).fill('60')
+  await page.getByRole('button', { name: 'Apply decision' }).click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await page.getByRole('button', { name: '×16' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+
+  const relief = page.locator('.paradox[data-state="relief"]')
+  await expect(relief).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+  // FEAT: sem dívidas em aberto a lista fica vazia, e a linha some do painel
+  await expect(debt).toHaveCount(0)
+})
+
+test('lets the deadline pass, labels the ending a collapse and not an extinction, and keeps that through a reload from the link', async ({
+  page,
+}) => {
+  test.slow()
+  await installParadox(page)
+  await runToCollapse(page)
+
+  const chip = page.getByRole('button', { name: 'Focus on worldline F' })
+  const label = (await chip.textContent()) ?? ''
+  const [, year] = /collapsed in (\d+)/.exec(label) ?? []
+  expect(year).toBeTruthy()
+  await expect(chip).not.toContainText('Extinct in')
+  await expect(page.locator('.paradox')).toHaveCount(0)
+  await expect(page.locator('.events__item', { hasText: 'Collapse' })).toBeVisible()
+  await expect(page.locator('.events__item', { hasText: 'Extinction' })).toHaveCount(0)
+
+  // FEAT: o colapso tem de voltar do endereço, não do que sobrou na memória
+  await expect(page).toHaveURL(/#\/m\//)
+  const link = page.url()
+  await page.goto('about:blank')
+  await page.goto(link)
+
+  const reopened = page.getByRole('button', { name: 'Focus on worldline F' })
+  await reopened.click()
+  await expect(reopened).toHaveText(new RegExp(`collapsed in ${year}\\b`))
+  await expect(page.locator('.paradox')).toHaveCount(0)
+  await expect(page.locator('.events__item', { hasText: 'Collapse' })).toBeVisible()
 })

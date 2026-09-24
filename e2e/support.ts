@@ -58,12 +58,18 @@ export async function installParadox(page: Page) {
   await page.getByRole('button', { name: 'Observe' }).click()
 }
 
+// FIX: o worker só confirma a pausa (e o "now" final) alguns quadros depois do clique
+async function settlePause(page: Page) {
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible({ timeout: 15_000 })
+}
+
 // FEAT: oitenta anos de dívida acima do limite antes de a história deixar de se sustentar
 export async function runToParadox(page: Page) {
   await page.getByRole('button', { name: '×16' }).click()
   await page.getByRole('button', { name: 'Play' }).click()
   await expect(page.locator('.paradox[data-state="warning"]')).toBeVisible({ timeout: 60_000 })
-  await page.getByRole('button', { name: 'Pause' }).click()
+  await settlePause(page)
 }
 
 // FEAT: mesmo roteiro do paradoxo, correndo além do prazo em ×16 para dar tempo de pausar no colapso
@@ -71,5 +77,5 @@ export async function runToCollapse(page: Page) {
   await runToParadox(page)
   await page.getByRole('button', { name: 'Play' }).click()
   await expect(page.getByText(/collapsed in \d+/)).toBeVisible({ timeout: 60_000 })
-  await page.getByRole('button', { name: 'Pause' }).click()
+  await settlePause(page)
 }
