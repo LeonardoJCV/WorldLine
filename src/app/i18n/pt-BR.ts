@@ -81,7 +81,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'causal.decision': 'Decisão no ano {year}',
   'causal.repeated': 'já mostrado',
   'causal.unknown': 'Evento desconhecido',
-  'causal.crossing': '{kind} que atravessou entre realidades no ano {year}',
+  'causal.crossing': '{kind} cruzou no ano {year}',
   'allocation.title': 'Alocação de esforço',
   'allocation.apply': 'Aplicar decisão',
   'allocation.reset': 'Desfazer ajustes',

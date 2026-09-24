@@ -180,7 +180,7 @@ test('shows the crossing as a cause of the events it changed', async ({ page }) 
   await golden.click()
   await expect(
     page.locator('.causal__node[data-kind="crossing"]', {
-      hasText: 'Doctrine that crossed between worldlines',
+      hasText: 'Doctrine crossed in year',
     }),
   ).toBeVisible()
   // FIX: a linha da travessia não tem índice de evento: escolhê-la larga a cadeia causal anterior

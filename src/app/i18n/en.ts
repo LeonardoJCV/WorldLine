@@ -82,7 +82,7 @@ export const en = {
   'causal.decision': 'Decision in year {year}',
   'causal.repeated': 'already shown',
   'causal.unknown': 'Unknown event',
-  'causal.crossing': '{kind} that crossed between worldlines in year {year}',
+  'causal.crossing': '{kind} crossed in year {year}',
   'allocation.title': 'Allocation of effort',
   'allocation.apply': 'Apply decision',
   'allocation.reset': 'Reset',
