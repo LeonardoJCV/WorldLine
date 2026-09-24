@@ -9,13 +9,15 @@
   cursor: ew-resize;
 }
 
+/* FIX: o alto à direita virou coluna de cartões; os comandos do palco sobem para o meio, que fica livre */
 .scene3d__actions {
   position: absolute;
   top: 12px;
-  right: var(--gutter);
+  left: 50%;
   z-index: 1;
   display: flex;
   gap: 6px;
+  transform: translateX(-50%);
 }
 
 .scene3d__enter,
@@ -44,12 +46,12 @@
 
 .scene3d__card {
   position: absolute;
-  /* FIX: acima do minimap (bottom 10px, altura 36px, z-index 3), senão ele desenha por cima da ficha */
+  /* FIX: acima da faixa de baixo, do zoom e do minimapa, senão eles desenham por cima da ficha */
   z-index: 4;
   left: var(--gutter);
-  bottom: 56px;
+  bottom: 120px;
   width: min(320px, 90%);
-  max-height: calc(100% - 140px);
+  max-height: calc(100% - 240px);
   overflow-y: auto;
   padding: 14px 16px;
   background: var(--nebula);

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { useGraphics } from './stage.ts'
+import { installParadox, runToParadox } from './support.ts'
 
 const WIDE = { width: 1440, height: 900 }
 
@@ -96,4 +97,85 @@ test('the universe answers the pointer between the cards', async ({ page }) => {
   expect(await onCanvas(hit, axis)).toContain('current')
   await page.mouse.click(hit, axis)
   await expect(page.locator('.causal__node').first()).toBeVisible()
+})
+
+test('every card takes its own area and the minimap keeps the floor', async ({ page }) => {
+  await observe(page)
+  const places = await page.evaluate(() => {
+    const rect = (selector: string) => {
+      const found = document.querySelector(selector)?.getBoundingClientRect()
+      return found ? { top: found.top, bottom: found.bottom, left: found.left } : null
+    }
+    return {
+      stage: rect('.stage'),
+      state: rect('.card--state'),
+      events: rect('.card--events'),
+      causal: rect('.card--causal'),
+      actions: rect('.card--actions'),
+      minimap: rect('.minimap'),
+      zoom: rect('.zoom'),
+      view: innerHeight,
+    }
+  })
+  const { stage, state, events, causal, actions, minimap, zoom, view } = places
+  if (!stage || !state || !events || !causal || !actions || !minimap || !zoom) {
+    throw new Error('the dashboard did not render its areas')
+  }
+  // FEAT: uma coluna de cada lado, ambas presas ao alto, com o centro do palco livre
+  expect(state.left).toBeLessThan(events.left)
+  expect(state.top - stage.top).toBeLessThan(40)
+  expect(events.top - stage.top).toBeLessThan(40)
+  // FEAT: o porquê lê-se colado à lista que explica
+  expect(causal.top - events.bottom).toBeLessThanOrEqual(24)
+  expect(causal.left).toBe(events.left)
+  // FEAT: a faixa de baixo fica acima do zoom e do minimapa, e o minimapa cabe inteiro na tela
+  expect(actions.bottom).toBeLessThanOrEqual(zoom.top)
+  expect(zoom.bottom).toBeLessThanOrEqual(minimap.top)
+  expect(minimap.bottom).toBeLessThanOrEqual(view)
+})
+
+test('a folded card keeps its title, gives back the room and is still folded after a reload', async ({
+  page,
+}) => {
+  await observe(page)
+  const card = page.locator('.card--events')
+  const tall = (await card.boundingBox())?.height ?? 0
+  const fold = page.getByRole('button', { name: 'Collapse Events' })
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await fold.click()
+
+  const unfold = page.getByRole('button', { name: 'Expand Events' })
+  await expect(unfold).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.locator('.panel.events')).toHaveCount(0)
+  const short = (await card.boundingBox())?.height ?? 0
+  expect(short).toBeLessThan(tall / 2)
+
+  // FEAT: encolhido, o conteúdo saiu do DOM, e por isso não recebe foco no Tab
+  await unfold.focus()
+  await page.keyboard.press('Tab')
+  const escaped = await page.evaluate(
+    () => document.activeElement?.closest('.card--events') === null,
+  )
+  expect(escaped).toBe(true)
+
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Expand Events' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  )
+  await expect(page.locator('.panel.events')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Expand Events' }).click()
+  await expect(page.locator('.panel.events')).toHaveCount(1)
+})
+
+test('the paradox notice is not a card and cannot be folded', async ({ page }) => {
+  test.slow()
+  await useGraphics(page, '2d')
+  await page.setViewportSize(WIDE)
+  await installParadox(page)
+  await runToParadox(page)
+  const notice = page.locator('.paradox')
+  await expect(notice).toBeVisible()
+  expect(await notice.locator('button').count()).toBe(0)
+  expect(await notice.evaluate((node) => node.closest('.card') === null)).toBe(true)
 })

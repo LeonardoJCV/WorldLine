@@ -55,9 +55,10 @@
   align-items: center;
 }
 
+/* FIX: os cantos do palco viraram colunas de cartões; os comandos do planeta formam uma fila no meio, que fica livre */
 .surface__levels {
-  left: var(--gutter);
   top: 12px;
+  right: calc(50% + 12px);
 }
 
 .surface__hour {
@@ -95,7 +96,7 @@
 .surface__exit {
   position: absolute;
   top: 12px;
-  right: var(--gutter);
+  left: calc(50% + 12px);
 }
 
 .surface__labels {

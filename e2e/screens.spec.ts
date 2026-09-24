@@ -37,6 +37,25 @@ for (const viewport of VIEWPORTS) {
   })
 }
 
+test('hud collapsed', async ({ page }) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(4000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  for (const name of [
+    /^Collapse State in year/,
+    'Collapse Why it happened',
+    'Collapse Keep this world',
+  ]) {
+    await page.getByRole('button', { name }).click()
+  }
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'screens/hud-collapsed.png' })
+})
+
 for (const viewport of VIEWPORTS) {
   test(`genesis ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })

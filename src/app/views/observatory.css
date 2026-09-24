@@ -1,4 +1,5 @@
 .observatory {
+  position: relative;
   display: grid;
   /* FEAT: só a barra superior reserva espaço; o resto da tela é do palco */
   grid-template-rows: auto minmax(360px, 1fr);
@@ -192,9 +193,12 @@
   overflow: hidden;
 }
 
+/* FEAT: o aviso não é cartão: sem título, sem botão, e vazio não rouba altura da faixa */
 .notices {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
   color: var(--dim);
-  min-height: 1.5rem;
 }
 
 .notices p {
@@ -202,9 +206,8 @@
 }
 
 /* FEAT: enquanto o paradoxo dura, o aviso toma a faixa inteira, acima de tudo o que se pode fazer */
-.notices:has(.paradox) {
-  flex: 1 1 100%;
-  order: -1;
+.notices > .paradox {
+  justify-self: stretch;
 }
 
 /* FEAT: o mesmo tom do aviso, agora sobre um fundo escuro, porque atrás dele passa o palco */
@@ -305,36 +308,114 @@
 
 /* FEAT: o painel de bordo flutua sobre o palco e só os cartões capturam o ponteiro */
 .hud {
+  /* FIX: absoluto na área do palco: por cheia que fique, a camada não estica a página nem empurra o minimapa para fora */
+  position: absolute;
+  inset: 0;
   grid-row: 2;
   grid-column: 1;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(230px, 20rem) minmax(80px, 1fr) minmax(230px, 21rem);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'left . right'
+    'strip strip strip';
   gap: 16px 32px;
-  /* FIX: o rodapé do palco continua sendo do minimapa */
-  padding: 16px var(--gutter) 52px;
+  /* FIX: o rodapé do palco é do zoom e do minimapa, que nunca podem ser cortados */
+  padding: 16px var(--gutter) 108px;
   pointer-events: none;
+}
+
+/* FIX: o painel do modo pede mais largura que o de estado, e só ele estica a coluna */
+.hud:has(.card--allocation),
+.hud:has(.card--cross) {
+  grid-template-columns: minmax(280px, 34rem) minmax(80px, 1fr) minmax(230px, 21rem);
 }
 
 /* FIX: com o planeta aberto, o rodapé do palco é dos controles da superfície */
 .observatory:has(.stage[data-lens='planet']) .hud {
-  padding-bottom: 110px;
+  padding-bottom: 130px;
 }
 
-.hud .worlds,
-.hud .panel,
-.hud .world-actions,
-.hud .notices:not(:empty) {
+.hud__left,
+.hud__right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* FIX: se a coluna não couber, o cartão cede altura e o conteúdo rola por dentro; o título e o botão ficam */
+.hud__left > .card,
+.hud__right > .card {
+  overflow: hidden;
+}
+
+/* FEAT: no aperto quem cede é a lista de referência; o painel em que se age continua inteiro */
+.hud__left > .card--allocation,
+.hud__left > .card--cross {
+  flex-shrink: 0;
+  max-height: 100%;
+}
+
+.hud__left > .card > .panel,
+.hud__right > .card > .panel {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--haze) transparent;
+}
+
+/* FEAT: a coluna da esquerda é o que se observa e o que se decide */
+.hud__left {
+  grid-area: left;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* FEAT: a coluna da direita é o que aconteceu e, logo abaixo, por que aconteceu: leem-se como um par */
+.hud__right {
+  grid-area: right;
+  gap: 6px;
+}
+
+.hud__left > .card {
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* FEAT: a faixa de baixo é de todas as realidades, acima do minimapa */
+.hud__strip {
+  grid-area: strip;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'notice notice'
+    'worlds actions';
+  align-items: end;
+  gap: 12px 24px;
+}
+
+.hud__strip .notices {
+  grid-area: notice;
+}
+
+.card--worlds {
+  grid-area: worlds;
+}
+
+.card--actions {
+  grid-area: actions;
+}
+
+.hud .card,
+.hud .notices > * {
   pointer-events: auto;
 }
 
 /* FEAT: translucidez por cor, sem desfoque, para o palco aparecer atrás do cartão */
-.hud .worlds,
-.hud .panel,
-.hud .world-actions,
+.hud .card,
 .hud .notices > p:not(.paradox) {
-  width: fit-content;
   max-width: 100%;
   padding: 10px 12px;
   background: rgb(10 11 30 / 0.78);
@@ -342,9 +423,54 @@
   border-radius: var(--radius);
 }
 
-.worlds {
-  grid-row: 2;
-  grid-column: 1 / -1;
+.card {
+  display: grid;
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.card__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.card__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card__toggle:hover {
+  color: var(--starlight);
+}
+
+.card__mark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.card[data-collapsed='true'] .card__mark {
+  transform: translateY(1px) rotate(-45deg);
+}
+
+/* FIX: o título do cartão já diz o nome; o do painel fica só como nome acessível da secção */
+.card .panel__title {
+  display: none;
 }
 
 .worlds__list {
@@ -445,32 +571,6 @@
   gap: 6px;
   color: var(--dim);
   font-size: 0.75rem;
-}
-
-.hud__main {
-  grid-row: 3;
-  grid-column: 2;
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  align-items: end;
-  gap: 24px;
-  min-width: 0;
-}
-
-.hud .state {
-  grid-row: 3;
-  grid-column: 1;
-  align-self: end;
-}
-
-.hud__footer {
-  grid-row: 4;
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 24px;
 }
 
 .world-actions {
@@ -648,13 +748,15 @@ button.state__row:hover,
   font-size: 0.75rem;
 }
 
-/* FIX: sem largura para duas colunas o painel de bordo volta a correr abaixo do palco; a folha do celular é outra tarefa */
+/* FIX: sem largura para três colunas o painel de bordo volta a correr abaixo do palco; a folha do celular é outra tarefa */
 @media (max-width: 900px) {
   .observatory {
     grid-template-rows: auto minmax(360px, 1fr) auto;
   }
 
   .hud {
+    position: static;
+    inset: auto;
     grid-row: 3;
     z-index: auto;
     display: flex;
@@ -665,23 +767,21 @@ button.state__row:hover,
     pointer-events: auto;
   }
 
-  .hud .worlds,
-  .hud .panel,
-  .hud .world-actions,
+  .hud__left,
+  .hud__right,
+  .hud__strip {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  .hud .card,
   .hud .notices > p:not(.paradox) {
     width: auto;
     padding: 0;
     background: none;
     border: 0;
-  }
-
-  .hud .state {
-    align-self: auto;
-  }
-
-  .hud__main {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
   }
 }
 
@@ -765,10 +865,6 @@ button.causal__node:hover {
   font-size: 0.75rem;
 }
 
-.hud__main > .allocation {
-  grid-column: 1 / -1;
-}
-
 .allocation__rows {
   display: grid;
   gap: 6px;
@@ -833,10 +929,6 @@ button.causal__node:hover {
   background: var(--nebula);
   border-color: var(--starlight);
   font-weight: 600;
-}
-
-.hud__main > .cross {
-  grid-column: 1 / -1;
 }
 
 .cross__groups {
@@ -941,10 +1033,11 @@ button.causal__node:hover {
   margin-top: 8px;
 }
 
+/* FEAT: o zoom mora em cima da ponta esquerda do minimapa, porque os dois mandam na mesma janela de tempo */
 .zoom {
   position: absolute;
-  top: 12px;
   left: var(--gutter);
+  bottom: 62px;
   z-index: 1;
   display: flex;
   gap: 4px;
@@ -971,7 +1064,7 @@ button.causal__node:hover {
 
 .minimap {
   position: absolute;
-  bottom: 10px;
+  bottom: 16px;
   z-index: 3;
   display: block;
   border-radius: 4px;
@@ -982,5 +1075,12 @@ button.causal__node:hover {
 @media (max-width: 720px) {
   .minimap {
     display: none;
+  }
+
+  /* FIX: sem minimapa embaixo, o zoom desce e sai de cima do nome do episódio */
+  .zoom {
+    left: auto;
+    right: var(--gutter);
+    bottom: 16px;
   }
 }
