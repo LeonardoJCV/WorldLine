@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { useGraphics } from './stage.ts'
+import { worldAtYear } from './support.ts'
 
 const stage = (page: import('@playwright/test').Page) => page.locator('main.stage')
 
@@ -13,8 +14,11 @@ test('opens the planet from the currents and returns', async ({ page }) => {
 })
 
 test('with motion turned down the dive lands without waiting for the flight', async ({ page }) => {
+  // FIX: em 'auto' o movimento reduzido já cai no 2D; só um nível explícito e um mundo com cabeça voam de verdade
+  await useGraphics(page, 'high')
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/?seed=482913')
+  await worldAtYear(page, 12)
+  await expect(page.locator('main.stage')).toHaveAttribute('data-view', '3d')
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible()
   const start = Date.now()

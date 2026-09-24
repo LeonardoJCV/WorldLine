@@ -196,9 +196,11 @@ export function eraLabelY(frame: Frame, row: number): number {
 }
 
 export function episodeY(frame: Frame, row: number): number {
-  const raw = frame.centerY + frame.height * 0.2 + Math.max(row, 0) * EPISODE_ROW_HEIGHT
-  // FIX: a fileira mais baixa não desce além do quadro reservado à faixa, onde mora o zoom
-  return Math.min(raw, frame.centerY + frame.height * 0.5 - 8)
+  // FIX: em quadro curto a pilha inteira sobe uma fileira de cada vez, em vez de a última invadir a faixa do zoom
+  const floor = frame.centerY + frame.height * 0.5 - EPISODE_ROW_HEIGHT
+  const raised = floor - (EPISODE_ROWS - 1) * EPISODE_ROW_HEIGHT
+  const top = Math.min(frame.centerY + frame.height * 0.2, raised)
+  return top + Math.max(row, 0) * EPISODE_ROW_HEIGHT
 }
 
 export const COMPANION_SCALE = 0.4

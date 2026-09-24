@@ -246,11 +246,16 @@ describe('layoutEvents', () => {
 })
 
 describe('episodeY', () => {
-  // FIX: a fileira mais baixa não pode passar do rodapé do quadro, onde mora o chão do palco
-  it('never leaves the bottom half of the frame, even on the last row of a short frame', () => {
-    const short: Frame = { left: 20, right: 820, centerY: 145.5, height: 75 }
-    const y = episodeY(short, EPISODE_ROWS - 1)
-    expect(y).toBeLessThanOrEqual(short.centerY + short.height * 0.5)
+  // FIX: 320px de largura com o palco no piso de MIN_STAGE, a tela mais curta que o app desenha
+  it('keeps every row inside the frame and apart on the shortest stage a phone can draw', () => {
+    for (const drawn of [120, 156, 200]) {
+      const { frame: short } = stageLayout(320, drawn)
+      const rows = Array.from({ length: EPISODE_ROWS }, (_, row) => episodeY(short, row))
+      expect(Math.max(...rows), `${drawn}px`).toBeLessThanOrEqual(
+        short.centerY + short.height * 0.5,
+      )
+      expect(new Set(rows).size, `${drawn}px`).toBe(EPISODE_ROWS)
+    }
   })
 
   it('keeps stacking rows apart on a tall frame where the clamp never engages', () => {
