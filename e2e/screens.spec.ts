@@ -3,7 +3,14 @@ import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../src/engine/golden.ts'
 import { MODEL_VERSION } from '../src/engine/params.ts'
 import { encodeMultiverse } from '../src/app/world/link.ts'
 import { useGraphics } from './stage.ts'
-import { installParadox, pickOrigin, runToCollapse, runToParadox } from './support.ts'
+import {
+  installParadox,
+  pickOrigin,
+  runToCollapse,
+  runToParadox,
+  SIBLING_CASE,
+  siblingInheritanceLink,
+} from './support.ts'
 
 test.skip(!process.env.SCREENS, 'screenshots are captured on demand')
 
@@ -295,6 +302,26 @@ test('inheritance notice', async ({ page }) => {
   await page.getByRole('button', { name: 'Pause' }).click()
   await page.waitForTimeout(300)
   await page.screenshot({ path: 'screens/inheritance-notice.png' })
+})
+
+test('inheritance causal', async ({ page }) => {
+  test.slow()
+  test.setTimeout(150_000)
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // FEAT: semente 4242 (support.ts) — duas colônias fundadas, uma vira a herdeira, a outra se perde
+  // com o planeta; a captura mostra a cadeia inteira e a irmã perdida na mesma lista
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  const events = page.locator('.panel.events')
+  await expect(events.locator('.events__item').first()).toContainText('Inheritance', {
+    timeout: 90_000,
+  })
+  await events.locator('.events__item', { hasText: 'Inheritance' }).first().click()
+  await expect(
+    page.locator('.causal__node[data-kind="event"]', { hasText: 'Space age' }),
+  ).toBeVisible()
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'screens/inheritance-causal.png' })
 })
 
 for (const viewport of VIEWPORTS) {

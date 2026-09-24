@@ -20,11 +20,20 @@ export function CausalPanel() {
     () => (selected === null ? null : buildCausalTree(events, selected)),
     [events, selected],
   )
+  // FEAT: a fila de causas de um acontecimento já gravado não muda, então a linha da raiz é estável
+  // por todo o tempo em que ele fica selecionado — só troca quando `selected` troca
+  const rootRow = tree?.nodes.find((node) => node.depth === 0)?.row
 
+  // FIX: sem centralizar a raiz na vertical, uma árvore com dois ramos (como a herança, que sobe
+  // tanto pelo colapso quanto pela colônia) deixa o ramo mais baixo fora da faixa visível
   useEffect(() => {
     const element = scrollRef.current
-    if (element) element.scrollLeft = element.scrollWidth
-  }, [selected])
+    if (!element) return
+    element.scrollLeft = element.scrollWidth
+    if (rootRow !== undefined) {
+      element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
+    }
+  }, [selected, rootRow])
 
   const root = selected === null ? undefined : events[selected]
   if (!tree || !root) {

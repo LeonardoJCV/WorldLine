@@ -115,4 +115,29 @@ describe('buildCausalTree', () => {
     const tree = buildCausalTree([record('famine', 40, [{ kind: 'event', record: 99 }])], 0)
     expect(tree.nodes.filter((n) => n.kind === 'event')).toHaveLength(2)
   })
+
+  it('traces an inheritance back through the founding to the space age that opened it', () => {
+    // FEAT: espelha o que o motor grava de verdade (worldline.test.ts, "writes the moment down once")
+    const records = [
+      record('space_era', 1802, [
+        condition('technology', 91),
+        condition('energy', 13),
+        condition('economy', 9),
+      ]),
+      record('colony_founded', 1803, [{ kind: 'event', record: 0 }]),
+      record('collapse', 2283, [condition('paradoxOverdue', 1)]),
+      record('inheritance', 2283, [
+        { kind: 'event', record: 2 },
+        { kind: 'event', record: 1 },
+      ]),
+    ]
+    const tree = buildCausalTree(records, 3)
+    const founding = tree.nodes.find((n) => n.kind === 'event' && n.record === 1)
+    expect(founding).toMatchObject({ depth: 1, parent: 'e3' })
+    const era = tree.nodes.find((n) => n.kind === 'event' && n.record === 0)
+    expect(era).toMatchObject({ depth: 2, parent: founding?.key })
+    const gates = tree.nodes.filter((n) => n.kind === 'condition' && n.parent === era?.key)
+    expect(gates).toHaveLength(3)
+    expect(gates.every((n) => n.depth === 3)).toBe(true)
+  })
 })

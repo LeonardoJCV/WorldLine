@@ -3,7 +3,7 @@ import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../src/engine/golden.ts'
 import { MODEL_VERSION } from '../src/engine/params.ts'
 import { encodeMultiverse } from '../src/app/world/link.ts'
 import { useGraphics } from './stage.ts'
-import { worldAtYear } from './support.ts'
+import { SIBLING_CASE, siblingInheritanceLink, worldAtYear } from './support.ts'
 
 // FEAT: o roteiro dourado da herança (golden.ts) aberto direto no ano pedido, para o navegador
 // assistir aos últimos anos do mundo natal sem reviver vinte e dois séculos em tempo real
@@ -122,4 +122,37 @@ test('says nothing on a history that arrives already moved', async ({ page }) =>
   await expect(page.locator('.panel.state')).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.inheritance')).toHaveCount(0)
   await expect(page.locator('.paradox')).toHaveCount(0)
+})
+
+test('reaches the colony that saved the history, and tells the whole story of the fleet', async ({
+  page,
+}) => {
+  test.slow()
+  test.setTimeout(150_000)
+  await useGraphics(page, '2d')
+  // FEAT: a semente 4242 (support.ts) funda duas colônias antes do colapso, ao contrário do roteiro
+  // dourado da herança (uma só) — só assim a lista tem uma irmã para perder de verdade
+  // FIX: +5 anos depois do colapso — no próprio ano do prazo o passo que resolve o paradoxo ainda
+  // não rodou, e a herança do ano 6676 ainda não teria aparecido na lista
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  const events = page.locator('.panel.events')
+  await expect(events).toBeVisible({ timeout: 60_000 })
+  // FIX: quase sete mil anos para calcular — o painel aparece antes de o worker chegar ao ano pedido
+  await expect(events.locator('.events__item').first()).toContainText('Inheritance', {
+    timeout: 90_000,
+  })
+
+  // FEAT: fundamos duas, uma se salvou, a outra se perdeu com o planeta — a leitura do conjunto
+  await expect(events.locator('.events__item', { hasText: 'Colony lost' })).toBeVisible()
+  await expect(events.locator('.events__item', { hasText: 'New colony' }).first()).toBeVisible()
+
+  // FEAT: a cadeia causal da herança alcança a fundação da colônia que a salvou (Colony.record) e
+  // sobe dali até a era que abriu a fundação — sem clicar de novo, dentro do MAX_DEPTH do painel
+  await events.locator('.events__item', { hasText: 'Inheritance' }).first().click()
+  await expect(
+    page.locator('.causal__node[data-kind="event"]', { hasText: 'New colony' }),
+  ).toBeVisible()
+  await expect(
+    page.locator('.causal__node[data-kind="event"]', { hasText: 'Space age' }),
+  ).toBeVisible()
 })

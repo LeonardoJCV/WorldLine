@@ -330,8 +330,9 @@
 }
 
 .inheritance__kept {
-  font-size: var(--text-base);
-  font-weight: 500;
+  /* FEAT: a frase que fecha a herança precisa ler como a mais bonita do projeto, não como legenda */
+  font-size: var(--text-lg);
+  font-weight: 600;
 }
 
 @keyframes inheritance-arrive {
