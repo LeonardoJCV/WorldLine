@@ -97,3 +97,32 @@ export const PARADOX_PATIENCE = 80
 export const PARADOX_LEAP = 3
 // FEAT: prazo, em anos, para quitar antes do colapso
 export const PARADOX_GRACE = 200
+
+// FEAT: energia do mundo natal a partir da qual sobra alguma coisa para fora do planeta
+export const COLONY_ENERGY_BASE = 9
+// FEAT: energia livre, além do que as colônias já custam, para lançar mais uma
+export const COLONY_FOUND_COST = 1
+// FEAT: energia por ano que uma colônia sem sustento nenhum cobra do mundo natal
+export const COLONY_UPKEEP = 0.5
+// FEAT: excedente por colônia que vale um sustento inteiro
+export const COLONY_SUPPORT_NEED = 4
+// FEAT: quanto do sustento o próprio corpo dá, sem energia vinda de casa
+export const COLONY_SUPPORT_HAB = 0.6
+// FEAT: passo anual do sustento rumo ao que o ano permite
+export const COLONY_SUPPORT_RATE = 0.05
+// FEAT: a primeira leva, no ano da fundação
+export const COLONY_START_POP = 1000
+// FEAT: abaixo desta gente a colônia se perde
+export const COLONY_FLOOR = 250
+// FEAT: sustento em que a população nem cresce nem mingua
+export const COLONY_HOLD = 0.4
+// FEAT: ritmo da população por unidade de sustento acima (ou abaixo) do ponto de apoio
+export const COLONY_GROWTH = 0.05
+// FEAT: fração do mundo natal que parte por ano, por colônia, com sustento cheio
+export const COLONY_MIGRATION = 0.002
+// FEAT: gente que uma colônia consegue receber por ano, em fração do que já é
+export const COLONY_INTAKE = 0.1
+// FEAT: sustento a partir do qual uma colônia se basta
+export const COLONY_SELF = 0.8
+// FEAT: gente que basta para uma colônia recomeçar a história sozinha
+export const COLONY_SEED_POP = 100_000

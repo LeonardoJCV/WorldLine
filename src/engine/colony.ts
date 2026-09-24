@@ -1,0 +1,126 @@
+import { clamp } from './math.ts'
+import {
+  COLONY_ENERGY_BASE,
+  COLONY_FLOOR,
+  COLONY_FOUND_COST,
+  COLONY_GROWTH,
+  COLONY_HOLD,
+  COLONY_INTAKE,
+  COLONY_MIGRATION,
+  COLONY_SEED_POP,
+  COLONY_SELF,
+  COLONY_START_POP,
+  COLONY_SUPPORT_HAB,
+  COLONY_SUPPORT_NEED,
+  COLONY_SUPPORT_RATE,
+  COLONY_UPKEEP,
+} from './params.ts'
+import { colonisable, type Body } from './system.ts'
+
+// FEAT: o bit da era espacial, que a Tarefa 3 leva para `Era` com este mesmo valor
+export const SPACE_ERA = 8
+
+export interface Colony {
+  readonly body: number
+  readonly founded: number
+  readonly population: number
+  readonly support: number
+}
+
+export interface HomeWorld {
+  readonly energy: number
+  readonly population: number
+}
+
+export interface ColonisingWorld extends HomeWorld {
+  readonly eras: number
+  readonly colonies: readonly Colony[]
+}
+
+export interface ColonyTick {
+  readonly colonies: readonly Colony[]
+  readonly migrated: number
+  readonly energyCost: number
+}
+
+// FEAT: a energia é o que o mundo faz por ano, não um estoque, e só o que passa da base sai daqui
+export function spareEnergy(state: HomeWorld): number {
+  return Math.max(0, state.energy - COLONY_ENERGY_BASE)
+}
+
+function upkeep(colony: Colony): number {
+  return COLONY_UPKEEP * clamp(1 - colony.support, 0, 1)
+}
+
+export function colonyCost(colonies: readonly Colony[]): number {
+  let total = 0
+  for (const colony of colonies) total += upkeep(colony)
+  return total
+}
+
+export function foundColony(
+  state: ColonisingWorld,
+  bodies: readonly Body[],
+  year: number,
+): Colony | null {
+  if ((state.eras & SPACE_ERA) === 0) return null
+  if (spareEnergy(state) - colonyCost(state.colonies) < COLONY_FOUND_COST) return null
+
+  let best: Body | null = null
+  for (const body of bodies) {
+    if (!colonisable(body)) continue
+    if (state.colonies.some((colony) => colony.body === body.index)) continue
+    if (best === null || body.habitability > best.habitability) best = body
+  }
+  if (best === null) return null
+
+  return { body: best.index, founded: year, population: COLONY_START_POP, support: 0 }
+}
+
+export function tickColonies(
+  colonies: readonly Colony[],
+  state: HomeWorld,
+  bodies: readonly Body[],
+): ColonyTick {
+  if (colonies.length === 0) return { colonies: [], migrated: 0, energyCost: 0 }
+
+  // FEAT: o excedente é partido entre as colônias, e o custo delas não paga o sustento delas
+  const share = spareEnergy(state) / colonies.length
+  const energyCost = colonyCost(colonies)
+  const next: Colony[] = []
+  let migrated = 0
+  let room = Math.max(0, state.population)
+
+  for (const colony of colonies) {
+    const body = bodies[colony.body]
+    const reach = body === undefined ? 0 : body.habitability
+    const possible = clamp(COLONY_SUPPORT_HAB * reach + share / COLONY_SUPPORT_NEED, 0, 1)
+    const support = clamp(colony.support + COLONY_SUPPORT_RATE * (possible - colony.support), 0, 1)
+    const grown = Math.max(0, colony.population * (1 + COLONY_GROWTH * (support - COLONY_HOLD)))
+    if (grown < COLONY_FLOOR) continue
+
+    const leaving = Math.min(
+      COLONY_MIGRATION * Math.max(0, state.population) * support,
+      COLONY_INTAKE * colony.population,
+      room,
+    )
+    room -= leaving
+    migrated += leaving
+    next.push({ ...colony, population: grown + leaving, support })
+  }
+
+  return { colonies: next, migrated, energyCost }
+}
+
+export function selfSufficient(colony: Colony): boolean {
+  return colony.support >= COLONY_SELF && colony.population >= COLONY_SEED_POP
+}
+
+export function heir(colonies: readonly Colony[]): Colony | null {
+  let best: Colony | null = null
+  for (const colony of colonies) {
+    if (!selfSufficient(colony)) continue
+    if (best === null || colony.population > best.population) best = colony
+  }
+  return best
+}
