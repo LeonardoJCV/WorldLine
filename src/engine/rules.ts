@@ -1,3 +1,4 @@
+import { colonyCost } from './colony.ts'
 import { debtRatio } from './debt.ts'
 import { clamp, pow, smoothstep } from './math.ts'
 import { DEBT_WEIGHT, PARAMS as K } from './params.ts'
@@ -75,10 +76,14 @@ export function derive(
   const foodAvailable = s.food * (1 - K.spoil) + foodProduction
   // FIX: sem ninguém para alimentar, a comida por pessoa não é uma divisão
   const foodSecurity = s.population > 0 ? foodAvailable / s.population : Number.POSITIVE_INFINITY
-  const energyTarget =
+  // FIX: a colônia consome vazão, não estoque: o custo sai do alvo da energia, não do nível
+  const energyTarget = Math.max(
+    K.energyBase,
     (K.energyBase + K.energyWeight * industry) *
-    (1 + (K.energyTech * s.technology) / 100) *
-    (hasEra(s, Era.industrial) ? K.industrialEnergy : 1)
+      (1 + (K.energyTech * s.technology) / 100) *
+      (hasEra(s, Era.industrial) ? K.industrialEnergy : 1) -
+      colonyCost(s.colonies),
+  )
   const pollution =
     K.pN * K.pollutionScale * s.energy * (1 - clean) * pow(s.population / K.P0, K.pollutionPopExp)
   const transition = s.economy / K.yDT

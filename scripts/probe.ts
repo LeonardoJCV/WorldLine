@@ -5,12 +5,15 @@ import {
   type CrossingKind,
   type Dose,
 } from '../src/engine/crossing.ts'
+import { heir, selfSufficient, type Colony } from '../src/engine/colony.ts'
 import { debtRatio, leapParadox, totalOwed, worldSize } from '../src/engine/debt.ts'
 import { causalDistance } from '../src/engine/distance.ts'
+import { worldMetrics } from '../src/engine/events.ts'
 import { genesis } from '../src/engine/genesis.ts'
+import { GOLDEN_SCRIPTS } from '../src/engine/golden.ts'
 import { PARADOX_RATIO } from '../src/engine/params.ts'
 import { step } from '../src/engine/step.ts'
-import type { Allocation, Decision, WorldState } from '../src/engine/state.ts'
+import { Era, type Allocation, type Decision, type WorldState } from '../src/engine/state.ts'
 import { Worldline } from '../src/engine/worldline.ts'
 
 const STRATEGIES: Record<string, Allocation> = {
@@ -387,8 +390,239 @@ function debtProbe(): void {
   summarise(cells)
 }
 
+// FEAT: a grade do espaço — semente × alocação, com o mesmo mundo de porta fechada como controle
+const SPACE_SEEDS = [1, 7, 42, 4242, 482913, 99991, 1597463007, 0xffffffff]
+const SPACE_HORIZON = 5000
+const SPACE_STRATEGIES: Record<string, readonly Decision[]> = {
+  balanced: [{ tick: 0, allocation: STRATEGIES.balanced ?? DONOR_ALLOCATION }],
+  industrial: [{ tick: 0, allocation: STRATEGIES.industrial ?? DONOR_ALLOCATION }],
+  research: [{ tick: 0, allocation: STRATEGIES.research ?? DONOR_ALLOCATION }],
+  spacer: [
+    { tick: 0, allocation: { agriculture: 20, industry: 50, research: 30, conservation: 0 } },
+  ],
+  turning: [
+    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+  ],
+  tended: [
+    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 25, conservation: 5 } },
+  ],
+  late: [
+    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    { tick: 1200, allocation: { agriculture: 25, industry: 45, research: 25, conservation: 5 } },
+  ],
+  reaching: [
+    { tick: 0, allocation: { agriculture: 30, industry: 40, research: 25, conservation: 5 } },
+  ],
+  wavering: [
+    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+    { tick: 3000, allocation: { agriculture: 35, industry: 25, research: 25, conservation: 15 } },
+    { tick: 3800, allocation: { agriculture: 25, industry: 45, research: 25, conservation: 5 } },
+  ],
+  abandons: [
+    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+    { tick: 3200, allocation: { agriculture: 40, industry: 15, research: 20, conservation: 25 } },
+  ],
+}
+
+interface SpaceRun {
+  readonly eraAt: number
+  readonly founded: number
+  readonly lost: number
+  readonly selfAt: number
+  readonly selfCount: number
+  readonly colonies: number
+  readonly support: number
+  readonly offworld: number
+  readonly population: number
+  readonly crowding: readonly number[]
+  readonly peakEnergy: number
+  readonly status: string
+  readonly ended: number
+}
+
+const SAMPLE = 50
+
+function spaceRun(
+  seed: number,
+  decisions: readonly Decision[],
+  crossings: readonly Crossing[],
+  years: number,
+  grounded: boolean,
+): SpaceRun {
+  const origin = genesis(seed)
+  let s: WorldState = origin.state
+  let decided = 0
+  let crossed = 0
+  let records = 0
+  let eraAt = -1
+  let founded = 0
+  let lost = 0
+  let selfAt = -1
+  let peakEnergy = 0
+  let seen: readonly Colony[] = []
+  const crowding: number[] = []
+  const key = (c: Colony) => `${c.body}:${c.founded}`
+  while (s.tick < years && s.status === 'running') {
+    const pending = decisions[decided]
+    const due = pending?.tick === s.tick ? pending : undefined
+    if (due) decided++
+    const arriving: Crossing[] = []
+    while (crossings[crossed]?.tick === s.tick) {
+      const entry = crossings[crossed]
+      if (entry) arriving.push(entry)
+      crossed++
+    }
+    const input = grounded ? { ...s, eras: s.eras & ~Era.space } : s
+    const result = step(input, origin.world, records, due, arriving)
+    records += result.started.length
+    s = result.state
+    if (eraAt < 0 && (s.eras & Era.space) !== 0) eraAt = s.tick
+    if (s.energy > peakEnergy) peakEnergy = s.energy
+    const now = new Set(s.colonies.map(key))
+    for (const old of seen) if (!now.has(key(old))) lost++
+    const before = new Set(seen.map(key))
+    for (const fresh of s.colonies) if (!before.has(key(fresh))) founded++
+    if (selfAt < 0 && heir(s.colonies)) selfAt = s.tick
+    seen = s.colonies
+    if (s.tick % SAMPLE === 0) crowding.push(worldMetrics(s, origin.world).crowding)
+  }
+  return {
+    eraAt,
+    founded,
+    lost,
+    selfAt,
+    selfCount: s.colonies.filter(selfSufficient).length,
+    colonies: s.colonies.length,
+    support: s.colonies.reduce((a, c) => Math.max(a, c.support), 0),
+    offworld: s.colonies.reduce((a, c) => a + c.population, 0),
+    population: s.population,
+    crowding,
+    peakEnergy,
+    status: s.status,
+    ended: s.tick,
+  }
+}
+
+interface SpaceCell {
+  readonly name: string
+  readonly seed: number
+  readonly left: SpaceRun
+  readonly stayed: SpaceRun
+  readonly relief: number
+  readonly reliefEnd: number
+}
+
+function reliefOf(left: SpaceRun, stayed: SpaceRun): readonly number[] {
+  const n = Math.min(left.crowding.length, stayed.crowding.length)
+  const out: number[] = []
+  for (let i = 0; i < n; i++) out.push((stayed.crowding[i] ?? 0) - (left.crowding[i] ?? 0))
+  return out
+}
+
+function spaceLine(cell: SpaceCell): void {
+  const { left, stayed } = cell
+  const at = (year: number) => (year < 0 ? 'never' : String(year)).padStart(6)
+  console.log(
+    `${`${cell.name} ${cell.seed}`.padEnd(26)}${at(left.eraAt)}${String(left.founded).padStart(5)}` +
+      `${String(left.lost).padStart(5)}${String(left.selfCount).padStart(5)}${at(left.selfAt)}` +
+      `${left.support.toFixed(2).padStart(7)}${(left.offworld / 1e3).toFixed(0).padStart(9)}k` +
+      `${(100 * cell.relief).toFixed(2).padStart(8)}${(100 * cell.reliefEnd).toFixed(2).padStart(8)}` +
+      `${(100 * (left.population / Math.max(1, stayed.population) - 1)).toFixed(1).padStart(8)}%` +
+      `${left.peakEnergy.toFixed(2).padStart(7)}  ${left.status}@${left.ended}`,
+  )
+}
+
+function spaceProbe(): void {
+  console.log(
+    `\n== space grid ==  ${SPACE_SEEDS.length} seeds × allocation  (horizon ${SPACE_HORIZON})`,
+  )
+  console.log(
+    'cell                        era  fnd  lst self  selfAt support offworld  relief% endRel%   dPop%  peakE  status',
+  )
+  const cells: SpaceCell[] = []
+  for (const [name, decisions] of Object.entries(SPACE_STRATEGIES)) {
+    for (const seed of SPACE_SEEDS) {
+      const left = spaceRun(seed, decisions, [], SPACE_HORIZON, false)
+      const stayed = spaceRun(seed, decisions, [], SPACE_HORIZON, true)
+      const gap = reliefOf(left, stayed)
+      const cell: SpaceCell = {
+        name,
+        seed,
+        left,
+        stayed,
+        relief: gap.length === 0 ? 0 : Math.max(...gap),
+        reliefEnd: gap[gap.length - 1] ?? 0,
+      }
+      cells.push(cell)
+      spaceLine(cell)
+    }
+  }
+
+  console.log('\n-- reference scripts (none of these may reach the era) --')
+  let reached = 0
+  for (const script of ['steady', 'shifting', 'crossed'] as const) {
+    const plan = GOLDEN_SCRIPTS[script]
+    for (const seed of SPACE_SEEDS) {
+      const left = spaceRun(seed, plan.decisions, plan.crossings, SPACE_HORIZON, false)
+      if (left.eraAt >= 0) reached++
+      console.log(
+        `  ${script.padEnd(10)}${String(seed).padStart(11)}   era ${
+          left.eraAt < 0 ? 'never' : left.eraAt
+        }   peak energy ${left.peakEnergy.toFixed(2)}   ${left.status}@${left.ended}`,
+      )
+    }
+  }
+
+  const living = cells.filter((c) => c.left.status === 'running')
+  const arrived = living.filter((c) => c.left.eraAt >= 0)
+  const tried = arrived.filter((c) => c.left.founded > 0)
+  const founded = arrived.reduce((a, c) => a + c.left.founded, 0)
+  const lost = arrived.reduce((a, c) => a + c.left.lost, 0)
+  console.log('\n-- summary --')
+  console.log(`  reference scripts reaching the era   ${reached}  (must be 0)`)
+  console.log(`  cells                                ${cells.length}, ${living.length} alive`)
+  console.log(
+    `  alive cells reaching the era         ${arrived.length}` +
+      `   era med ${median(arrived.map((c) => c.left.eraAt)).toFixed(0)}` +
+      `   earliest ${Math.min(...arrived.map((c) => c.left.eraAt))}`,
+  )
+  console.log(
+    `  colonies founded ${founded}   lost ${lost}   loss share ${
+      founded === 0 ? 'n/a' : (100 * (lost / founded)).toFixed(0) + '%'
+    }   founded med ${median(tried.map((c) => c.left.founded)).toFixed(0)}`,
+  )
+  const selves = arrived.filter((c) => c.left.selfAt >= 0)
+  console.log(
+    `  cells with a self-sufficient colony  ${selves.length}/${arrived.length}` +
+      `   selfAt med ${selves.length === 0 ? 'never' : median(selves.map((c) => c.left.selfAt)).toFixed(0)}` +
+      `   wait med ${
+        selves.length === 0
+          ? 'n/a'
+          : median(selves.map((c) => c.left.selfAt - c.left.eraAt)).toFixed(0)
+      }`,
+  )
+  console.log(
+    `  crowding relief (pp)  med ${(100 * median(arrived.map((c) => c.relief))).toFixed(2)}` +
+      `   max ${(100 * Math.max(0, ...arrived.map((c) => c.relief))).toFixed(2)}` +
+      `   at end med ${(100 * median(arrived.map((c) => c.reliefEnd))).toFixed(2)}`,
+  )
+  console.log(
+    `  offworld share of the species  med ${(
+      100 *
+      median(arrived.map((c) => c.left.offworld / Math.max(1, c.left.offworld + c.left.population)))
+    ).toFixed(1)}%`,
+  )
+}
+
 const args = process.argv.slice(2)
 const seed = Number(args.find((a) => /^\d+$/.test(a)) ?? 482913)
-const mode = args.find((a) => a === 'debt' || a === 'strategies') ?? 'all'
-if (mode !== 'debt') strategyProbe(seed)
-if (mode !== 'strategies') debtProbe()
+const mode = args.find((a) => a === 'debt' || a === 'strategies' || a === 'space') ?? 'all'
+if (mode === 'space') spaceProbe()
+else {
+  if (mode !== 'debt') strategyProbe(seed)
+  if (mode !== 'strategies') debtProbe()
+}

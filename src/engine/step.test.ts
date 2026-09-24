@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Colony } from './colony.ts'
+import { colonyCost, type Colony } from './colony.ts'
 import type { Crossing, CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
 import { EVENTS, worldMetrics } from './events.ts'
@@ -335,14 +335,15 @@ describe('colonies', () => {
     expect({ ...reached.state, eras: grounded.state.eras }).toEqual(grounded.state)
   })
 
-  it('charges the home world for every colony that cannot support itself', () => {
+  it('charges the home world a flow, not a hoard, for every colony that cannot support itself', () => {
     const dear = step(spacefaring({ colonies: settled(0) }), TEST_WORLD, 0)
     const cheap = step(spacefaring({ colonies: settled(1) }), TEST_WORLD, 0)
     expect(dear.state.energy).toBeLessThan(cheap.state.energy)
-    expect(cheap.state.energy - dear.state.energy).toBeCloseTo(
-      COLONY_UPKEEP * free.length * (1 - PARAMS.rE),
-      6,
-    )
+    // FIX: o preço entra no alvo, então um ano cobra `rE` dele — não o preço inteiro do nível
+    const price = colonyCost(dear.state.colonies) - colonyCost(cheap.state.colonies)
+    expect(price).toBeGreaterThan(0)
+    expect(cheap.state.energy - dear.state.energy).toBeCloseTo(PARAMS.rE * price, 6)
+    expect(cheap.state.energy - dear.state.energy).toBeLessThan(COLONY_UPKEEP * free.length)
   })
 
   it('loses a colony that falls under the floor and leaves the world alone', () => {

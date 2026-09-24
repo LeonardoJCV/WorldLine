@@ -79,8 +79,7 @@ interface Departure {
   readonly migrated: number
 }
 
-// FEAT: a camada das colônias corre antes do derive, porque quem parte e o que as colônias cobram
-// mudam a população e a energia que o ano inteiro vai usar
+// FEAT: a camada das colônias corre antes do derive: quem parte e a frota que o ano cobra mudam ele
 function colonise(s: WorldState, world: WorldConfig): Departure {
   if ((s.eras & Era.space) === 0 && s.colonies.length === 0) return { state: s, migrated: 0 }
   const bodies = system(world.seed)
@@ -92,7 +91,6 @@ function colonise(s: WorldState, world: WorldConfig): Departure {
       ...s,
       colonies: year.colonies,
       population: Math.max(0, s.population - year.migrated),
-      energy: Math.max(0, s.energy - year.energyCost),
     },
     migrated: year.migrated,
   }

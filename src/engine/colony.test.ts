@@ -9,6 +9,7 @@ import {
   type ColonisingWorld,
 } from './colony.ts'
 import {
+  COLONY_CAPACITY,
   COLONY_FLOOR,
   COLONY_GROWTH,
   COLONY_HOLD,
@@ -17,6 +18,7 @@ import {
   COLONY_SEED_POP,
   COLONY_SELF,
   COLONY_START_POP,
+  COLONY_SUPPORT_RATE,
   COLONY_UPKEEP,
 } from './params.ts'
 import type { Body, BodyKind } from './system.ts'
@@ -33,7 +35,8 @@ const BODIES: readonly Body[] = [
   body(3, 'ice', 0.7),
   body(4, 'rocky', 0.2),
 ]
-const BARREN: readonly Body[] = [body(0, 'rocky', 0.95, true), body(1, 'ice', 0)]
+// FEAT: o corpo 1 quase não dá sustento nenhum, mas ainda comporta gente
+const BARREN: readonly Body[] = [body(0, 'rocky', 0.95, true), body(1, 'ice', 0.05)]
 
 function world(overrides: Partial<ColonisingWorld> = {}): ColonisingWorld {
   return { eras: SPACE_ERA, energy: 14, population: 1e6, colonies: [], ...overrides }
@@ -63,16 +66,38 @@ describe('foundColony', () => {
   })
 
   it('does not count a colony that pays its own way', () => {
-    const kept = [colony({ body: 3, support: 1 })]
-    expect(foundColony(world({ energy: 10, colonies: kept }), BODIES, 2400)?.body).toBe(2)
+    const kept = (support: number) => [colony({ body: 2, support })]
+    expect(foundColony(world({ energy: 10, colonies: kept(0) }), BODIES, 2400)).toBeNull()
+    expect(foundColony(world({ energy: 10, colonies: kept(1) }), BODIES, 2400)?.body).toBe(3)
+  })
+
+  it('founds nothing on a body the surplus could never support', () => {
+    // FEAT: com excedente 1 partido em dois, o corpo 2 promete menos do que o ponto de apoio
+    expect(foundColony(world({ energy: 10, colonies: [colony({ body: 3 })] }), BODIES, 2400)).toBe(
+      null,
+    )
+    expect(
+      foundColony(world({ energy: 14, colonies: [colony({ body: 3 })] }), BODIES, 2400)?.body,
+    ).toBe(2)
+  })
+
+  it('founds nothing on a body that could not hold the first crew', () => {
+    const roomless: readonly Body[] = [
+      body(0, 'rocky', 0.95, true),
+      body(1, 'rocky', COLONY_START_POP / COLONY_CAPACITY / 2),
+    ]
+    expect(foundColony(world({ energy: 1000 }), roomless, 2400)).toBeNull()
   })
 
   it('picks the free colonisable body with the highest habitability', () => {
     expect(foundColony(world(), BODIES, 2400)?.body).toBe(3)
     expect(foundColony(world({ colonies: [colony({ body: 3 })] }), BODIES, 2400)?.body).toBe(2)
     expect(
-      foundColony(world({ colonies: [colony({ body: 3 }), colony({ body: 2 })] }), BODIES, 2400)
-        ?.body,
+      foundColony(
+        world({ energy: 16, colonies: [colony({ body: 3 }), colony({ body: 2 })] }),
+        BODIES,
+        2400,
+      )?.body,
     ).toBe(4)
   })
 
@@ -95,9 +120,9 @@ describe('tickColonies', () => {
   })
 
   it('grows support out of the world surplus and the body', () => {
-    // FEAT: excedente 4, uma colônia, sustento possível 1: o passo é 0,05 do caminho
+    // FEAT: excedente 4, uma colônia, sustento possível 1: o passo é uma fração do caminho
     const { colonies } = tickColonies([colony()], world({ energy: 13 }), BODIES)
-    expect(colonies[0]?.support).toBeCloseTo(0.05, 12)
+    expect(colonies[0]?.support).toBeCloseTo(COLONY_SUPPORT_RATE, 12)
   })
 
   it('grows support faster on a better body', () => {
@@ -147,8 +172,21 @@ describe('tickColonies', () => {
 
   it('shrinks the population when support fails', () => {
     const { colonies } = tickColonies([colony({ body: 1 })], world({ energy: 9 }), BARREN)
-    expect(colonies[0]?.support).toBe(0)
-    expect(colonies[0]?.population).toBeCloseTo(1000 * (1 - COLONY_GROWTH * COLONY_HOLD), 9)
+    const support = colonies[0]?.support ?? 1
+    expect(support).toBeLessThan(0.01)
+    expect(colonies[0]?.population).toBeCloseTo(
+      1000 * (1 + COLONY_GROWTH * (support - COLONY_HOLD)),
+      9,
+    )
+  })
+
+  it('shrinks a colony that outgrew the body that holds it', () => {
+    const holds = COLONY_CAPACITY * 0.05
+    const packed = colony({ body: 1, support: 1, population: 4 * holds })
+    const { colonies } = tickColonies([packed], world({ energy: 1e4 }), BARREN)
+    // FEAT: a lotação manda no ano, e o pior que ela faz é o ritmo inteiro
+    expect(colonies[0]?.population).toBeLessThan(4 * holds)
+    expect(colonies[0]?.population).toBeGreaterThan(4 * holds * (1 - COLONY_GROWTH))
   })
 
   it('loses a colony that falls below the floor, and never gets it back', () => {
@@ -180,17 +218,24 @@ describe('tickColonies', () => {
   })
 
   it('moves people out of the home world and loses none of them', () => {
-    // FEAT: com o sustento parado no ponto de apoio a população só muda pelo que chega
     const steady: readonly Colony[] = [
-      colony({ body: 1, support: COLONY_HOLD, population: 1000 }),
-      colony({ body: 1, support: COLONY_HOLD, population: 2000 }),
+      colony({ body: 1, support: 1, population: 1000 }),
+      colony({ body: 1, support: 1, population: 2000 }),
     ]
-    const before = steady.reduce((sum, c) => sum + c.population, 0)
-    const { colonies, migrated } = tickColonies(steady, world({ energy: 12.2 }), BARREN)
-    expect(colonies[0]?.support).toBeCloseTo(COLONY_HOLD, 12)
-    expect(colonies[1]?.support).toBeCloseTo(COLONY_HOLD, 12)
-    expect(migrated).toBeCloseTo(300, 9)
-    expect(colonies.reduce((sum, c) => sum + c.population, 0) - before).toBeCloseTo(migrated, 9)
+    const total = (cs: readonly Colony[]) => cs.reduce((sum, c) => sum + c.population, 0)
+    // FEAT: o mesmo ano com o mundo natal vazio: a diferença entre os dois é quem partiu
+    const fed = tickColonies(steady, world({ energy: 30 }), BARREN)
+    const alone = tickColonies(steady, world({ energy: 30, population: 0 }), BARREN)
+    expect(fed.migrated).toBeCloseTo(COLONY_INTAKE * 3000, 9)
+    expect(alone.migrated).toBe(0)
+    expect(total(fed.colonies) - total(alone.colonies)).toBeCloseTo(fed.migrated, 9)
+  })
+
+  it('sends no one to a colony that is not growing', () => {
+    const failing = [colony({ body: 1, support: COLONY_HOLD, population: 1000 })]
+    const { colonies, migrated } = tickColonies(failing, world({ energy: 9 }), BARREN)
+    expect(colonies[0]?.support).toBeLessThan(COLONY_HOLD)
+    expect(migrated).toBe(0)
   })
 
   it('never sends more people than the home world has', () => {

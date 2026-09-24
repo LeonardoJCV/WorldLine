@@ -105,11 +105,11 @@ export const COLONY_FOUND_COST = 1
 // FEAT: energia por ano que uma colônia sem sustento nenhum cobra do mundo natal
 export const COLONY_UPKEEP = 0.5
 // FEAT: excedente por colônia que vale um sustento inteiro
-export const COLONY_SUPPORT_NEED = 4
+export const COLONY_SUPPORT_NEED = 6
 // FEAT: quanto do sustento o próprio corpo dá, sem energia vinda de casa
 export const COLONY_SUPPORT_HAB = 0.6
 // FEAT: passo anual do sustento rumo ao que o ano permite
-export const COLONY_SUPPORT_RATE = 0.05
+export const COLONY_SUPPORT_RATE = 0.02
 // FEAT: a primeira leva, no ano da fundação
 export const COLONY_START_POP = 1000
 // FEAT: abaixo desta gente a colônia se perde
@@ -122,6 +122,8 @@ export const COLONY_GROWTH = 0.05
 export const COLONY_MIGRATION = 0.002
 // FEAT: gente que uma colônia consegue receber por ano, em fração do que já é
 export const COLONY_INTAKE = 0.1
+// FEAT: gente que o corpo comporta, por unidade de habitabilidade
+export const COLONY_CAPACITY = 2_000_000
 // FEAT: sustento a partir do qual uma colônia se basta
 export const COLONY_SELF = 0.8
 // FEAT: gente que basta para uma colônia recomeçar a história sozinha

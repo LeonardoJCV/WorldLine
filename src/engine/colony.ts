@@ -1,5 +1,6 @@
 import { clamp } from './math.ts'
 import {
+  COLONY_CAPACITY,
   COLONY_ENERGY_BASE,
   COLONY_FLOOR,
   COLONY_FOUND_COST,
@@ -70,10 +71,17 @@ export function foundColony(
   let best: Body | null = null
   for (const body of bodies) {
     if (!colonisable(body)) continue
+    // FEAT: um corpo que não comporta nem a primeira leva não é destino nenhum
+    if (COLONY_CAPACITY * body.habitability < COLONY_START_POP) continue
     if (state.colonies.some((colony) => colony.body === body.index)) continue
     if (best === null || body.habitability > best.habitability) best = body
   }
   if (best === null) return null
+  // FEAT: ninguém parte para um corpo que a parte do excedente que lhe cabe não sustentaria
+  const seen = (spareEnergy(state) - COLONY_UPKEEP) / (state.colonies.length + 1)
+  if (COLONY_SUPPORT_HAB * best.habitability + seen / COLONY_SUPPORT_NEED <= COLONY_HOLD) {
+    return null
+  }
 
   return { body: best.index, founded: year, population: COLONY_START_POP, support: 0 }
 }
@@ -97,11 +105,17 @@ export function tickColonies(
     const reach = body === undefined ? 0 : body.habitability
     const possible = clamp(COLONY_SUPPORT_HAB * reach + share / COLONY_SUPPORT_NEED, 0, 1)
     const support = clamp(colony.support + COLONY_SUPPORT_RATE * (possible - colony.support), 0, 1)
-    const grown = Math.max(0, colony.population * (1 + COLONY_GROWTH * (support - COLONY_HOLD)))
+    // FIX: o corpo comporta só tanta gente; manda no ano quem estiver mais apertado, sustento ou lotação
+    const holds = COLONY_CAPACITY * reach
+    const vacancy = clamp(holds > 0 ? 1 - colony.population / holds : -1, -1, 1)
+    const rate = COLONY_GROWTH * Math.min(support - COLONY_HOLD, vacancy)
+    const grown = Math.max(0, colony.population * (1 + rate))
     if (grown < COLONY_FLOOR) continue
 
+    // FEAT: ninguém emigra para uma colônia que está minguando; a leva segue o sustento acima do apoio
+    const pull = clamp((support - COLONY_HOLD) / (1 - COLONY_HOLD), 0, 1)
     const leaving = Math.min(
-      COLONY_MIGRATION * Math.max(0, state.population) * support,
+      COLONY_MIGRATION * Math.max(0, state.population) * pull,
       COLONY_INTAKE * colony.population,
       room,
     )

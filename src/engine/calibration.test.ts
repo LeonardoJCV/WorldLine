@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { heir } from './colony.ts'
 import {
   crossingAmounts,
   crossingCost,
@@ -8,11 +9,12 @@ import {
 } from './crossing.ts'
 import { debtRatio, totalOwed, worldSize } from './debt.ts'
 import { causalDistance } from './distance.ts'
-import type { EventId } from './events.ts'
+import { worldMetrics, type EventId } from './events.ts'
 import { genesis } from './genesis.ts'
+import { GOLDEN_SCRIPTS, type GoldenScript } from './golden.ts'
 import { PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
 import { step } from './step.ts'
-import type { Allocation, Decision, WorldState } from './state.ts'
+import { Era, type Allocation, type Decision, type WorldState } from './state.ts'
 import { Worldline } from './worldline.ts'
 
 const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
@@ -299,5 +301,146 @@ describe('debt calibration', () => {
     expect(median(young.map((s) => s.ratio))).toBeGreaterThan(PARADOX_RATIO)
     expect(median(young.map((s) => s.ratio))).toBeLessThan(1)
     expect(median(mature.map((s) => s.ratio))).toBeLessThan(PARADOX_RATIO / 2)
+  })
+})
+
+// FEAT: a grade do espaço, a mesma de `npm run probe space`, reduzida para caber num teste
+const SPACE_SEEDS = [1, 7, 42, 4242, 482913, 99991, 1597463007, 0xffffffff]
+const SPACE_HORIZON = 5000
+const SPACER: Allocation = { agriculture: 20, industry: 50, research: 30, conservation: 0 }
+const TURN: readonly Decision[] = [
+  { tick: 0, allocation: balanced },
+  { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+]
+const RETREAT: readonly Decision[] = [
+  ...TURN,
+  { tick: 3200, allocation: { agriculture: 40, industry: 15, research: 20, conservation: 25 } },
+]
+
+interface Left {
+  readonly eraAt: number
+  readonly founded: number
+  readonly lost: number
+  readonly selfAt: number
+  readonly crowding: number
+  readonly population: number
+  readonly peakEnergy: number
+}
+
+function leave(
+  seed: number,
+  decisions: readonly Decision[],
+  crossings: readonly Crossing[] = [],
+  grounded = false,
+): Left {
+  const origin = genesis(seed)
+  let s: WorldState = origin.state
+  let decided = 0
+  let crossed = 0
+  let records = 0
+  let eraAt = -1
+  let founded = 0
+  let lost = 0
+  let selfAt = -1
+  let peakEnergy = 0
+  let fleet = new Set<string>()
+  while (s.tick < SPACE_HORIZON && s.status === 'running') {
+    const pending = decisions[decided]
+    const due = pending?.tick === s.tick ? pending : undefined
+    if (due) decided++
+    const arriving: Crossing[] = []
+    while (crossings[crossed]?.tick === s.tick) {
+      const entry = crossings[crossed]
+      if (entry) arriving.push(entry)
+      crossed++
+    }
+    const result = step(
+      grounded ? { ...s, eras: s.eras & ~Era.space } : s,
+      origin.world,
+      records,
+      due,
+      arriving,
+    )
+    records += result.started.length
+    s = result.state
+    if (eraAt < 0 && (s.eras & Era.space) !== 0) eraAt = s.tick
+    if (s.energy > peakEnergy) peakEnergy = s.energy
+    const now = new Set(s.colonies.map((c) => `${c.body}:${c.founded}`))
+    for (const old of fleet) if (!now.has(old)) lost++
+    for (const fresh of now) if (!fleet.has(fresh)) founded++
+    if (selfAt < 0 && heir(s.colonies)) selfAt = s.tick
+    fleet = now
+  }
+  return {
+    eraAt,
+    founded,
+    lost,
+    selfAt,
+    crowding: worldMetrics(s, origin.world).crowding,
+    population: s.population,
+    peakEnergy,
+  }
+}
+
+describe('space calibration', () => {
+  it('no reference script ever reaches the space era, on any seed', () => {
+    // FEAT: a regra dura do plano — os doze fingerprints dependem de o portão nunca abrir aqui
+    for (const script of ['steady', 'shifting', 'crossed'] as readonly GoldenScript[]) {
+      const plan = GOLDEN_SCRIPTS[script]
+      for (const seed of SPACE_SEEDS) {
+        const run = leave(seed, plan.decisions, plan.crossings)
+        expect(run.eraAt).toBe(-1)
+        expect(run.founded).toBe(0)
+        // FEAT: o pico das referências é 8,99 contra um portão de 12 — a folga medida no plano
+        expect(run.peakEnergy).toBeLessThan(10)
+      }
+    }
+  })
+
+  it('a world turned to industry and research reaches it, after two millennia', () => {
+    const turned = SPACE_SEEDS.map((seed) => leave(seed, TURN))
+    const arrived = turned.filter((run) => run.eraAt >= 0)
+    expect(arrived.length).toBeGreaterThanOrEqual(6)
+    expect(Math.min(...arrived.map((run) => run.eraAt))).toBeGreaterThan(1500)
+    expect(median(arrived.map((run) => run.eraAt))).toBeLessThan(3000)
+  })
+
+  it('the quickest path to the sky still costs eighteen centuries, the colony another one', () => {
+    const sprint = leave(482913, [{ tick: 0, allocation: SPACER }])
+    expect(sprint.eraAt).toBeGreaterThan(1500)
+    expect(sprint.eraAt).toBeLessThan(2100)
+    expect(sprint.selfAt - sprint.eraAt).toBeGreaterThan(50)
+    expect(sprint.selfAt - sprint.eraAt).toBeLessThan(400)
+  })
+
+  it('self-sufficiency is an achievement, not a formality', () => {
+    const arrived = SPACE_SEEDS.map((seed) => leave(seed, TURN)).filter((run) => run.eraAt >= 0)
+    const standing = shareOf(arrived.map((run) => run.selfAt >= 0))
+    expect(standing).toBeGreaterThan(0.1)
+    expect(standing).toBeLessThan(0.6)
+    const waits = arrived.filter((r) => r.selfAt >= 0).map((r) => r.selfAt - r.eraAt)
+    expect(Math.min(...waits)).toBeGreaterThan(100)
+  })
+
+  it('a world that stops paying loses the colonies it left behind', () => {
+    const seeds = [4242, 482913, 1597463007]
+    const kept = seeds.map((seed) => leave(seed, TURN))
+    const dropped = seeds.map((seed) => leave(seed, RETREAT))
+    expect(kept.every((run) => run.founded > 0 && run.lost === 0)).toBe(true)
+    expect(dropped.every((run) => run.lost === run.founded)).toBe(true)
+    expect(dropped.reduce((sum, run) => sum + run.lost, 0)).toBeGreaterThanOrEqual(3)
+  })
+
+  it('the crowding relief is felt at home without emptying it', () => {
+    for (const seed of [7, 482913, 99991]) {
+      const left = leave(seed, TURN)
+      const stayed = leave(seed, TURN, [], true)
+      const relief = stayed.crowding - left.crowding
+      expect(relief).toBeGreaterThan(0.005)
+      expect(relief).toBeLessThan(0.05)
+      // FEAT: o mundo natal continua apertado, e continua com quase toda a gente
+      expect(left.crowding).toBeGreaterThan(0.8)
+      expect(left.population).toBeGreaterThan(0.9 * stayed.population)
+    }
   })
 })
