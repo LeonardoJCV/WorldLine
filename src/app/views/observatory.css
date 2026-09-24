@@ -940,9 +940,35 @@ button.state__row:hover,
   font-size: var(--text-xs);
 }
 
+/* FEAT: a cadeia cabe inteira até três colunas (MAX_DEPTH em causal/tree.ts, 912px no pior caso);
+   o cartão paira sobre o palco vazio à esquerda em vez de ficar preso à coluna da lista de eventos
+   — só quando há uma árvore de verdade (`[data-wide]`, CausalPanel.tsx); sem evento selecionado o
+   cartão fica do jeito de sempre, do mesmo tamanho da lista de eventos acima */
+.hud__right .card--causal:has(.panel.causal[data-wide]) {
+  width: fit-content;
+  max-width: min(94vw, 60rem);
+  align-self: flex-end;
+}
+
+/* FIX: quando a cadeia pede mais altura do que sobra, é a lista de eventos que cede primeiro — mas
+   nunca para menos de três linhas, e nunca quando ela mesma está recolhida (o piso prenderia a
+   dobra no meio da animação); ela já rola por dentro (regra `.hud__right > .card > .panel`) */
+.hud__right .card--events:not([data-collapsed='true']) {
+  min-height: 168px;
+}
+
+.panel.causal[data-wide] {
+  width: min(var(--causal-width, 100%), 94vw, 60rem);
+}
+
 .causal__scroll {
-  max-height: 264px;
+  /* FEAT: cresce até --causal-height (a cadeia inteira) ou 46vh, o que for menor — e nunca além do
+     que a coluna realmente cede (100%): se a lista de eventos já estiver no piso de 168px e ainda
+     assim não couber, quem rola é este cartão, com uma barra visível, em vez de perder o rodapé */
+  max-height: min(var(--causal-height, 264px), 46vh, 100%);
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--haze) transparent;
 }
 
 .causal__canvas {

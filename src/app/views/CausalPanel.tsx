@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
@@ -86,8 +86,23 @@ export function CausalPanel() {
     }
   }
 
+  // FIX: o cartão cresce até caber a cadeia inteira (largura e altura próprias, não as da coluna
+  // de eventos acima) — sem isto, uma cadeia de duas ou mais colunas ou muitas causas paralelas
+  // ficava atrás de uma rolagem sem aviso; o teto em vh evita empurrar os cartões abaixo dele
+  const cardStyle = {
+    '--causal-width': `${width}px`,
+    '--causal-height': `${height}px`,
+  } as CSSProperties
+
   return (
-    <section className="panel causal" aria-labelledby="causal-title">
+    // FIX: data-wide só existe com uma árvore de verdade; sem evento selecionado o cartão volta ao
+    // tamanho de sempre — sem o atributo, 100% de uma largura fit-content vira uma conta circular
+    <section
+      className="panel causal"
+      aria-labelledby="causal-title"
+      data-wide="true"
+      style={cardStyle}
+    >
       <h2 className="panel__title" id="causal-title">
         {t('causal.title')}
       </h2>
