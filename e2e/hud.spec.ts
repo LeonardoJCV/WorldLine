@@ -179,3 +179,196 @@ test('the paradox notice is not a card and cannot be folded', async ({ page }) =
   expect(await notice.locator('button').count()).toBe(0)
   expect(await notice.evaluate((node) => node.closest('.card') === null)).toBe(true)
 })
+
+const PHONE = { width: 390, height: 844 }
+
+async function observeOnPhone(page: Page) {
+  await useGraphics(page, '2d')
+  await page.setViewportSize(PHONE)
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(3000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible()
+}
+
+function sheetBoxes(page: Page) {
+  return page.evaluate(() => {
+    const rect = (selector: string) => {
+      const found = document.querySelector(selector)?.getBoundingClientRect()
+      if (!found) return null
+      return {
+        top: found.top,
+        bottom: found.bottom,
+        left: found.left,
+        width: found.width,
+        height: found.height,
+      }
+    }
+    return {
+      stage: rect('.stage'),
+      sheet: rect('.sheet'),
+      planet: rect('.planet-slot'),
+      view: innerHeight,
+    }
+  })
+}
+
+function handleOf(page: Page) {
+  return page.getByRole('button', { name: /^Panels/ })
+}
+
+// FIX: a folha desliza; a altura só vale depois de ela assentar
+function restHeight(page: Page) {
+  return async () => {
+    const { sheet, stage } = await sheetBoxes(page)
+    return sheet && stage ? sheet.height / stage.height : 0
+  }
+}
+
+test('the handle alone carries the sheet through its three heights', async ({ page }) => {
+  await observeOnPhone(page)
+  const sheet = page.locator('.sheet')
+  const handle = handleOf(page)
+  await expect(sheet).toHaveAttribute('data-state', 'peek')
+  await expect(handle).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(restHeight(page)).toBeCloseTo(0.4, 1)
+  const peek = await sheetBoxes(page)
+  if (!peek.sheet || !peek.stage) throw new Error('the sheet did not render')
+  expect(Math.abs(peek.sheet.bottom - peek.view)).toBeLessThanOrEqual(1)
+
+  // FEAT: o teclado sozinho percorre as três alturas, sem depender de arrasto
+  await handle.focus()
+  await page.keyboard.press('Enter')
+  await expect(sheet).toHaveAttribute('data-state', 'open')
+  await expect.poll(restHeight(page)).toBeCloseTo(0.85, 1)
+  await expect(page.locator('.sheet .card--state')).toBeVisible()
+
+  await page.keyboard.press(' ')
+  await expect(sheet).toHaveAttribute('data-state', 'hidden')
+  await expect(handle).toHaveAttribute('aria-expanded', 'false')
+  await expect.poll(restHeight(page)).toBeLessThan(0.2)
+  // FEAT: escondida, os cartões saem do DOM e o essencial fica
+  await expect(page.locator('.sheet .card')).toHaveCount(0)
+  await expect(page.locator('.sheet__essentials')).toBeVisible()
+  await expect(page.locator('.sheet__essentials')).toContainText('Population')
+  // FEAT: o aviso de paradoxo mora fora do que a folha esconde, nunca dentro dos cartões
+  const notice = await page.evaluate(() => {
+    const node = document.querySelector('.hud--sheet > .notices')
+    return { outside: node !== null, buried: node?.closest('.sheet') !== null }
+  })
+  expect(notice.outside).toBe(true)
+  expect(notice.buried).toBe(false)
+
+  await page.keyboard.press('Enter')
+  await expect(sheet).toHaveAttribute('data-state', 'peek')
+})
+
+test('the universe keeps the screen behind the hidden sheet and still answers the pointer', async ({
+  page,
+}) => {
+  await observeOnPhone(page)
+  const handle = handleOf(page)
+  await handle.click()
+  await handle.click()
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'hidden')
+  await expect.poll(restHeight(page)).toBeLessThan(0.2)
+
+  const { stage, sheet, planet } = await sheetBoxes(page)
+  if (!stage || !sheet || !planet) throw new Error('the stage did not render')
+  // FEAT: o planeta e a corrente moram acima da folha, não por baixo dela
+  expect(planet.top).toBeGreaterThanOrEqual(stage.top - 1)
+  expect(planet.bottom).toBeLessThanOrEqual(sheet.top)
+  expect(sheet.top - stage.top).toBeGreaterThan(stage.height * 0.8)
+
+  const x = Math.round(stage.left + stage.width * 0.4)
+  const y = Math.round(sheet.top - 12)
+  const under = await page.evaluate(
+    ([px, py]) => document.elementFromPoint(px as number, py as number)?.className ?? '',
+    [x, y],
+  )
+  expect(under).toContain('current')
+
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  const present = Number(await history.getAttribute('aria-valuemax'))
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x - 140, y, { steps: 8 })
+  await page.mouse.up()
+  await expect(history).not.toHaveAttribute('aria-valuenow', String(present))
+})
+
+test('a drag on the handle settles on the nearest height', async ({ page }) => {
+  await observeOnPhone(page)
+  const sheet = page.locator('.sheet')
+  const box = await page.locator('.sheet__handle').boundingBox()
+  if (!box) throw new Error('the handle did not render')
+  const x = Math.round(box.x + box.width / 2)
+  const y = Math.round(box.y + box.height / 2)
+
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x, y - 260, { steps: 10 })
+  await page.mouse.up()
+  await expect(sheet).toHaveAttribute('data-state', 'open')
+
+  const risen = await page.locator('.sheet__handle').boundingBox()
+  if (!risen) throw new Error('the handle went away')
+  const from = Math.round(risen.y + risen.height / 2)
+  await page.mouse.move(x, from)
+  await page.mouse.down()
+  await page.mouse.move(x, from + 500, { steps: 10 })
+  await page.mouse.up()
+  await expect(sheet).toHaveAttribute('data-state', 'hidden')
+})
+
+test('the focus order follows the screen with the sheet open and with it hidden', async ({
+  page,
+}) => {
+  await observeOnPhone(page)
+  const handle = handleOf(page)
+  await handle.click()
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'open')
+  await expect.poll(restHeight(page)).toBeCloseTo(0.85, 1)
+  await handle.focus()
+  await page.keyboard.press('Tab')
+  const first = await page.evaluate(() => {
+    const active = document.activeElement
+    return {
+      toggle: active?.className ?? '',
+      card: active?.closest('.card')?.className ?? '',
+      inside: active?.closest('.sheet__panels') !== null,
+    }
+  })
+  expect(first.toggle).toContain('card__toggle')
+  expect(first.card).toContain('card--state')
+  expect(first.inside).toBe(true)
+
+  await handle.click()
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'hidden')
+  await handle.focus()
+  await page.keyboard.press('Tab')
+  const escaped = await page.evaluate(() => document.activeElement?.closest('.sheet') === null)
+  expect(escaped).toBe(true)
+})
+
+test('with motion turned down the sheet changes height without sliding', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await observeOnPhone(page)
+  await handleOf(page).click()
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'open')
+  const moment = await page.evaluate(() => {
+    const sheet = document.querySelector('.sheet')
+    const stage = document.querySelector('.stage')
+    if (!sheet || !stage) return null
+    return {
+      duration: getComputedStyle(sheet).transitionDuration,
+      ratio: sheet.getBoundingClientRect().height / stage.getBoundingClientRect().height,
+    }
+  })
+  if (!moment) throw new Error('the sheet did not render')
+  // FEAT: a altura muda na hora; o que se desliga é o deslizar
+  expect(Number.parseFloat(moment.duration)).toBeLessThan(0.05)
+  expect(moment.ratio).toBeCloseTo(0.85, 1)
+})

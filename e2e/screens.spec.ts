@@ -902,3 +902,32 @@ test('surface card mobile', async ({ page }) => {
   await page.waitForTimeout(500)
   await page.screenshot({ path: 'screens/surface-card-mobile.png' })
 })
+
+for (const height of ['hidden', 'peek', 'open'] as const) {
+  test(`hud sheet ${height}`, async ({ page }) => {
+    await useGraphics(page, '2d')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/?seed=482913')
+    await page.getByRole('button', { name: '×256' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    await page.waitForTimeout(4000)
+    await page.getByRole('button', { name: 'Pause' }).click()
+    const handle = page.getByRole('button', { name: /^Panels/ })
+    const presses = height === 'peek' ? 0 : height === 'open' ? 1 : 2
+    for (let press = 0; press < presses; press++) await handle.click()
+    await expect(page.locator('.sheet')).toHaveAttribute('data-state', height)
+    // FIX: a folha desliza; a captura espera a altura assentar
+    await expect
+      .poll(async () => {
+        const box = await page.locator('.sheet').boundingBox()
+        const stage = await page.locator('.stage').boundingBox()
+        if (!box || !stage) return false
+        const fraction = height === 'hidden' ? 0.12 : height === 'peek' ? 0.4 : 0.85
+        const target = Math.max(height === 'hidden' ? 76 : 0, fraction * stage.height)
+        return Math.abs(box.height - target) <= 2
+      })
+      .toBe(true)
+    await page.waitForTimeout(400)
+    await page.screenshot({ path: `screens/hud-sheet-${height}.png` })
+  })
+}

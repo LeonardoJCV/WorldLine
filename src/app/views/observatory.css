@@ -753,43 +753,6 @@ button.state__row:hover,
   font-size: 0.75rem;
 }
 
-/* FIX: sem largura para três colunas o painel de bordo volta a correr abaixo do palco; a folha do celular é outra tarefa */
-@media (max-width: 900px) {
-  .observatory {
-    grid-template-rows: auto minmax(360px, 1fr) auto;
-  }
-
-  .hud {
-    position: static;
-    inset: auto;
-    grid-row: 3;
-    z-index: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px var(--gutter) 20px;
-    border-top: 1px solid rgb(58 42 107 / 0.6);
-    pointer-events: auto;
-  }
-
-  .hud__left,
-  .hud__right,
-  .hud__strip {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-width: 0;
-  }
-
-  .hud .card,
-  .hud .notices > p:not(.paradox) {
-    width: auto;
-    padding: 0;
-    background: none;
-    border: 0;
-  }
-}
-
 .causal__scroll {
   max-height: 264px;
   overflow: auto;
@@ -1087,5 +1050,164 @@ button.causal__node:hover {
     left: auto;
     right: var(--gutter);
     bottom: 16px;
+  }
+}
+
+/* FEAT: no celular os cartões sobem do fundo numa folha, e o palco fica com a tela inteira por trás */
+.hud--sheet {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0;
+}
+
+/* FIX: dentro do planeta a ficha da cidade já é a folha de baixo; duas não cabem num celular */
+.observatory:has(.stage[data-lens='planet']) .hud--sheet {
+  display: none;
+}
+
+/* FEAT: o aviso mora acima da alça, fora do que a folha esconde */
+.hud--sheet > .notices {
+  padding: 0 var(--gutter) 8px;
+}
+
+.notices:empty {
+  display: none;
+}
+
+.sheet {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  height: var(--sheet-height);
+  min-height: 76px;
+  overflow: hidden;
+  /* FIX: aberta, a folha cobre quase a tela toda: o palco por trás não pode atrapalhar a leitura */
+  background: rgb(10 11 30 / 0.97);
+  border-top: 1px solid rgb(58 42 107 / 0.75);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -14px 30px rgb(4 4 16 / 0.45);
+  pointer-events: auto;
+  transition: height 220ms ease;
+}
+
+.sheet[data-state='hidden'] {
+  --sheet-height: 12%;
+}
+
+.sheet[data-state='peek'] {
+  --sheet-height: 40%;
+}
+
+.sheet[data-state='open'] {
+  --sheet-height: 85%;
+}
+
+.sheet[data-dragging='true'] {
+  transition: none;
+}
+
+/* FEAT: sem animação a folha continua mudando de altura; só não desliza */
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    transition: none;
+  }
+}
+
+.sheet__grip {
+  flex: none;
+  display: grid;
+  gap: 2px;
+  padding: 2px var(--gutter) 6px;
+}
+
+.sheet__handle {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 6px 0 2px;
+  background: transparent;
+  border: 0;
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.sheet__bar {
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--haze);
+}
+
+.sheet__handle:hover {
+  color: var(--starlight);
+}
+
+.sheet__essentials {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.sheet__label {
+  color: var(--dim);
+}
+
+.sheet__panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 6px var(--gutter) 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--haze) transparent;
+}
+
+/* FIX: na folha os grupos não encolhem; quem cede é o rolar da folha, senão os cartões se sobrepõem */
+.hud--sheet .hud__left,
+.hud--sheet .hud__right,
+.hud--sheet .hud__strip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* FEAT: sobre a folha o cartão não precisa de fundo próprio: o título e o espaço bastam */
+.hud--sheet .card,
+.hud--sheet .notices > p:not(.paradox) {
+  width: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.hud--sheet .hud__left > .card,
+.hud--sheet .hud__right > .card {
+  max-width: none;
+  overflow: visible;
+}
+
+.hud--sheet .hud__left > .card > .panel,
+.hud--sheet .hud__right > .card > .panel {
+  overflow: visible;
+}
+
+/* FIX: com a folha no chão, o zoom e o minimapa sobem para continuarem à vista */
+@media (max-width: 900px) {
+  .zoom,
+  .minimap {
+    bottom: calc(var(--reserve, 16px) + 12px);
   }
 }

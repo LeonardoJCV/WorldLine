@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
 import { Minimap } from '../current/Minimap.tsx'
@@ -16,9 +16,12 @@ import { PlanetView } from '../surface/PlanetView.tsx'
 import { isCompatibleVersion, type MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
+import { BottomSheet, usePhone } from './BottomSheet.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
 import { CrossPanel } from './CrossPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
+import { sheetReserve } from './hud.ts'
+import { useSheet } from './hudStore.ts'
 import { PanelCard } from './PanelCard.tsx'
 import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
@@ -64,7 +67,14 @@ export function Observatory({
   const linkVersion = useSimulation((s) => s.linkVersion)
   const manyWorlds = useSimulation((s) => s.worlds.length > 1)
   const remount = `${seed}:${worldFocus}:${cursor === null ? 'now' : (inspectedTick ?? 'pending')}`
-  const layout = useMemo(() => (size ? stageLayout(size.width, size.height) : null), [size])
+  const phone = usePhone()
+  const sheet = useSheet()
+  // FEAT: no celular o palco desenha acima da folha, para o planeta e a corrente nunca ficarem por baixo dela
+  const reserve = phone && size ? sheetReserve(sheet, size.height) : 0
+  const layout = useMemo(
+    () => (size ? stageLayout(size.width, size.height - reserve) : null),
+    [size, reserve],
+  )
   const fullFrame = useMemo(() => {
     if (!size) return null
     const gutter = Math.max(16, Math.round(size.width * 0.03))
@@ -76,8 +86,60 @@ export function Observatory({
     }
   }, [size])
 
+  const notices = (
+    <div className="notices" role="status">
+      <ParadoxNotice />
+      {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
+        <p>{t('link.version', { version: linkVersion })}</p>
+      )}
+      {ended !== null && <p>{t(`ended.${ended}`)}</p>}
+      {error !== null && <p>{t('error.simulation', { message: error })}</p>}
+    </div>
+  )
+  const cards = (
+    <>
+      {/* FEAT: à esquerda mora o que se observa e o que se decide */}
+      <div className="hud__left">
+        <PanelCard id="state" title={t('state.title', { year: formatYear(observed?.tick ?? 0) })}>
+          <StatePanel focus={focus} onFocus={setFocus} />
+        </PanelCard>
+        {mode === 'intervene' && (
+          <PanelCard id="allocation" title={t('allocation.title')}>
+            <AllocationPanel key={remount} />
+          </PanelCard>
+        )}
+        {mode === 'cross' && (
+          <PanelCard id="cross" title={t('cross.title', { id: worldFocus })}>
+            <CrossPanel key={remount} />
+          </PanelCard>
+        )}
+      </div>
+      {/* FEAT: à direita o que aconteceu e, logo abaixo, por que aconteceu */}
+      <div className="hud__right">
+        <PanelCard id="events" title={t('events.title')}>
+          <EventsPanel />
+        </PanelCard>
+        <PanelCard id="causal" title={t('causal.title')}>
+          <CausalPanel />
+        </PanelCard>
+      </div>
+      <div className="hud__strip">
+        {/* FEAT: na folha o aviso mora acima da alça, onde nenhuma altura o esconde */}
+        {!phone && notices}
+        {manyWorlds && (
+          <PanelCard id="worlds" title={t('worlds.title')}>
+            <WorldsStrip />
+          </PanelCard>
+        )}
+        <PanelCard id="actions" title={t('hud.actions')}>
+          <WorldActions />
+        </PanelCard>
+      </div>
+    </>
+  )
+
   return (
-    <div className="observatory">
+    <div className="observatory" style={{ '--reserve': `${reserve}px` } as CSSProperties}>
       <TopBar onLeave={onLeave} />
       <main
         className="stage"
@@ -118,51 +180,13 @@ export function Observatory({
           </>
         )}
       </main>
-      <footer className="hud">
-        {/* FEAT: à esquerda mora o que se observa e o que se decide */}
-        <div className="hud__left">
-          <PanelCard id="state" title={t('state.title', { year: formatYear(observed?.tick ?? 0) })}>
-            <StatePanel focus={focus} onFocus={setFocus} />
-          </PanelCard>
-          {mode === 'intervene' && (
-            <PanelCard id="allocation" title={t('allocation.title')}>
-              <AllocationPanel key={remount} />
-            </PanelCard>
-          )}
-          {mode === 'cross' && (
-            <PanelCard id="cross" title={t('cross.title', { id: worldFocus })}>
-              <CrossPanel key={remount} />
-            </PanelCard>
-          )}
-        </div>
-        {/* FEAT: à direita o que aconteceu e, logo abaixo, por que aconteceu */}
-        <div className="hud__right">
-          <PanelCard id="events" title={t('events.title')}>
-            <EventsPanel />
-          </PanelCard>
-          <PanelCard id="causal" title={t('causal.title')}>
-            <CausalPanel />
-          </PanelCard>
-        </div>
-        <div className="hud__strip">
-          <div className="notices" role="status">
-            <ParadoxNotice />
-            {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
-              <p>{t('link.version', { version: linkVersion })}</p>
-            )}
-            {ended !== null && <p>{t(`ended.${ended}`)}</p>}
-            {error !== null && <p>{t('error.simulation', { message: error })}</p>}
-          </div>
-          {manyWorlds && (
-            <PanelCard id="worlds" title={t('worlds.title')}>
-              <WorldsStrip />
-            </PanelCard>
-          )}
-          <PanelCard id="actions" title={t('hud.actions')}>
-            <WorldActions />
-          </PanelCard>
-        </div>
-      </footer>
+      {phone ? (
+        <BottomSheet available={size?.height ?? 0} notices={notices}>
+          {cards}
+        </BottomSheet>
+      ) : (
+        <footer className="hud">{cards}</footer>
+      )}
     </div>
   )
 }
