@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Current } from '../current/Current.tsx'
 import { stageLayout } from '../current/geometry.ts'
 import { Minimap } from '../current/Minimap.tsx'
@@ -31,6 +31,13 @@ import { WorldActions } from './WorldActions.tsx'
 import { WorldsStrip } from './WorldsStrip.tsx'
 import './observatory.css'
 
+const NOTICE_GAP = 8
+const MIN_STAGE = 120
+// FEAT: a faixa que o zoom (e, acima de 720px, o minimapa) ocupa no chão, a mesma que o CSS desenha
+const ZOOM_BAND = 44
+const MAP_BAND = 92
+const NARROW = 720
+
 export function Observatory({
   link,
   lens,
@@ -53,8 +60,8 @@ export function Observatory({
   const currentLens = useLens()
   const planetOpen = stage === '3d' && currentLens === 'planet'
   const exitPlanet = useCallback(() => lensStore.getState().setLens('current'), [])
-  const stageRef = useRef<HTMLElement>(null)
-  const size = useElementSize(stageRef)
+  const [board, setBoard] = useState<HTMLElement | null>(null)
+  const size = useElementSize(board)
   const [focus, setFocus] = useState<Strand | null>(null)
   const ended = useSimulation((s) => s.ended)
   const error = useSimulation((s) => s.error)
@@ -69,25 +76,33 @@ export function Observatory({
   const remount = `${seed}:${worldFocus}:${cursor === null ? 'now' : (inspectedTick ?? 'pending')}`
   const phone = usePhone()
   const sheet = useSheet()
-  // FEAT: no celular o palco desenha acima da folha, para o planeta e a corrente nunca ficarem por baixo dela
-  const reserve = phone && size ? sheetReserve(sheet, size.height) : 0
-  const layout = useMemo(
-    () => (size ? stageLayout(size.width, size.height - reserve) : null),
-    [size, reserve],
-  )
+  const [noticeBand, setNoticeBand] = useState<HTMLDivElement | null>(null)
+  const noticesSize = useElementSize(noticeBand)
+  const [stripBand, setStripBand] = useState<HTMLDivElement | null>(null)
+  const stripSize = useElementSize(stripBand)
+  const canKeep = useSimulation((s) => s.seed !== null && s.worlds.length > 0)
+  // FEAT: o chão é do aviso primeiro, do zoom e do minimapa depois, e só então dos cartões
+  const reserve = phone && size && !planetOpen ? sheetReserve(sheet, size.height) : 0
+  const band = phone && noticesSize && noticesSize.height > 0 ? noticesSize.height + NOTICE_GAP : 0
+  const floor = reserve + band
+  const controlBand =
+    phone && size && !planetOpen ? (size.width > NARROW ? MAP_BAND : ZOOM_BAND) : 0
+  // FEAT: o palco inteiro desenha acima do chão, em 2D e em 3D
+  const drawn = size ? Math.max(MIN_STAGE, size.height - floor - controlBand) : 0
+  const layout = useMemo(() => (size ? stageLayout(size.width, drawn) : null), [size, drawn])
   const fullFrame = useMemo(() => {
     if (!size) return null
     const gutter = Math.max(16, Math.round(size.width * 0.03))
     return {
       left: gutter,
       right: size.width - gutter,
-      centerY: size.height / 2,
-      height: size.height,
+      centerY: drawn / 2,
+      height: drawn,
     }
-  }, [size])
+  }, [size, drawn])
 
   const notices = (
-    <div className="notices" role="status">
+    <div className="notices" role="status" ref={setNoticeBand}>
       <ParadoxNotice />
       {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
         <p>{t('link.version', { version: linkVersion })}</p>
@@ -123,7 +138,7 @@ export function Observatory({
           <CausalPanel />
         </PanelCard>
       </div>
-      <div className="hud__strip">
+      <div className="hud__strip" ref={setStripBand}>
         {/* FEAT: na folha o aviso mora acima da alça, onde nenhuma altura o esconde */}
         {!phone && notices}
         {manyWorlds && (
@@ -131,62 +146,82 @@ export function Observatory({
             <WorldsStrip />
           </PanelCard>
         )}
-        <PanelCard id="actions" title={t('hud.actions')}>
-          <WorldActions />
-        </PanelCard>
+        {/* FIX: sem mundo para guardar o painel não desenha nada; o cartão também não aparece */}
+        {canKeep && (
+          <PanelCard id="actions" title={t('hud.actions')}>
+            <WorldActions />
+          </PanelCard>
+        )}
       </div>
     </>
   )
 
-  return (
-    <div className="observatory" style={{ '--reserve': `${reserve}px` } as CSSProperties}>
-      <TopBar onLeave={onLeave} />
-      <main
-        className="stage"
-        ref={stageRef}
-        data-view={stage}
-        data-lens={planetOpen ? 'planet' : 'current'}
-      >
-        {size && stage === '3d' && fullFrame && (
-          <>
-            <Current3D width={size.width} height={size.height} paused={planetOpen} />
-            {planetOpen ? (
-              <PlanetView width={size.width} height={size.height} onExit={exitPlanet} />
-            ) : (
-              <ZoomControls />
-            )}
-            <Minimap frame={fullFrame} />
-          </>
-        )}
-        {size && layout && stage === '2d' && (
-          <>
-            <div
-              className="planet-slot"
-              style={{
-                left: layout.planet.cx - layout.planet.size / 2,
-                top: layout.planet.cy - layout.planet.size / 2,
-              }}
-            >
-              <Planet
-                size={layout.planet.size}
-                seed={seed}
-                snapshot={observed}
-                detail={TIERS[tier].focus}
-              />
-            </div>
-            <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
-            <ZoomControls />
-            <Minimap frame={layout.frame} />
-          </>
-        )}
-      </main>
-      {phone ? (
-        <BottomSheet available={size?.height ?? 0} notices={notices}>
-          {cards}
-        </BottomSheet>
-      ) : (
-        <footer className="hud">{cards}</footer>
+  const stageNode = (
+    <main
+      className="stage"
+      ref={setBoard}
+      data-view={stage}
+      data-lens={planetOpen ? 'planet' : 'current'}
+    >
+      {size && stage === '3d' && fullFrame && (
+        <>
+          <Current3D width={size.width} height={drawn} paused={planetOpen} />
+          {planetOpen && <PlanetView width={size.width} height={drawn} onExit={exitPlanet} />}
+        </>
       )}
+      {size && layout && stage === '2d' && (
+        <>
+          <div
+            className="planet-slot"
+            style={{
+              left: layout.planet.cx - layout.planet.size / 2,
+              top: layout.planet.cy - layout.planet.size / 2,
+            }}
+          >
+            <Planet
+              size={layout.planet.size}
+              seed={seed}
+              snapshot={observed}
+              detail={TIERS[tier].focus}
+            />
+          </div>
+          <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
+        </>
+      )}
+    </main>
+  )
+  // FEAT: o chão lê-se depois dos cartões e sai do DOM com a folha aberta, que o cobre inteiro
+  const controls =
+    phone && sheet === 'open' ? null : (
+      <div className="stage__floor">
+        {!planetOpen && size !== null && <ZoomControls />}
+        {size && stage === '3d' && fullFrame && <Minimap frame={fullFrame} />}
+        {size && layout && stage === '2d' && <Minimap frame={layout.frame} />}
+      </div>
+    )
+  const dashboard = phone ? (
+    <BottomSheet available={size?.height ?? 0} notices={notices}>
+      {cards}
+    </BottomSheet>
+  ) : (
+    <footer className="hud">{cards}</footer>
+  )
+
+  return (
+    <div
+      className="observatory"
+      style={
+        {
+          '--reserve': `${reserve}px`,
+          '--floor': `${floor}px`,
+          '--strip': `${Math.round(stripSize?.height ?? 0)}px`,
+        } as CSSProperties
+      }
+    >
+      <TopBar onLeave={onLeave} />
+      {stageNode}
+      {dashboard}
+      {controls}
     </div>
   )
 }

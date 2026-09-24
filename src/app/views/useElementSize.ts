@@ -1,15 +1,15 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useState } from 'react'
 
 export interface Size {
   readonly width: number
   readonly height: number
 }
 
-export function useElementSize(ref: RefObject<HTMLElement | null>): Size | null {
+// FIX: mede o nó que a referência de retorno entrega, e não um guardado uma vez: assim um remonte volta a ser medido
+export function useElementSize(element: HTMLElement | null): Size | null {
   const [size, setSize] = useState<Size | null>(null)
 
   useEffect(() => {
-    const element = ref.current
     if (!element) return
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return
@@ -23,7 +23,7 @@ export function useElementSize(ref: RefObject<HTMLElement | null>): Size | null 
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [ref])
+  }, [element])
 
   return size
 }

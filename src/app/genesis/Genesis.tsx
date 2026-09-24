@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { genesis } from '../../engine/genesis.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import { toSnapshot } from '../../worker/protocol.ts'
@@ -25,8 +25,8 @@ export function Genesis({ onStart }: GenesisProps) {
   const seed = seedFromText(text)
   const preview = useMemo(() => (seed === null ? null : genesis(seed)), [seed])
   const snapshot = useMemo(() => (preview ? toSnapshot(preview.state) : null), [preview])
-  const planetRef = useRef<HTMLDivElement>(null)
-  const size = useElementSize(planetRef)
+  const [planetBox, setPlanetBox] = useState<HTMLDivElement | null>(null)
+  const size = useElementSize(planetBox)
   const planetSize = size ? Math.round(Math.min(size.width, size.height) * 0.92) : 0
 
   return (
@@ -94,7 +94,7 @@ export function Genesis({ onStart }: GenesisProps) {
         )}
         <LibraryPanel onOpen={onStart} />
       </section>
-      <div className="genesis__planet" ref={planetRef}>
+      <div className="genesis__planet" ref={setPlanetBox}>
         {seed !== null && snapshot && planetSize > 0 && (
           <Planet size={planetSize} seed={seed} snapshot={snapshot} detail={TIERS[tier].focus} />
         )}

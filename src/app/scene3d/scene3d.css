@@ -46,12 +46,12 @@
 
 .scene3d__card {
   position: absolute;
-  /* FIX: acima da faixa de baixo, do zoom e do minimapa, senão eles desenham por cima da ficha */
+  /* FIX: acima do zoom, do minimapa e da faixa medida, senão eles desenham por cima da ficha */
   z-index: 4;
   left: var(--gutter);
-  bottom: 120px;
+  bottom: calc(120px + var(--strip, 0px));
   width: min(320px, 90%);
-  max-height: calc(100% - 240px);
+  max-height: calc(100% - 240px - var(--strip, 0px));
   overflow-y: auto;
   padding: 14px 16px;
   background: var(--nebula);
@@ -85,7 +85,8 @@
   cursor: pointer;
 }
 
-@media (max-width: 640px) {
+/* FIX: no celular a ficha é a folha do palco, e o palco já termina acima do chão da camada */
+@media (max-width: 900px) {
   .scene3d__card {
     left: 0;
     right: 0;

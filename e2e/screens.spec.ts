@@ -945,3 +945,20 @@ for (const height of ['hidden', 'peek', 'open'] as const) {
     await page.screenshot({ path: `screens/hud-sheet-${height}.png` })
   })
 }
+
+test('hud sheet planet', async ({ page }) => {
+  test.slow()
+  await useGraphics(page, 'high')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installParadox(page)
+  await runToParadox(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('.paradox')).toBeVisible()
+  await page.waitForTimeout(600)
+  await page.screenshot({ path: 'screens/hud-sheet-notice.png' })
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await expect(page.locator('.stage')).toHaveAttribute('data-lens', 'planet')
+  await expect(page.locator('.paradox')).toBeVisible()
+  await page.waitForTimeout(2000)
+  await page.screenshot({ path: 'screens/hud-sheet-planet.png' })
+})

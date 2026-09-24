@@ -350,6 +350,21 @@
   display: block;
 }
 
+/* FEAT: o chão do palco é uma camada própria, depois dos cartões na leitura e acima deles no desenho */
+.stage__floor {
+  position: absolute;
+  inset: 0;
+  grid-row: 2;
+  grid-column: 1;
+  /* FIX: acima do palco, abaixo dos cartões: a folha aberta é uma escolha do leitor e cobre o chão */
+  z-index: 1;
+  pointer-events: none;
+}
+
+.stage__floor > * {
+  pointer-events: auto;
+}
+
 /* FEAT: o painel de bordo flutua sobre o palco e só os cartões capturam o ponteiro */
 .hud {
   /* FIX: absoluto na área do palco: por cheia que fique, a camada não estica a página nem empurra o minimapa para fora */
@@ -357,7 +372,7 @@
   inset: 0;
   grid-row: 2;
   grid-column: 1;
-  z-index: 1;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(230px, 20rem) minmax(80px, 1fr) minmax(230px, 21rem);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -377,7 +392,7 @@
 }
 
 /* FIX: com o planeta aberto, o rodapé do palco é dos controles da superfície */
-.observatory:has(.stage[data-lens='planet']) .hud {
+.observatory:has(.stage[data-lens='planet']) .hud:not(.hud--sheet) {
   padding-bottom: 130px;
 }
 
@@ -405,6 +420,18 @@
 .hud__left > .card--cross {
   flex-shrink: 0;
   max-height: 100%;
+}
+
+/* FIX: aberto, o estado guarda altura para rolar por dentro; nunca vira um cartão de altura zero com o foco preso lá */
+.hud__left > .card--state[data-collapsed='false'] {
+  min-height: 112px;
+}
+
+/* FIX: se ainda assim não couber, é a coluna que rola, e não o cartão que desaparece */
+.hud__left {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--haze) transparent;
 }
 
 .hud__left > .card > .panel,
@@ -1102,18 +1129,19 @@ button.causal__node:hover {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 0;
+  gap: 8px;
   padding: 0;
 }
 
 /* FIX: dentro do planeta a ficha da cidade já é a folha de baixo; duas não cabem num celular */
-.observatory:has(.stage[data-lens='planet']) .hud--sheet {
+/* FIX: só os cartões saem; o aviso continua na camada, porque ele nunca pode ser escondido */
+.observatory:has(.stage[data-lens='planet']) .hud--sheet > .sheet {
   display: none;
 }
 
 /* FEAT: o aviso mora acima da alça, fora do que a folha esconde */
 .hud--sheet > .notices {
-  padding: 0 var(--gutter) 8px;
+  padding: 0 var(--gutter);
 }
 
 .notices:empty {
@@ -1229,16 +1257,21 @@ button.causal__node:hover {
 }
 
 /* FEAT: sobre a folha o cartão não precisa de fundo próprio: o título e o espaço bastam */
-.hud--sheet .card,
-.hud--sheet .notices > p:not(.paradox) {
+.hud--sheet .card {
   width: auto;
   padding: 0;
   background: none;
   border: 0;
 }
 
+.hud--sheet .hud__left,
+.hud--sheet .hud__right {
+  overflow: visible;
+}
+
 .hud--sheet .hud__left > .card,
 .hud--sheet .hud__right > .card {
+  min-height: 0;
   max-width: none;
   overflow: visible;
 }
@@ -1248,10 +1281,20 @@ button.causal__node:hover {
   overflow: visible;
 }
 
-/* FIX: com a folha no chão, o zoom e o minimapa sobem para continuarem à vista */
+/* FIX: o chão é primeiro do aviso e da folha; depois o minimapa, e o zoom acima dele */
 @media (max-width: 900px) {
-  .zoom,
   .minimap {
-    bottom: calc(var(--reserve, 16px) + 12px);
+    bottom: calc(var(--floor, 16px) + 12px);
+  }
+
+  .zoom {
+    bottom: calc(var(--floor, 16px) + 58px);
+  }
+}
+
+/* FIX: sem minimapa embaixo, o zoom desce para o chão da camada */
+@media (max-width: 720px) {
+  .zoom {
+    bottom: calc(var(--floor, 16px) + 12px);
   }
 }

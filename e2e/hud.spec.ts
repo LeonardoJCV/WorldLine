@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { useGraphics } from './stage.ts'
-import { installParadox, runToParadox } from './support.ts'
+import {
+  branchFromStart,
+  installParadox,
+  pickOrigin,
+  runToParadox,
+  worldAtYear,
+} from './support.ts'
 
 const WIDE = { width: 1440, height: 900 }
 
@@ -455,4 +461,242 @@ test('with motion turned down the sheet changes height without sliding', async (
   // FEAT: a altura muda na hora; o que se desliga é o deslizar
   expect(Number.parseFloat(moment.duration)).toBeLessThan(0.05)
   expect(moment.ratio).toBeCloseTo(0.85, 1)
+})
+
+function floorBoxes(page: Page) {
+  return page.evaluate(() => {
+    const rect = (selector: string) => {
+      const found = document.querySelector(selector)?.getBoundingClientRect()
+      if (!found) return null
+      return { top: found.top, bottom: found.bottom, height: found.height }
+    }
+    return {
+      stage: rect('.stage'),
+      scene: rect('.scene3d'),
+      sheet: rect('.sheet'),
+      notices: rect('.notices'),
+      zoom: rect('.zoom'),
+      reach: [...document.querySelectorAll('.zoom button')].map((button) => {
+        const box = button.getBoundingClientRect()
+        const found = document.elementFromPoint(
+          (box.left + box.right) / 2,
+          (box.top + box.bottom) / 2,
+        )
+        return found !== null && (found === button || button.contains(found))
+      }),
+    }
+  })
+}
+
+test('the paradox owns the phone floor, and keeps it inside the planet', async ({ page }) => {
+  test.slow()
+  await useGraphics(page, 'high')
+  await page.setViewportSize(WIDE)
+  await installParadox(page)
+  await runToParadox(page)
+  await page.setViewportSize(PHONE)
+  await expect(page.locator('.sheet')).toBeVisible()
+  await expect(page.locator('.paradox')).toBeVisible()
+
+  const band = await floorBoxes(page)
+  if (!band.sheet || !band.notices || !band.zoom) throw new Error('the floor did not render')
+  // FEAT: o chão em ordem: o aviso acima da folha, e o zoom acima do aviso
+  expect(band.notices.bottom).toBeLessThanOrEqual(band.sheet.top)
+  expect(band.zoom.bottom).toBeLessThanOrEqual(band.notices.top)
+  expect(band.reach).toEqual([true, true, true])
+
+  // FEAT: dentro do planeta os cartões saem, o aviso fica
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await expect(page.locator('.stage')).toHaveAttribute('data-lens', 'planet')
+  await expect(page.locator('.paradox')).toBeVisible()
+  await expect(page.locator('.sheet')).toBeHidden()
+  const lens = await floorBoxes(page)
+  if (!lens.notices || !lens.stage) throw new Error('the notice left the planet')
+  expect(lens.notices.height).toBeGreaterThan(0)
+  expect(lens.notices.bottom).toBeLessThanOrEqual(lens.stage.bottom + 1)
+})
+
+test('the phone keeps its default stage above the sheet', async ({ page }) => {
+  // FEAT: sem forçar nada, o celular abre em 3D: é esse palco que tem de ficar acima da folha
+  await page.setViewportSize(PHONE)
+  await page.goto('/?seed=482913')
+  await expect(page.locator('.stage')).toHaveAttribute('data-view', '3d')
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'peek')
+  await expect(page.locator('.scene3d__canvas')).toBeVisible()
+  const band = await floorBoxes(page)
+  if (!band.scene || !band.sheet || !band.stage || !band.zoom) {
+    throw new Error('the 3d stage did not render')
+  }
+  expect(band.scene.bottom).toBeLessThanOrEqual(band.zoom.top + 1)
+  expect(band.scene.height).toBeGreaterThan(band.stage.height * 0.5)
+  expect(band.zoom.bottom).toBeLessThanOrEqual(band.sheet.top)
+  expect(band.reach).toEqual([true, true, true])
+
+  await handleOf(page).click()
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'open')
+  await handleOf(page).click()
+  await expect(page.locator('.sheet')).toHaveAttribute('data-state', 'hidden')
+  await expect.poll(async () => (await floorBoxes(page)).sheet?.height ?? 0).toBeLessThan(120)
+  const wide = await floorBoxes(page)
+  if (!wide.scene || !wide.sheet) throw new Error('the 3d stage went away')
+  // FEAT: escondida a folha, o palco 3D recupera a tela
+  expect(wide.scene.bottom).toBeLessThanOrEqual(wide.sheet.top + 1)
+  expect(wide.scene.height).toBeGreaterThan(band.scene.height)
+})
+
+test('the minimap and the zoom share the floor at tablet width instead of covering it', async ({
+  page,
+}) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.locator('.sheet')).toBeVisible()
+  await expect(page.locator('.minimap')).toBeVisible()
+  const band = await floorBoxes(page)
+  const map = await page.locator('.minimap').boundingBox()
+  if (!band.zoom || !band.sheet || !map) throw new Error('the tablet floor did not render')
+  // FEAT: o minimapa no chão, o zoom acima dele, a folha abaixo dos dois
+  expect(map.y + map.height).toBeLessThanOrEqual(band.sheet.top)
+  expect(band.zoom.bottom).toBeLessThanOrEqual(map.y)
+  expect(band.reach).toEqual([true, true, true])
+})
+
+test('a short window makes the state panel scroll instead of erasing it', async ({ page }) => {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 640 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  await expect(page.locator('.panel.allocation')).toBeVisible()
+  const squeeze = await page.evaluate(() => {
+    const panel = document.querySelector('.panel.state')
+    const card = document.querySelector('.card--state')
+    const rail = document.querySelector('.hud__left')
+    if (!panel || !card || !rail) return null
+    const row = panel.querySelector('button.state__row')
+    const box = row?.getBoundingClientRect()
+    const railBox = rail.getBoundingClientRect()
+    return {
+      card: card.getBoundingClientRect().height,
+      client: panel.clientHeight,
+      scroll: panel.scrollHeight,
+      railScrolls: rail.scrollHeight > rail.clientHeight,
+      rowInside: box ? box.top >= railBox.top - 1 && box.bottom <= railBox.bottom + 1 : false,
+    }
+  })
+  if (!squeeze) throw new Error('the intervene rail did not render')
+  // FEAT: o aperto degrada para rolagem: nunca para um cartão de altura zero com o foco preso dentro
+  expect(squeeze.client).toBeGreaterThan(24)
+  expect(squeeze.scroll).toBeGreaterThan(squeeze.client)
+  expect(squeeze.card).toBeGreaterThanOrEqual(112)
+  expect(squeeze.rowInside).toBe(true)
+})
+
+test('the cards are read before the floor the stage keeps for itself', async ({ page }) => {
+  await observe(page)
+  const order = await page.evaluate(() => {
+    const hud = document.querySelector('.hud')
+    const floor = document.querySelector('.stage__floor')
+    const stage = document.querySelector('.stage')
+    if (!hud || !floor || !stage) return null
+    return {
+      floorAfterCards: Boolean(
+        hud.compareDocumentPosition(floor) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+      cardsAfterStage: Boolean(
+        stage.compareDocumentPosition(hud) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+      zoomOnFloor: document.querySelector('.zoom')?.closest('.stage__floor') !== null,
+      mapOnFloor: document.querySelector('.minimap')?.closest('.stage__floor') !== null,
+    }
+  })
+  if (!order) throw new Error('the layers did not render')
+  expect(order).toEqual({
+    floorAfterCards: true,
+    cardsAfterStage: true,
+    zoomOnFloor: true,
+    mapOnFloor: true,
+  })
+
+  // FEAT: antes do primeiro cartão vem o palco em si, e nunca um comando preso ao chão
+  await page.locator('.card--state .card__toggle').focus()
+  await page.keyboard.press('Shift+Tab')
+  const back = await page.evaluate(() => ({
+    role: document.activeElement?.getAttribute('role') ?? '',
+    floor: document.activeElement?.closest('.stage__floor') !== null,
+  }))
+  expect(back).toEqual({ role: 'slider', floor: false })
+
+  // FEAT: e depois do último cartão vêm o zoom e o minimapa, que é onde eles estão na tela
+  await page.getByRole('button', { name: 'Export file' }).focus()
+  await page.keyboard.press('Tab')
+  const forward = await page.evaluate(
+    () => document.activeElement?.closest('.stage__floor') !== null,
+  )
+  expect(forward).toBe(true)
+})
+
+test('the 3d crossing card clears the cards on a desktop and the sheet on a phone', async ({
+  page,
+}) => {
+  test.slow()
+  await page.setViewportSize(WIDE)
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await page.getByRole('button', { name: 'Cross', exact: true }).click()
+  await pickOrigin(page)
+  await page.getByRole('button', { name: 'Knowledge' }).click()
+  await page.getByRole('button', { name: 'A little' }).click()
+  await page.getByRole('button', { name: 'Open the crossing' }).click()
+  await page.getByRole('button', { name: 'Observe' }).click()
+  await expect(page.locator('.scene3d')).toHaveAttribute('data-arcs', '1', { timeout: 10_000 })
+  const crossing = page
+    .getByRole('list', { name: 'Crossings on the currents' })
+    .getByRole('button')
+    .first()
+  await expect(crossing).toBeAttached({ timeout: 10_000 })
+  await crossing.focus()
+  await crossing.press('Enter')
+  await expect(page.getByRole('dialog')).toBeFocused()
+
+  const audit = () =>
+    page.evaluate(() => {
+      const card = document.querySelector('.scene3d__card')?.getBoundingClientRect()
+      const stage = document.querySelector('.stage')?.getBoundingClientRect()
+      if (!card || !stage) return null
+      const visible = (node: Element) =>
+        getComputedStyle(node).display !== 'none' && node.getBoundingClientRect().height > 0
+      return {
+        buried: [...document.querySelectorAll('.hud .card, .hud .notices > *, .sheet')]
+          .filter(visible)
+          .filter((node) => {
+            const other = node.getBoundingClientRect()
+            // FIX: um pixel de arredondamento entre duas bordas encostadas não é sobreposição
+            return (
+              card.left < other.right - 1 &&
+              other.left < card.right - 1 &&
+              card.top < other.bottom - 1 &&
+              other.top < card.bottom - 1
+            )
+          })
+          .map((node) => node.className),
+        inside: card.top >= stage.top - 1 && card.bottom <= stage.bottom + 1,
+      }
+    })
+
+  const wide = await audit()
+  if (!wide) throw new Error('the crossing card did not open')
+  expect(wide.buried).toEqual([])
+  expect(wide.inside).toBe(true)
+
+  await page.setViewportSize(PHONE)
+  await expect(page.locator('.sheet')).toBeVisible()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  const narrow = await audit()
+  if (!narrow) throw new Error('the crossing card left the phone')
+  expect(narrow.buried).toEqual([])
+  expect(narrow.inside).toBe(true)
 })
