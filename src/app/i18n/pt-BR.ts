@@ -70,7 +70,10 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
     'Esta história não se sustenta mais: dois mundos devem um ao outro o que nenhum produziu.',
   'paradox.deadline': 'Colapsa em {years} anos, a menos que se quite {value} em dívidas.',
   'paradox.lastYear': 'Colapsa no ano que vem, a menos que se quite {value} em dívidas.',
+  'paradox.thisYear': 'Colapsa este ano, a menos que se quite {value} em dívidas.',
   'paradox.resolved': 'A dívida foi quitada. A história se sustenta de novo.',
+  'paradox.collapsed':
+    'Esta história colapsou no ano {year}, sob um paradoxo que não conseguiu quitar.',
   'events.title': 'Eventos',
   'events.empty': 'Nenhum evento ainda. Deixe o tempo correr para ver o que surge.',
   'events.ongoing': 'em curso',

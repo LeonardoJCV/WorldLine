@@ -216,13 +216,23 @@
   background: rgb(201 80 30 / 0.16);
 }
 
-.paradox[data-state='relief'] {
+.paradox[data-state='relief'],
+.paradox[data-state='collapse'] {
   display: flex;
   align-items: baseline;
   gap: 10px;
+  font-weight: 600;
+}
+
+.paradox[data-state='relief'] {
   border-color: var(--v-environment);
   background: rgb(31 165 138 / 0.14);
-  font-weight: 600;
+}
+
+/* FEAT: o fim tem o mesmo peso do aviso que o anunciou, e a mesma cor */
+.paradox[data-state='collapse'] {
+  border-color: var(--v-energy);
+  background: rgb(201 80 30 / 0.16);
 }
 
 .paradox__headline {

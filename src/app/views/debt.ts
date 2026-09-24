@@ -1,17 +1,19 @@
 import { totalOwed, type Debt, type DebtKind, type Paradox } from '../../engine/debt.ts'
+import type { EventRecord } from '../../engine/events.ts'
 
 export type DebtTrend = 'rising' | 'falling' | 'steady'
 
 export interface DebtView {
   readonly total: number
   readonly trend: DebtTrend
-  readonly kinds: readonly DebtKind[] // espécies em aberto, para dizer como quitar
-  readonly origins: readonly string[] // de quem se deve, sem repetição
+  readonly kinds: readonly DebtKind[]
+  readonly origins: readonly string[]
 }
 
 export interface ParadoxView {
   readonly kind: Paradox['kind']
-  readonly yearsLeft: number // até o prazo, a partir do ano observado
+  // FEAT: anos até o prazo contados do ano observado, não do presente
+  readonly yearsLeft: number
   readonly owed: number
 }
 
@@ -60,6 +62,12 @@ export function paradoxView(
     yearsLeft: Math.max(0, paradox.deadline - observed),
     owed: totalOwed(debts),
   }
+}
+
+// FEAT: o ano do colapso é o que o motor gravou no evento, não o ano em que o relógio parou
+export function collapseYear(events: readonly EventRecord[]): number | null {
+  const record = events.find((entry) => entry.event === 'collapse')
+  return record === undefined ? null : record.start
 }
 
 const REPAY_HINTS: Record<DebtKind, 'research' | 'production' | 'doctrine'> = {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Debt, Paradox } from '../../engine/debt.ts'
-import { debtView, paradoxView, repayHint } from './debt.ts'
+import type { EventId, EventRecord } from '../../engine/events.ts'
+import { collapseYear, debtView, paradoxView, repayHint } from './debt.ts'
 
 function debt(overrides: Partial<Debt> = {}): Debt {
   return {
@@ -94,5 +95,20 @@ describe('repayHint', () => {
 
   it('gives mixed for more than one open kind', () => {
     expect(repayHint(['knowledge', 'resource'])).toBe('mixed')
+  })
+})
+
+describe('collapseYear', () => {
+  function record(event: EventId, start: number): EventRecord {
+    return { event, start, end: null, causes: [] }
+  }
+
+  it('is null without a collapse on record', () => {
+    expect(collapseYear([])).toBeNull()
+    expect(collapseYear([record('paradox', 79)])).toBeNull()
+  })
+
+  it('takes the year the engine wrote, not the year the clock stopped', () => {
+    expect(collapseYear([record('paradox', 79), record('collapse', 279)])).toBe(279)
   })
 })

@@ -104,12 +104,17 @@ test('lets the deadline pass, labels the ending a collapse and not an extinction
   await installParadox(page)
   await runToCollapse(page)
 
+  // FEAT: o fim de uma história é dito na mesma região viva que passou séculos avisando dele
+  const announcement = page.locator('.paradox[data-state="collapse"]')
+  await expect(announcement).toBeVisible()
+  await expect(announcement).toContainText(/collapsed in year \d+/)
+  await expect(page.locator('.paradox[data-state="warning"]')).toHaveCount(0)
+
   const chip = page.getByRole('button', { name: 'Focus on worldline F' })
   const label = (await chip.textContent()) ?? ''
   const [, year] = /collapsed in (\d+)/.exec(label) ?? []
   expect(year).toBeTruthy()
   await expect(chip).not.toContainText('Extinct in')
-  await expect(page.locator('.paradox')).toHaveCount(0)
   await expect(page.locator('.events__item', { hasText: 'Collapse' })).toBeVisible()
   await expect(page.locator('.events__item', { hasText: 'Extinction' })).toHaveCount(0)
 
