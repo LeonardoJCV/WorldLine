@@ -48,7 +48,9 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
   const previousDebts = useSimulation(
     (s) => s.worlds.find((world) => world.info.id === s.focus)?.previousDebts ?? null,
   )
-  const debt = debtView(debts, previousDebts)
+  const inPast = useSimulation((s) => s.cursor !== null)
+  // FIX: o instantâneo de um ano não carrega dívidas, e a de hoje não vale para o ano observado
+  const debt = inPast ? null : debtView(debts, previousDebts)
 
   return (
     <section className="panel state" aria-labelledby="state-title">

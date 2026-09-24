@@ -107,11 +107,10 @@ export function CrossPanel() {
   })
   const sameYearDoctrine =
     world !== null && crossCarriesPreviousAllocation(kind, rawYear, world.decisions)
-  // FEAT: a dívida do destino já vem pronta do worker; só explica, nunca recalcula o custo maior
-  const destinationDebt = debtView(
-    worlds.find((candidate) => candidate.info.id === focus)?.debts ?? NO_DEBTS,
-    null,
-  )
+  // FIX: a dívida do destino é a de hoje; no passado cala-se, para não dizê-la de um ano que não a tinha
+  const destinationDebt = inPast
+    ? null
+    : debtView(worlds.find((candidate) => candidate.info.id === focus)?.debts ?? NO_DEBTS, null)
   const quote =
     source !== null && destination !== null
       ? crossQuote({ kind, dose: carried, origin: source, destination })

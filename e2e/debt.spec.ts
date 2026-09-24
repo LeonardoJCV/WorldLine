@@ -33,6 +33,15 @@ test('shows what a world owes after a crossing lands', async ({ page }) => {
   await expect(debt).toContainText('owed to A')
   // FEAT: a âncora é o ano sem dívida logo antes da travessia chegar, então o primeiro ano é "growing"
   await expect(debt).toContainText('growing')
+
+  // FIX: o ano observado não traz dívidas consigo, então a linha cala no passado em vez de datar mal a de hoje
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  await expect(page.locator('.panel.state .panel__title')).toHaveText('State in year 0000')
+  await expect(debt).toHaveCount(0)
+  await history.press('End')
+  await expect(debt).toBeVisible()
 })
 
 test('has no causal debt line on a worldline that never crossed', async ({ page }) => {

@@ -50,7 +50,12 @@ export function WorldsStrip() {
                 type="button"
                 className="worlds__chip"
                 aria-pressed={id === focus}
-                aria-label={t('worlds.focus', { id })}
+                // FIX: o total mora no nome do próprio botão, senão quem anda de Tab nunca o ouve
+                aria-label={
+                  debt
+                    ? t('worlds.focusDebt', { id, value: formatCompact(debt.total, locale) })
+                    : t('worlds.focus', { id })
+                }
                 data-origin={isOrigin ? 'true' : undefined}
                 onClick={() => setFocus(id)}
               >
@@ -78,17 +83,16 @@ export function WorldsStrip() {
                     )
                   )}
                 </span>
+                {debt && (
+                  <span
+                    className="worlds__debt"
+                    aria-hidden="true"
+                    title={t('worlds.debt', { value: formatCompact(debt.total, locale) })}
+                  >
+                    ◇
+                  </span>
+                )}
               </button>
-              {debt && (
-                // FEAT: marca discreta — só a forma denuncia a dívida, o total mora no nome acessível
-                <span
-                  className="worlds__debt"
-                  role="img"
-                  aria-label={t('worlds.debt', { value: formatCompact(debt.total, locale) })}
-                >
-                  ◇
-                </span>
-              )}
               {inParadox && (
                 <span className="worlds__paradoxMark">
                   <span aria-hidden="true">▲</span> {t('worlds.paradox')}

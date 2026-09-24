@@ -174,6 +174,7 @@ export const en = {
   'worlds.debt': 'owes {value}',
   'worlds.paradox': 'in paradox',
   'worlds.focus': 'Focus on worldline {id}',
+  'worlds.focusDebt': 'Focus on worldline {id}, owes {value}',
   'worlds.origin': 'From worldline {id}, use as the crossing origin',
   'worlds.remove': 'Remove worldline {id}',
   'worlds.confirm': 'Remove {id} and every worldline that branched from it?',
