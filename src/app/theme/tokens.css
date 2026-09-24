@@ -15,9 +15,36 @@
   --v-economy: #c9aeff;
   --v-environment: #1fa58a;
   --font: 'Archivo Variable', system-ui, sans-serif;
+
+  /* FEAT: escala de espaçamento — degraus para margin/padding/gap, do mais apertado ao mais folgado */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* FEAT: escala tipográfica — rótulos e texto auxiliar menores que o corpo */
+  --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
+  /* FEAT: tamanho do corpo do texto — não mexer no valor, é a referência que não pode deslocar */
   --text-base: 0.9375rem;
+  /* FEAT: destaques e cabeçalhos de seção acima do corpo */
   --text-lg: 1.25rem;
+  /* FEAT: ênfase maior que um cabeçalho comum, abaixo do número de destaque da tela */
+  --text-xl: 1.5rem;
+  /* FEAT: o número de maior destaque na tela (o ano) — mesmo tamanho que já tinha, agora nomeado */
+  --text-display: clamp(2.5rem, 5vw, 4.5rem);
+
+  /* FEAT: duração para microinterações (hover, foco, toggles pequenos) */
+  --motion-fast: 120ms;
+  /* FEAT: duração para transições maiores (painéis, entradas/saídas de tela) */
+  --motion-slow: 240ms;
+  /* FEAT: curva de aceleração única para toda transição nova, para não variar caso a caso */
+  --ease: ease-out;
+
   --radius: 6px;
   --gutter: clamp(16px, 2.5vw, 32px);
 }
