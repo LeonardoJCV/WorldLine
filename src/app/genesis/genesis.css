@@ -2,16 +2,16 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   align-items: center;
-  gap: 48px;
+  gap: var(--space-8);
   min-height: 100dvh;
-  padding: clamp(24px, 4vw, 56px) var(--gutter);
+  padding: clamp(var(--space-6), 4vw, 56px) var(--gutter);
   background:
     radial-gradient(90% 70% at 75% 50%, rgb(58 42 107 / 0.5), transparent 65%), var(--void);
 }
 
 .genesis__intro {
   display: grid;
-  gap: 16px;
+  gap: var(--space-5);
   max-width: 36rem;
 }
 
@@ -33,18 +33,18 @@
 
 .genesis__form {
   display: grid;
-  gap: 8px;
+  gap: var(--space-3);
 }
 
 .genesis__field {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   color: var(--dim);
   font-size: var(--text-sm);
 }
 
 .genesis__field input {
-  padding: 10px 12px;
+  padding: var(--space-4);
   background: rgb(10 11 30 / 0.6);
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -67,12 +67,12 @@
 .genesis__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
 }
 
 .genesis__actions button {
-  padding: 10px 16px;
+  padding: var(--space-4) var(--space-5);
   background: transparent;
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -93,7 +93,7 @@
 .genesis__traits dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 24px;
+  gap: var(--space-3) var(--space-6);
   margin: 0;
 }
 
@@ -139,7 +139,7 @@
 
 .library__list {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -152,8 +152,8 @@
     'name open delete'
     'meta open delete';
   align-items: center;
-  gap: 2px 8px;
-  padding: 6px 0;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) 0;
   border-bottom: 1px solid rgb(58 42 107 / 0.6);
 }
 
@@ -164,12 +164,12 @@
 .library__meta {
   grid-area: meta;
   color: var(--dim);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .library__item button,
 .library__import {
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-4);
   background: transparent;
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -187,7 +187,7 @@
 
 .library__import {
   display: inline-block;
-  margin-top: 8px;
+  margin-top: var(--space-3);
 }
 
 .library__import input {
