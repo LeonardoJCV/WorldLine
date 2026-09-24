@@ -110,13 +110,17 @@ test('lets the deadline pass, labels the ending a collapse and not an extinction
   await expect(announcement).toContainText(/collapsed in year \d+/)
   await expect(page.locator('.paradox[data-state="warning"]')).toHaveCount(0)
 
-  const chip = page.getByRole('button', { name: 'Focus on worldline F' })
-  const label = (await chip.textContent()) ?? ''
-  const [, year] = /collapsed in (\d+)/.exec(label) ?? []
-  expect(year).toBeTruthy()
-  await expect(chip).not.toContainText('Extinct in')
-  await expect(page.locator('.events__item', { hasText: 'Collapse' })).toBeVisible()
+  // FIX: o ano do colapso é o que o motor gravou no evento, e a tira tem de repetir esse mesmo ano
+  const collapse = page.locator('.events__item', { hasText: 'Collapse' })
+  await expect(collapse).toBeVisible()
+  const year = ((await collapse.locator('.events__year').textContent()) ?? '').trim()
+  expect(year).toMatch(/^\d{4}$/)
+  await expect(announcement).toContainText(`collapsed in year ${year}`)
   await expect(page.locator('.events__item', { hasText: 'Extinction' })).toHaveCount(0)
+
+  const chip = page.getByRole('button', { name: 'Focus on worldline F' })
+  await expect(chip).toContainText(`Collapsed in ${year}`)
+  await expect(chip).not.toContainText('Extinct in')
 
   // FEAT: o colapso tem de voltar do endereço, não do que sobrou na memória
   await expect(page).toHaveURL(/#\/m\//)
@@ -126,7 +130,7 @@ test('lets the deadline pass, labels the ending a collapse and not an extinction
 
   const reopened = page.getByRole('button', { name: 'Focus on worldline F' })
   await reopened.click()
-  await expect(reopened).toHaveText(new RegExp(`collapsed in ${year}\\b`))
+  await expect(reopened).toHaveText(new RegExp(`Collapsed in ${year}\\b`))
   await expect(page.locator('.paradox')).toHaveCount(0)
   await expect(page.locator('.events__item', { hasText: 'Collapse' })).toBeVisible()
 })

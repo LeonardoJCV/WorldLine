@@ -170,7 +170,7 @@ export const en = {
   'worlds.branch': 'From {parent}, year {year}',
   'worlds.distance': 'Distance {value}',
   'worlds.extinct': 'Extinct in {year}',
-  'worlds.collapsed': 'collapsed in {year}',
+  'worlds.collapsed': 'Collapsed in {year}',
   'worlds.debt': 'owes {value}',
   'worlds.paradox': 'in paradox',
   'worlds.focus': 'Focus on worldline {id}',

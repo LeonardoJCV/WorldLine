@@ -170,7 +170,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'worlds.branch': 'De {parent}, ano {year}',
   'worlds.distance': 'Distância {value}',
   'worlds.extinct': 'Extinta em {year}',
-  'worlds.collapsed': 'colapsada em {year}',
+  'worlds.collapsed': 'Colapsada em {year}',
   'worlds.debt': 'deve {value}',
   'worlds.paradox': 'em paradoxo',
   'worlds.focus': 'Focar a realidade {id}',

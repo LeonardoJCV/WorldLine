@@ -6,7 +6,7 @@ import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import type { WorldView } from '../sim/store.ts'
 import { crossOrigins } from './cross.ts'
-import { debtView } from './debt.ts'
+import { collapseYear, debtView } from './debt.ts'
 
 function distanceToOrigin(world: WorldView, worlds: readonly WorldView[]): number | null {
   const origin = worlds.find((candidate) => candidate.info.id === world.info.parent)
@@ -66,7 +66,9 @@ export function WorldsStrip() {
                   ) : collapsed ? (
                     <span>
                       <span aria-hidden="true">▲ </span>
-                      {t('worlds.collapsed', { year: formatYear(world.present.tick) })}
+                      {t('worlds.collapsed', {
+                        year: formatYear(collapseYear(world.events) ?? world.present.tick),
+                      })}
                     </span>
                   ) : (
                     distance !== null && (
