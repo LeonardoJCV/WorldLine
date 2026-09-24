@@ -42,7 +42,8 @@ export function WorldsStrip() {
           const canPickOrigin = usable.some((candidate) => candidate.info.id === id)
           // FEAT: o total já vem pronto do motor; a tira só decide se mostra o selo, não quanto se deve
           const debt = debtView(world.debts, world.previousDebts)
-          const inParadox = world.paradox !== null
+          // FIX: colapso é o prazo do paradoxo vencido — depois dele não há mais contagem em curso
+          const inParadox = world.present.status === 'running' && world.paradox !== null
           return (
             <li key={id} className="worlds__item">
               <button
@@ -63,7 +64,10 @@ export function WorldsStrip() {
                   {extinct ? (
                     <span>{t('worlds.extinct', { year: formatYear(world.present.tick) })}</span>
                   ) : collapsed ? (
-                    <span>{t('worlds.collapsed', { year: formatYear(world.present.tick) })}</span>
+                    <span>
+                      <span aria-hidden="true">▲ </span>
+                      {t('worlds.collapsed', { year: formatYear(world.present.tick) })}
+                    </span>
                   ) : (
                     distance !== null && (
                       <span>
