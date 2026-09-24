@@ -245,6 +245,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'cross.doctrineSameYear':
     'Uma decisão tomada neste ano só vale a partir do próximo, então isto carrega a alocação que {id} seguia antes dela.',
   'cross.carries.people': 'Cerca de {value} pessoas deixam {id} e chegam aqui.',
+  'cross.indebted': '{id} já deve {value}, o que torna chegar até lá mais caro.',
   'cross.open': 'Abrir a travessia',
   'cross.openFromYear': 'Cruzar no ano {year}',
   'cross.done': 'Chegou de {id}: {kind}.',

@@ -246,6 +246,7 @@ export const en = {
   'cross.doctrineSameYear':
     'A decision made this year only takes effect next year, so this carries the allocation {id} was following before it.',
   'cross.carries.people': 'About {value} people leave {id} and arrive here.',
+  'cross.indebted': '{id} already owes {value}, which makes reaching it dearer.',
   'cross.open': 'Open the crossing',
   'cross.openFromYear': 'Cross in year {year}',
   'cross.done': '{kind} arrived from {id}.',

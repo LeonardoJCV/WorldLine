@@ -94,6 +94,23 @@ describe('buildCausalTree', () => {
     })
   })
 
+  it('traces a collapse back through the still-active paradox to the crossing that named it', () => {
+    // FEAT: espelha o que o motor grava de verdade (events.test.ts, "paradox and collapse")
+    const records = [
+      record('paradox', 90, [
+        condition('paradoxActive', 1),
+        { kind: 'crossing', tick: 5, crossing: 'resource' },
+      ]),
+      record('collapse', 290, [{ kind: 'event', record: 0 }]),
+    ]
+    const tree = buildCausalTree(records, 1)
+    const crossing = tree.nodes.find((n) => n.kind === 'crossing')
+    expect(crossing).toMatchObject({ cause: { tick: 5, crossing: 'resource' } })
+    const paradox = tree.nodes.find((n) => n.kind === 'event' && n.record === 0)
+    expect(paradox?.parent).toBe('e1')
+    expect(crossing?.parent).toBe(paradox?.key)
+  })
+
   it('tolerates causes that point to missing records', () => {
     const tree = buildCausalTree([record('famine', 40, [{ kind: 'event', record: 99 }])], 0)
     expect(tree.nodes.filter((n) => n.kind === 'event')).toHaveLength(2)

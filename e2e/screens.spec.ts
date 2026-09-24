@@ -207,6 +207,18 @@ test('worlds collapsed', async ({ page }) => {
   await strip.screenshot({ path: 'screens/worlds-collapsed.png' })
 })
 
+test('paradox causal', async ({ page }) => {
+  test.slow()
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installParadox(page)
+  await runToCollapse(page)
+  await page.locator('.events__item', { hasText: 'Collapse' }).first().click()
+  await expect(page.locator('.causal__node[data-kind="crossing"]')).toBeVisible()
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'screens/paradox-causal.png' })
+})
+
 test('cross panel mobile', async ({ page }) => {
   await enterCross(page, 390, 844)
   const overflow = await page.evaluate(

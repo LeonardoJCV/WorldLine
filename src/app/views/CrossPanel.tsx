@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CROSSING_KINDS, type CrossingKind, type Dose } from '../../engine/crossing.ts'
+import type { Debt } from '../../engine/debt.ts'
 import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
 import { formatCompact, formatDecimal, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
@@ -12,6 +13,10 @@ import {
   DOSES_FOR,
   worldEnded,
 } from './cross.ts'
+import { debtView } from './debt.ts'
+
+// FIX: referência estável para quando o foco ainda não tem dívida nenhuma
+const NO_DEBTS: readonly Debt[] = []
 
 interface Done {
   readonly kind: CrossingKind
@@ -102,6 +107,11 @@ export function CrossPanel() {
   })
   const sameYearDoctrine =
     world !== null && crossCarriesPreviousAllocation(kind, rawYear, world.decisions)
+  // FEAT: a dívida do destino já vem pronta do worker; só explica, nunca recalcula o custo maior
+  const destinationDebt = debtView(
+    worlds.find((candidate) => candidate.info.id === focus)?.debts ?? NO_DEBTS,
+    null,
+  )
   const quote =
     source !== null && destination !== null
       ? crossQuote({ kind, dose: carried, origin: source, destination })
@@ -212,6 +222,14 @@ export function CrossPanel() {
                 id: world.info.id,
               })}
           </p>
+          {destinationDebt !== null && (
+            <p className="cross__note">
+              {t('cross.indebted', {
+                id: focus,
+                value: formatCompact(destinationDebt.total, locale),
+              })}
+            </p>
+          )}
           {sameYearDoctrine && (
             <p className="cross__note">{t('cross.doctrineSameYear', { id: world.info.id })}</p>
           )}
