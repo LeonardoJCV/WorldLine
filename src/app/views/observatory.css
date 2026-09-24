@@ -393,6 +393,7 @@
   grid-template-columns: minmax(280px, 34rem) minmax(80px, 1fr) minmax(230px, 21rem);
 }
 
+/* FIX: a regra global só encurta a duração; sem isto a transição ainda corre e o valor computado atrasa um quadro */
 @media (prefers-reduced-motion: reduce) {
   .hud {
     transition: none;
@@ -542,7 +543,7 @@
   gap: var(--space-3);
   min-width: 0;
   overflow: hidden;
-  /* FEAT: a altura do cartão anima por uma pista de grade — funciona mesmo com o conteúdo já fora do DOM */
+  /* FEAT: a altura anima pela pista de grade enquanto o conteúdo continua montado; ele sai do DOM no fim */
   transition:
     grid-template-rows var(--motion-fast) var(--ease),
     gap var(--motion-fast) var(--ease);
@@ -561,7 +562,7 @@
 
 .card__title {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -680,7 +681,7 @@
 .worlds__remove,
 .worlds__confirm button,
 .worlds__origin {
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-4);
   background: transparent;
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -1005,10 +1006,6 @@ button.causal__node:hover {
   border-radius: var(--radius);
   font-size: var(--text-sm);
   cursor: pointer;
-}
-
-.link {
-  padding: var(--space-1) var(--space-3);
 }
 
 .allocation__actions button:disabled {

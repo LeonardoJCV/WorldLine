@@ -44,25 +44,20 @@ test('the stage takes the whole screen below the top bar', async ({ page }) => {
   expect(hud.bottom).toBeLessThanOrEqual(stage.bottom + 1)
 })
 
-test('every card section announces its own title, not just "section"', async ({ page }) => {
+test('every card announces the panel it holds, not the button that folds it', async ({ page }) => {
   await observe(page)
   await page.getByRole('button', { name: 'Intervene' }).click()
-  const names = await page.evaluate(() =>
-    [...document.querySelectorAll('.hud .card')].map((card) => {
-      const labelledby = card.getAttribute('aria-labelledby')
-      const label = labelledby ? document.getElementById(labelledby)?.textContent : null
-      return { className: card.className, label }
-    }),
-  )
-  expect(names.length).toBeGreaterThan(0)
-  for (const { className, label } of names) {
-    expect(label, `${className} has no accessible name`).toBeTruthy()
-  }
-  // FIX: o nome do cartão é o do próprio título — cada cartão soa diferente para o leitor de tela
-  const state = names.find(({ className }) => className.includes('card--state'))
-  expect(state?.label).toMatch(/^State in year \d{4}$/)
-  const allocation = names.find(({ className }) => className.includes('card--allocation'))
-  expect(allocation?.label).toBe('Allocation of effort')
+  // FIX: o nome sai da árvore de acessibilidade, onde o aria-label do botão contaria se fosse ele o rótulo
+  const hud = page.locator('.hud')
+  await expect(hud.getByRole('group', { name: 'Events', exact: true })).toBeVisible()
+  await expect(hud.getByRole('group', { name: 'Allocation of effort', exact: true })).toBeVisible()
+  await expect(hud.getByRole('group', { name: /^State in year \d{4}$/ })).toBeVisible()
+  await expect(hud.getByRole('group', { name: /Collapse|Expand/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Collapse Events' }).click()
+  await expect(hud.getByRole('group', { name: 'Events', exact: true })).toBeVisible()
+  // FIX: cartão é grupo, não marco de página; a lista de regiões fica com os painéis que já a tinham
+  await expect(hud.locator('[role="group"]')).toHaveCount(await hud.locator('.card').count())
+  await expect(page.getByRole('region', { name: /Collapse|Expand/ })).toHaveCount(0)
 })
 
 test('the canvas measures the whole stage', async ({ page }) => {
@@ -484,6 +479,30 @@ test('with motion turned down the sheet changes height without sliding', async (
   expect(moment.ratio).toBeCloseTo(0.85, 1)
 })
 
+test('a card folds by sliding its height down, not by snapping', async ({ page }) => {
+  await observe(page)
+  // FEAT: só aqui o passo fica lento, para a queda não caber entre dois quadros da máquina
+  await page.addStyleTag({ content: '.card { --motion-fast: 2400ms }' })
+  const card = page.locator('.card--events')
+  const panel = page.locator('.panel.events')
+  const tall = (await card.boundingBox())?.height ?? 0
+  await page.getByRole('button', { name: 'Collapse Events' }).click()
+  const samples: { height: number; mounted: number }[] = []
+  for (let i = 0; i < 14; i++) {
+    samples.push({ height: (await card.boundingBox())?.height ?? 0, mounted: await panel.count() })
+    await page.waitForTimeout(150)
+  }
+  // FEAT: terminada a animação o conteúdo sai do DOM, fora do foco e da leitura
+  await expect(panel).toHaveCount(0)
+  const short = (await card.boundingBox())?.height ?? 0
+  expect(short).toBeLessThan(tall / 2)
+  // FEAT: em pleno meio da queda o conteúdo ainda está montado; sem ele só os 8px do vão animariam
+  const sliding = samples.filter(
+    (sample) => sample.mounted === 1 && sample.height > short + 16 && sample.height < tall - 16,
+  )
+  expect(sliding.length, `${tall} -> ${short}: ${JSON.stringify(samples)}`).toBeGreaterThan(0)
+})
+
 test('with motion turned down a card still folds, just without a height transition', async ({
   page,
 }) => {
@@ -623,11 +642,7 @@ test('the minimap and the zoom share the floor at tablet width instead of coveri
   expect(band.reach).toEqual([true, true, true])
 })
 
-// FIX: ZOOM_BAND e MAP_BAND em Observatory.tsx (e o corte em NARROW no mesmo arquivo e em
-// current/geometry.ts) são cópias à mão da mesma geometria que o CSS expressa em --floor e nos
-// dois media queries de largura; não há como um único lugar guiar os dois sem medir o DOM em
-// tempo real (mudaria o comportamento) ou sem uma ferramenta de build nova (fora do orçamento).
-// Estes dois testes falham se qualquer um dos lados se mover sem o outro.
+// FIX: ZOOM_BAND e MAP_BAND copiam à mão a geometria do CSS; estes testes falham nos dois sentidos
 const ZOOM_BAND = 44
 const MAP_BAND = 92
 
@@ -655,9 +670,10 @@ test('the reserved zoom band covers what the floor formula actually places on a 
   const reserve = await floorReserve(page, '.zoom')
   if (reserve === null) throw new Error('the phone floor did not render')
   expect(reserve).toBeLessThanOrEqual(ZOOM_BAND)
+  expect(reserve).toBeGreaterThan(ZOOM_BAND - 16)
 })
 
-test('the reserved map band covers what the floor formula actually places at tablet width', async ({
+test('the band reserved at tablet width matches where the zoom sits above the minimap', async ({
   page,
 }) => {
   await useGraphics(page, '2d')
@@ -665,9 +681,12 @@ test('the reserved map band covers what the floor formula actually places at tab
   // FEAT: o minimapa só aparece depois de MIN_SPAN*2 anos de história para mostrar
   await worldAtYear(page, 45)
   await expect(page.locator('.minimap')).toBeVisible()
-  const reserve = await floorReserve(page, '.zoom')
-  if (reserve === null) throw new Error('the tablet floor did not render')
+  const zoom = await floorReserve(page, '.zoom')
+  const map = await floorReserve(page, '.minimap')
+  if (zoom === null || map === null) throw new Error('the tablet floor did not render')
+  const reserve = Math.max(zoom, map)
   expect(reserve).toBeLessThanOrEqual(MAP_BAND)
+  expect(reserve).toBeGreaterThan(MAP_BAND - 16)
 })
 
 test('the map/zoom split falls at the same width in the CSS breakpoint and the JS band switch', async ({
