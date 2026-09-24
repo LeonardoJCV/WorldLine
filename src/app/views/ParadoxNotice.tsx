@@ -4,7 +4,7 @@ import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
 import { formatCompact, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
-import { collapseYear, paradoxView, repayHint } from './debt.ts'
+import { endingYear, paradoxView, repayHint } from './debt.ts'
 
 // FEAT: o alívio dura tempo de leitura, não anos simulados — a ×256 alguns anos passariam num piscar
 const RELIEF_MS = 8000
@@ -46,7 +46,7 @@ export function ParadoxNotice() {
     return () => clearTimeout(timer)
   }, [announced])
 
-  const collapsed = collapseYear(events)
+  const collapsed = endingYear(events, 'collapse')
   if (announced === 'collapse' && collapsed !== null) {
     return (
       <p className="paradox" data-state="collapse">

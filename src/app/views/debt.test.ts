@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Debt, Paradox } from '../../engine/debt.ts'
 import type { EventId, EventRecord } from '../../engine/events.ts'
-import { collapseYear, debtView, paradoxView, repayHint } from './debt.ts'
+import { debtView, endingYear, paradoxView, repayHint } from './debt.ts'
 
 function debt(overrides: Partial<Debt> = {}): Debt {
   return {
@@ -98,17 +98,19 @@ describe('repayHint', () => {
   })
 })
 
-describe('collapseYear', () => {
+describe('endingYear', () => {
   function record(event: EventId, start: number): EventRecord {
     return { event, start, end: null, causes: [] }
   }
 
-  it('is null without a collapse on record', () => {
-    expect(collapseYear([])).toBeNull()
-    expect(collapseYear([record('paradox', 79)])).toBeNull()
+  it('is null without that ending on record', () => {
+    expect(endingYear([], 'collapse')).toBeNull()
+    expect(endingYear([record('paradox', 79)], 'collapse')).toBeNull()
+    expect(endingYear([record('collapse', 279)], 'extinction')).toBeNull()
   })
 
   it('takes the year the engine wrote, not the year the clock stopped', () => {
-    expect(collapseYear([record('paradox', 79), record('collapse', 279)])).toBe(279)
+    expect(endingYear([record('paradox', 79), record('collapse', 279)], 'collapse')).toBe(279)
+    expect(endingYear([record('famine', 900), record('extinction', 1165)], 'extinction')).toBe(1165)
   })
 })

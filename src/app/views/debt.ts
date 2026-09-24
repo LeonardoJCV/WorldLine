@@ -64,9 +64,12 @@ export function paradoxView(
   }
 }
 
-// FEAT: o ano do colapso é o que o motor gravou no evento, não o ano em que o relógio parou
-export function collapseYear(events: readonly EventRecord[]): number | null {
-  const record = events.find((entry) => entry.event === 'collapse')
+// FEAT: o ano do fim é o que o motor gravou no evento; o presente fica parado no ano seguinte
+export function endingYear(
+  events: readonly EventRecord[],
+  ending: 'collapse' | 'extinction',
+): number | null {
+  const record = events.find((entry) => entry.event === ending)
   return record === undefined ? null : record.start
 }
 
