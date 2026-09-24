@@ -6,6 +6,7 @@ import { EVENTS, worldMetrics } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
 import {
+  COLONY_CAPACITY,
   COLONY_SEED_POP,
   COLONY_SELF,
   COLONY_UPKEEP,
@@ -20,7 +21,7 @@ import {
 } from './params.ts'
 import { step } from './step.ts'
 import { Era, VARIABLES, type Allocation, type WorldState } from './state.ts'
-import { colonisable, system } from './system.ts'
+import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
 
 const { world, state } = genesis(482913)
@@ -566,19 +567,84 @@ describe('inheritance', () => {
     ])
   })
 
-  it('happens once, and the body left behind never becomes home again', () => {
-    let current = step(doomed([standing()]), world, 0).state
-    let records = 0
-    const seen: string[] = []
+  // FEAT: a semente 5 tem dois corpos que comportam um herdeiro, então a segunda herança é possível
+  const twin = genesis(5)
+  const pair = system(twin.world.seed)
+    .filter(colonisable)
+    .filter((body) => COLONY_CAPACITY * body.habitability >= COLONY_SEED_POP)
+    .sort((a, b) => b.habitability - a.habitability)
+  const richer = pair[0] as Body
+  const poorer = pair[1] as Body
+  const settler = (body: number, record: number, population = 5e5): Colony => ({
+    body,
+    founded: 100,
+    population,
+    support: 1,
+    record,
+  })
+  const doomedTwin = (
+    colonies: readonly Colony[],
+    overrides: Partial<WorldState> = {},
+  ): WorldState =>
+    makeState({
+      tick: 2400,
+      eras: Era.space,
+      energy: 9,
+      technology: 95,
+      economy: 9,
+      population: 500,
+      food: 1e6,
+      colonies,
+      ...overrides,
+    })
+
+  it('loses the sibling colonies with the world that paid for them, and writes each loss down', () => {
+    expect(pair).toHaveLength(2)
+    const result = step(
+      doomedTwin([settler(richer.index, 4), settler(poorer.index, 6, 3e5)]),
+      twin.world,
+      30,
+    )
+    expect(events(result)).toContain('inheritance')
+    expect(result.state.home).toBe(richer.index)
+    expect(result.state.colonies).toEqual([])
+    // FEAT: só a irmã se perde; a herdeira não é uma colônia perdida, é a casa nova
+    expect(result.started.filter((record) => record.event === 'colony_lost')).toEqual([
+      { event: 'colony_lost', start: 2400, end: 2400, causes: [{ kind: 'event', record: 6 }] },
+    ])
+  })
+
+  it('happens once for each world that ends, and the body left behind never becomes home again', () => {
+    const moved = step(doomedTwin([settler(richer.index, 4)]), twin.world, 0)
+    expect(moved.started.filter((record) => record.event === 'inheritance')).toHaveLength(1)
+    expect(moved.state.home).toBe(richer.index)
+
+    let current = moved.state
+    let records = moved.started.length
     for (let year = 0; year < 300 && current.status === 'running'; year++) {
-      const result = step(current, world, records)
+      const result = step(current, twin.world, records)
       records += result.started.length
-      seen.push(...result.started.map((record) => record.event))
+      const seen = result.started.map((record) => record.event)
+      const moves = seen.filter((event) => event === 'inheritance')
+      // FEAT: a história só muda de casa no ano em que um mundo acaba, e nunca duas vezes num ano
+      expect(moves.length).toBeLessThanOrEqual(1)
+      if (moves.length === 1) {
+        expect(seen.some((event) => event === 'extinction' || event === 'collapse')).toBe(true)
+      }
       current = result.state
-      expect(current.home).toBe(best.index)
-      expect(current.colonies.some((colony) => colony.body === best.index)).toBe(false)
+      expect(current.colonies.some((colony) => colony.body === richer.index)).toBe(false)
     }
-    expect(seen).not.toContain('inheritance')
     expect(current.status).toBe('running')
+    expect(current.home).toBe(richer.index)
+
+    // FEAT: sobreviver a um mundo não gasta o direito de sobreviver ao seguinte
+    const again = step(
+      doomedTwin([settler(poorer.index, 9, 3e5)], { home: richer.index }),
+      twin.world,
+      0,
+    )
+    expect(again.started.filter((record) => record.event === 'inheritance')).toHaveLength(1)
+    expect(again.state.status).toBe('running')
+    expect(again.state.home).toBe(poorer.index)
   })
 })

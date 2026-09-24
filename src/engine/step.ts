@@ -196,9 +196,13 @@ export function step(
   )
   const causes: Cause[] = [{ kind: 'event', record: successor.record }]
   if (terminal >= 0) causes.unshift({ kind: 'event', record: first + terminal })
+  // FEAT: as irmãs se perdem com o mundo que as pagava, e a história do mundo registra cada uma
+  const orphans = ending.colonies
+    .filter((colony) => colony.body !== successor.body)
+    .map((colony) => moment('colony_lost', s.tick, [{ kind: 'event', record: colony.record }]))
   return {
     state: inherit(ending, successor, system(world.seed)[successor.body]),
-    started: [...started, moment('inheritance', s.tick, causes)],
+    started: [...started, ...orphans, moment('inheritance', s.tick, causes)],
     ended: outcome.ended,
   }
 }
