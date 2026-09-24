@@ -64,7 +64,7 @@
 .surface__hour {
   left: var(--gutter);
   bottom: 60px;
-  padding: var(--space-1) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: rgba(10, 11, 30, 0.7);
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -80,7 +80,7 @@
 
 .surface__levels button,
 .surface__exit {
-  padding: var(--space-1) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: rgba(10, 11, 30, 0.7);
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -229,7 +229,7 @@
   width: min(320px, 90%);
   max-height: calc(100% - 128px);
   overflow-y: auto;
-  padding: var(--space-5);
+  padding: var(--space-4);
   background: var(--nebula);
   border: 1px solid var(--haze);
   border-radius: var(--radius);
@@ -238,8 +238,9 @@
 }
 
 .surface__card h2 {
-  margin: 0 var(--space-7) var(--space-4) 0;
-  font-size: var(--text-lg);
+  margin: 0 var(--space-7) var(--space-3) 0;
+  font-size: var(--text-base);
+  font-weight: 600;
 }
 
 .surface__card h3 {

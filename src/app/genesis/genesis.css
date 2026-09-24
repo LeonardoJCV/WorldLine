@@ -169,7 +169,7 @@
 
 .library__item button,
 .library__import {
-  padding: var(--space-1) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: transparent;
   border: 1px solid var(--haze);
   border-radius: var(--radius);
