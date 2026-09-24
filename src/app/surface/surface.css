@@ -298,6 +298,26 @@
   cursor: pointer;
 }
 
+/* FIX: no celular o painel de bordo sai de cima do palco, e os comandos voltam aos cantos, onde cabem */
+@media (max-width: 900px) {
+  .surface__levels {
+    right: auto;
+    left: var(--gutter);
+  }
+
+  .surface__exit {
+    left: auto;
+    right: var(--gutter);
+  }
+}
+
+/* FIX: a ficha para acima da faixa de baixo, para não voltar a disputar o canto com um cartão */
+@media (min-width: 641px) {
+  .stage[data-lens='planet'] .surface__card {
+    max-height: calc(100% - 290px);
+  }
+}
+
 @media (max-width: 640px) {
   .surface__card {
     top: auto;

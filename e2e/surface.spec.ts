@@ -297,3 +297,134 @@ test('keeps the planet open while switching worlds', async ({ page }) => {
     'true',
   )
 })
+
+async function auditCard(page: import('@playwright/test').Page) {
+  const audit = await page.evaluate(() => {
+    const node = document.querySelector('.surface__card')
+    const stage = document.querySelector('.stage')
+    if (!node || !stage) return null
+    const card = node.getBoundingClientRect()
+    const board = stage.getBoundingClientRect()
+    const reaches = (x: number, y: number) => {
+      const found = document.elementFromPoint(x, y)
+      return found !== null && found.closest('.surface__card') !== null
+    }
+    const visible = (n: Element) =>
+      getComputedStyle(n).display !== 'none' && n.getBoundingClientRect().height > 0
+    return {
+      buried: [...document.querySelectorAll('.hud .card')]
+        .filter(visible)
+        .filter((n) => {
+          const other = n.getBoundingClientRect()
+          return (
+            card.left < other.right &&
+            other.left < card.right &&
+            card.top < other.bottom &&
+            other.top < card.bottom
+          )
+        })
+        .map((n) => n.className),
+      inside:
+        card.top >= board.top - 1 &&
+        card.bottom <= board.bottom + 1 &&
+        card.left >= board.left - 1 &&
+        card.right <= board.right + 1,
+      corners: [
+        reaches((card.left + card.right) / 2, (card.top + card.bottom) / 2),
+        reaches(card.right - 22, card.top + 22),
+        reaches(card.left + 4, card.top + 4),
+        reaches(card.right - 4, card.bottom - 4),
+      ],
+      markers: [...document.querySelectorAll('.surface__micro')].map((n) => {
+        const mark = n.getBoundingClientRect()
+        const found = document.elementFromPoint(
+          (mark.left + mark.right) / 2,
+          (mark.top + mark.bottom) / 2,
+        )
+        return found === null || found.closest('.hud') === null
+      }),
+    }
+  })
+  if (!audit) throw new Error('the planet card is not open')
+  return audit
+}
+
+test("keeps the planet's own card clear of the floating cards", async ({ page }) => {
+  test.slow()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await page.getByRole('button', { name: 'Continent' }).click()
+  // FEAT: dentro do planeta a lista dos rumos sai; o estado e as ações ficam
+  await expect(page.locator('.card--events')).toBeHidden()
+  await expect(page.locator('.card--causal')).toBeHidden()
+  await expect(page.locator('.card--state')).toBeVisible()
+  await expect(page.locator('.card--actions')).toBeVisible()
+
+  const city = page.locator('.surface__city').first()
+  await expect(city).toBeVisible({ timeout: 15_000 })
+  await city.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  const audit = await auditCard(page)
+  expect(audit.buried).toEqual([])
+  expect(audit.inside).toBe(true)
+  expect(audit.corners).toEqual([true, true, true, true])
+  expect(audit.markers.every(Boolean)).toBe(true)
+  await page.getByRole('button', { name: 'Close' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('keeps the microevent card and its markers clear of the floating cards', async ({ page }) => {
+  test.slow()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await expect
+    .poll(async () => Number(await page.getByTestId('year').textContent()), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(300)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const current = page.getByRole('slider', { name: /Worldline history/ })
+  await current.focus()
+  for (let i = 0; i < 20; i++) await current.press('+')
+  const list = page.getByRole('list', { name: 'Microevents on the current' })
+  await expect(list.getByRole('button').first()).toBeAttached({ timeout: 10_000 })
+  await page.waitForTimeout(1000)
+  const first = list.getByRole('button').first()
+  const name = (await first.textContent()) ?? ''
+  await list.getByRole('button', { name, exact: true }).press('Enter')
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet')
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
+
+  const audit = await auditCard(page)
+  expect(audit.buried).toEqual([])
+  expect(audit.inside).toBe(true)
+  expect(audit.corners).toEqual([true, true, true, true])
+  expect(audit.markers.length).toBeGreaterThan(0)
+  expect(audit.markers.every(Boolean)).toBe(true)
+})
+
+test('keeps the planet card whole at phone width', async ({ page }) => {
+  test.slow()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'View planet' }).click()
+  await page.getByRole('button', { name: 'Continent' }).click()
+  const city = page.locator('.surface__city').first()
+  await expect(city).toBeVisible({ timeout: 20_000 })
+  await city.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  const audit = await auditCard(page)
+  expect(audit.buried).toEqual([])
+  expect(audit.inside).toBe(true)
+  expect(audit.corners).toEqual([true, true, true, true])
+  expect(audit.markers.every(Boolean)).toBe(true)
+})

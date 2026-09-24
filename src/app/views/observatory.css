@@ -337,6 +337,11 @@
   padding-bottom: 130px;
 }
 
+/* FEAT: dentro do planeta quem conta a história é a ficha da cidade e a superfície; a lista dos rumos sai do caminho */
+.observatory:has(.stage[data-lens='planet']) .hud__right {
+  display: none;
+}
+
 .hud__left,
 .hud__right {
   display: flex;
