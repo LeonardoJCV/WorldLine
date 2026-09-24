@@ -80,6 +80,23 @@ describe('hashState', () => {
     expect(a).not.toBe(b)
   })
 
+  it('ignores the colonies block while it is empty', () => {
+    expect(hashState({ ...state, colonies: [] })).toBe(hashState(state))
+  })
+
+  it('separates two worlds that keep different colonies', () => {
+    const a = hashState({
+      ...state,
+      colonies: [{ body: 2, founded: 400, population: 1000, support: 0.2 }],
+    })
+    const b = hashState({
+      ...state,
+      colonies: [{ body: 3, founded: 400, population: 1000, support: 0.2 }],
+    })
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(hashState(state))
+  })
+
   it('ignores a new event that never fired, but reacts once one has', () => {
     // FIX: os cinco eventos da dívida (Tarefa 4) só entram no hash depois que dispararam uma vez;
     // um mundo que nunca cruzou nada tem lastEnded[11..] sempre em NEVER e reproduz o fingerprint antigo

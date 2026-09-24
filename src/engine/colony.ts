@@ -15,10 +15,11 @@ import {
   COLONY_SUPPORT_RATE,
   COLONY_UPKEEP,
 } from './params.ts'
+import { Era } from './state.ts'
 import { colonisable, type Body } from './system.ts'
 
-// FEAT: o bit da era espacial, que a Tarefa 3 leva para `Era` com este mesmo valor
-export const SPACE_ERA = 8
+// FEAT: um só lugar dono do bit da era espacial, agora que `Era` mora em state.ts
+export const SPACE_ERA = Era.space
 
 export interface Colony {
   readonly body: number

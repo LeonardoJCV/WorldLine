@@ -1,3 +1,4 @@
+import type { Colony } from './colony.ts'
 import type { CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
@@ -17,7 +18,7 @@ export const VARIABLES = [
 ] as const
 export type Variable = (typeof VARIABLES)[number]
 
-export const Era = { agricultural: 1, industrial: 2, demographic: 4 } as const
+export const Era = { agricultural: 1, industrial: 2, demographic: 4, space: 8 } as const
 
 export const NEVER = -1_000_000
 
@@ -62,6 +63,7 @@ export interface WorldState {
   // sempre num mundo que nunca recebeu nada
   readonly strain: number
   readonly status: Status
+  readonly colonies: readonly Colony[]
 }
 
 export function isValidAllocation(allocation: Allocation): boolean {

@@ -12,7 +12,7 @@ import {
 import { GOLDEN_CASES, GOLDEN_SCRIPTS } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
-import { VARIABLES, type Allocation, type Decision } from './state.ts'
+import { Era, VARIABLES, hasEra, type Allocation, type Decision } from './state.ts'
 import { step } from './step.ts'
 import { Worldline } from './worldline.ts'
 
@@ -105,6 +105,24 @@ describe('golden hashes', () => {
     const w = new Worldline(seed, plan.decisions, null, plan.crossings)
     w.advance(year)
     expect(w.hashAt(year)).toBe(hash)
+  })
+})
+
+describe('space era gate', () => {
+  it('never opens for any reference script, over the whole horizon', () => {
+    // FEAT: prova exigida pela Tarefa 3 — o portão exige energia além da que as referências alcançam
+    const seen = new Set<string>()
+    for (const { seed, script } of GOLDEN_CASES) {
+      const key = `${seed}:${script}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const plan = GOLDEN_SCRIPTS[script]
+      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      w.advance(HORIZON)
+      for (let t = 0; t <= w.present.tick; t += 25) {
+        expect(hasEra(w.stateAt(t), Era.space)).toBe(false)
+      }
+    }
   })
 })
 

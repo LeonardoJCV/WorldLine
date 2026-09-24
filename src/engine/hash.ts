@@ -68,5 +68,15 @@ export function hashState(s: WorldState): string {
     h = feed(h, s.paradox.since)
     h = feed(h, s.paradox.deadline)
   }
+  // FEAT: sem era espacial não há colônia; o bloco só entra quando há alguma, no mesmo padrão
+  if (s.colonies.length > 0) {
+    h = feed(h, s.colonies.length)
+    for (const colony of s.colonies) {
+      h = feed(h, colony.body)
+      h = feed(h, colony.founded)
+      h = feed(h, colony.population)
+      h = feed(h, colony.support)
+    }
+  }
   return h.toString(16).padStart(8, '0')
 }

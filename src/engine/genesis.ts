@@ -41,6 +41,7 @@ export function genesis(seed: number): { readonly world: WorldConfig; readonly s
       paradox: null,
       strain: 0,
       status: 'running',
+      colonies: [],
     },
   }
 }

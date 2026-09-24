@@ -405,6 +405,31 @@ describe('paradox and collapse', () => {
   })
 })
 
+describe('space era', () => {
+  it('opens only once technology, energy and economy are all high at once', () => {
+    const s = world(EVENTS)
+    const started = evaluateEvents(
+      s,
+      makeMetrics({ technology: 95, energy: 13, economy: 9 }),
+      1,
+      0,
+    ).started
+    expect(started.map((r) => r.event)).toContain('space_era')
+  })
+
+  it('stays shut on the energy the reference scripts actually reach, tech and economy notwithstanding', () => {
+    const s = world(EVENTS)
+    // FEAT: 9/11 é o teto medido dos doze roteiros de referência (spec §3); 13 é a folga calibrada
+    const started = evaluateEvents(
+      s,
+      makeMetrics({ technology: 100, energy: 9, economy: 11 }),
+      1,
+      0,
+    ).started
+    expect(started.map((r) => r.event)).not.toContain('space_era')
+  })
+})
+
 describe('EVENTS table', () => {
   it('is internally consistent', () => {
     expect(EVENTS.map((d) => d.id)).toEqual([...EVENT_IDS])

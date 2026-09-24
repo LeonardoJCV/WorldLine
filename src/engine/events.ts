@@ -30,6 +30,10 @@ export const EVENT_IDS = [
   'dependency',
   'paradox',
   'collapse',
+  'space_era',
+  'colony_founded',
+  'colony_lost',
+  'inheritance',
 ] as const
 export type EventId = (typeof EVENT_IDS)[number]
 
@@ -263,6 +267,45 @@ export const EVENTS: readonly EventDef[] = [
     trigger: [{ metric: 'paradoxOverdue', op: '>', value: 0 }],
     cooldown: 0,
     influences: [],
+  },
+  {
+    id: 'space_era',
+    kind: 'era',
+    era: Era.space,
+    // FEAT: tecnologia e economia saturam em qualquer mundo maduro; energia é o portão real (spec §3)
+    trigger: [
+      { metric: 'technology', op: '>', value: 90 },
+      { metric: 'energy', op: '>', value: 12 },
+      { metric: 'economy', op: '>', value: 8 },
+    ],
+    cooldown: 0,
+    influences: ['population', 'energy'],
+  },
+  // FEAT: os três a seguir nascem por colônia, o que nenhuma métrica descreve hoje; o gatilho
+  // abaixo nunca vale (população nunca é negativa) até uma tarefa futura registrar o evento direto
+  {
+    id: 'colony_founded',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: ['population'],
+  },
+  {
+    id: 'colony_lost',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: ['population'],
+  },
+  {
+    id: 'inheritance',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: ['population', 'environment', 'stability', 'technology'],
   },
 ]
 
