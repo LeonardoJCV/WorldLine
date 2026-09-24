@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Crossing } from './crossing.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON, PARADOX_GRACE } from './params.ts'
 import { Worldline } from './worldline.ts'
@@ -282,5 +283,69 @@ describe('collapse', () => {
       short.advance(year)
       expect(line.hashAt(year)).toBe(hashState(short.present))
     }
+  })
+})
+
+describe('a worldline that outlives its world', () => {
+  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+  const heirWorld = (years: number) => {
+    const line = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+    line.advance(years)
+    return line
+  }
+  const line = heirWorld(3000)
+
+  it('changes home instead of ending, and keeps running', () => {
+    expect(line.present.tick).toBe(3000)
+    expect(line.present.status).toBe('running')
+    expect(line.present.home).not.toBeNull()
+    expect(line.stateAt(INHERITANCE_CASE.ended).home).toBeNull()
+    expect(line.stateAt(INHERITANCE_CASE.year).home).toBe(line.present.home)
+  })
+
+  it('rebuilds the inheritance from the checkpoints, year by year', () => {
+    for (const year of [
+      INHERITANCE_CASE.founded,
+      INHERITANCE_CASE.ended,
+      INHERITANCE_CASE.year,
+      INHERITANCE_CASE.year + 1,
+      2560,
+      3000,
+    ]) {
+      expect(line.hashAt(year)).toBe(hashState(heirWorld(year).present))
+    }
+  })
+
+  it('writes the moment down once, in the year the home world fell', () => {
+    const moments = line.records.filter((record) => record.event === 'inheritance')
+    expect(moments).toHaveLength(1)
+    expect(moments[0]?.start).toBe(INHERITANCE_CASE.ended)
+    const causes = moments[0]?.causes ?? []
+    const named = causes.flatMap((cause) =>
+      cause.kind === 'event' ? [line.records[cause.record]] : [],
+    )
+    expect(named.map((record) => record?.event)).toEqual(['collapse', 'colony_founded'])
+    expect(named[1]?.start).toBe(INHERITANCE_CASE.founded)
+    // FEAT: e a cadeia sobe da fundação para a era que a permitiu
+    const era = named[1]?.causes[0]
+    expect(era?.kind === 'event' && line.records[era.record]?.event).toBe('space_era')
+  })
+
+  it('does not hand the inheritance to a fork taken before it', () => {
+    const early = line.fork(INHERITANCE_CASE.founded - 1)
+    expect(early.present.home).toBeNull()
+    expect(early.records.some((record) => record.event === 'inheritance')).toBe(false)
+    // FEAT: sem o presente que a matou, a bifurcação nunca perde o planeta
+    early.advance(3000 - early.present.tick)
+    expect(early.present.home).toBeNull()
+    expect(early.present.status).toBe('running')
+  })
+
+  it('hands the same inheritance to a fork that kept every cause of it', () => {
+    const late = line.fork(INHERITANCE_CASE.ended - 1)
+    expect(late.present.home).toBeNull()
+    late.advance(INHERITANCE_CASE.year - late.present.tick)
+    expect(late.present.home).toBe(line.present.home)
+    expect(hashState(late.present)).toBe(line.hashAt(INHERITANCE_CASE.year))
   })
 })

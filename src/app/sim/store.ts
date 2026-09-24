@@ -1,4 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
+import type { Colony } from '../../engine/colony.ts'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { Debt, Paradox } from '../../engine/debt.ts'
 import type { EventRecord } from '../../engine/events.ts'
@@ -32,6 +33,7 @@ export interface WorldView {
   // FEAT: a dívida do último ano diferente já relatado, para a tendência não piscar a cada quadro
   readonly previousDebts: readonly Debt[] | null
   readonly paradox: Paradox | null
+  readonly colonies: readonly Colony[]
 }
 
 export interface SimulationState {
@@ -47,6 +49,7 @@ export interface SimulationState {
   readonly events: readonly EventRecord[]
   readonly debts: readonly Debt[]
   readonly paradox: Paradox | null
+  readonly colonies: readonly Colony[]
   readonly error: string | null
   readonly cursor: number | null
   readonly inspected: Snapshot | null
@@ -118,8 +121,9 @@ function focused(worlds: readonly WorldView[], focus: WorldlineId) {
         decisions: world.decisions,
         debts: world.debts,
         paradox: world.paradox,
+        colonies: world.colonies,
       }
-    : { present: null, events: [], decisions: [], debts: [], paradox: null }
+    : { present: null, events: [], decisions: [], debts: [], paradox: null, colonies: [] }
 }
 
 function messageOf(error: unknown): string {
@@ -146,6 +150,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     events: [],
     debts: [],
     paradox: null,
+    colonies: [],
     error: null,
     cursor: null,
     inspected: null,
@@ -174,6 +179,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         events: [],
         debts: [],
         paradox: null,
+        colonies: [],
         error: null,
         cursor: null,
         inspected: null,
@@ -337,6 +343,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
               update.debts,
             ),
             paradox: update.paradox,
+            colonies: update.colonies,
           }
         })
         const current = store.getState().focus

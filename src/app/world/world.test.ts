@@ -7,6 +7,8 @@ import {
   type Crossing,
   type CrossingKind,
 } from '../../engine/crossing.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
+import { hashState } from '../../engine/hash.ts'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import { Worldline } from '../../engine/worldline.ts'
@@ -527,5 +529,33 @@ describe('library', () => {
     }
     expect(toSavedWorld(legacyRow)?.link.branches).toEqual([])
     expect(toSavedWorld({ ...legacyRow, link: { ...legacyRow.link, branches: 'x' } })).toBeNull()
+  })
+})
+
+describe('a link to a history that outlived its world', () => {
+  it('reopens it on the same body, with the same fingerprint', () => {
+    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const value: MultiverseLink = {
+      version: MODEL_VERSION,
+      seed: INHERITANCE_CASE.seed,
+      tick: INHERITANCE_CASE.year,
+      decisions: plan.decisions,
+      branches: [],
+      crossings: plan.crossings,
+    }
+    const back = decodeMultiverse(encodeMultiverse(value))
+    expect(back).toEqual(value)
+    const file = parseWorldFile(serializeWorld({ name: 'Heir', link: value }))
+    expect(file?.link).toEqual(value)
+
+    const sent = new Worldline(value.seed, plan.decisions, null, plan.crossings)
+    const opened = new Worldline(value.seed, back?.decisions ?? [], null, back?.crossings ?? [])
+    sent.advance(INHERITANCE_CASE.year)
+    opened.advance(INHERITANCE_CASE.year)
+    expect(sent.present.status).toBe('running')
+    expect(sent.present.home).not.toBeNull()
+    expect(opened.present.home).toBe(sent.present.home)
+    expect(hashState(opened.present)).toBe(INHERITANCE_CASE.hash)
+    expect(hashState(opened.present)).toBe(hashState(sent.present))
   })
 })

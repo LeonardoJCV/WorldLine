@@ -1,5 +1,11 @@
 import type { Crossing } from '../engine/crossing.ts'
-import { GOLDEN_CASES, GOLDEN_SCRIPTS, type GoldenCase } from '../engine/golden.ts'
+import {
+  GOLDEN_CASES,
+  GOLDEN_SCRIPTS,
+  INHERITANCE_CASE,
+  type GoldenCase,
+  type InheritanceCase,
+} from '../engine/golden.ts'
 import type { Decision, Status } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
 
@@ -67,5 +73,46 @@ export function runCollapseCheck(): CollapseResult {
     status,
     reached,
     ok: status === 'collapsed' && reached === COLLAPSE_CASE.year && computed === COLLAPSE_CASE.hash,
+  }
+}
+
+export interface InheritanceResult extends InheritanceCase {
+  readonly computed: string
+  readonly status: Status
+  readonly moved: number
+  readonly settled: number
+  readonly home: number | null
+  readonly ok: boolean
+}
+
+// FEAT: prova a herança inteira, não só o hash: o ano da queda, o ano da casa nova, o corpo que
+// virou lar e a cadeia causal que liga o momento à fundação da colônia que salvou a história
+export function runInheritanceCheck(): InheritanceResult {
+  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+  const world = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+  world.advance(INHERITANCE_CASE.year)
+  const moments = world.records.filter((record) => record.event === 'inheritance')
+  const moved = moments.length === 1 ? (moments[0]?.start ?? -1) : -1
+  const founding = moments[0]?.causes.flatMap((cause) =>
+    cause.kind === 'event' && world.records[cause.record]?.event === 'colony_founded'
+      ? [world.records[cause.record]?.start ?? -1]
+      : [],
+  )
+  const settled = founding?.length === 1 ? (founding[0] ?? -1) : -1
+  const computed = world.hashAt(Math.min(INHERITANCE_CASE.year, world.present.tick))
+  return {
+    ...INHERITANCE_CASE,
+    computed,
+    status: world.present.status,
+    moved,
+    settled,
+    home: world.present.home,
+    ok:
+      world.present.status === 'running' &&
+      world.present.tick === INHERITANCE_CASE.year &&
+      moved === INHERITANCE_CASE.ended &&
+      settled === INHERITANCE_CASE.founded &&
+      world.present.home !== null &&
+      computed === INHERITANCE_CASE.hash,
   }
 }

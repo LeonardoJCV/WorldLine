@@ -5,7 +5,19 @@ import type { Debt, Paradox } from './debt.ts'
 import { EVENTS, worldMetrics } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
-import { COLONY_UPKEEP, PARADOX_GRACE, PARADOX_PATIENCE, PARAMS } from './params.ts'
+import {
+  COLONY_SEED_POP,
+  COLONY_SELF,
+  COLONY_UPKEEP,
+  GENESIS_FOOD_RESERVE,
+  INHERIT_ECONOMY,
+  INHERIT_ENERGY,
+  INHERIT_ENVIRONMENT,
+  INHERIT_SHOCK,
+  PARADOX_GRACE,
+  PARADOX_PATIENCE,
+  PARAMS,
+} from './params.ts'
 import { step } from './step.ts'
 import { Era, VARIABLES, type Allocation, type WorldState } from './state.ts'
 import { colonisable, system } from './system.ts'
@@ -312,7 +324,7 @@ describe('colonies', () => {
       ...overrides,
     })
   const settled = (support: number): Colony[] =>
-    free.map((body) => ({ body: body.index, founded: -50, population: 5000, support }))
+    free.map((body) => ({ body: body.index, founded: -50, population: 5000, support, record: 0 }))
 
   it('founds the first colony the year the world has energy to spare', () => {
     const result = step(spacefaring(), TEST_WORLD, 0)
@@ -347,14 +359,14 @@ describe('colonies', () => {
   })
 
   it('loses a colony that falls under the floor and leaves the world alone', () => {
-    const dying: Colony = { body: best.index, founded: -50, population: 200, support: 0 }
+    const dying: Colony = { body: best.index, founded: -50, population: 200, support: 0, record: 0 }
     const result = step(spacefaring({ energy: 9.5, colonies: [dying] }), TEST_WORLD, 0)
     expect(result.state.colonies).toEqual([])
   })
 
   it('takes people off the planet, and the planet is emptier for it', () => {
     const sized = (population: number): Colony[] =>
-      free.map((body) => ({ body: body.index, founded: -50, population, support: 1 }))
+      free.map((body) => ({ body: body.index, founded: -50, population, support: 1, record: 0 }))
     const few = step(spacefaring({ colonies: sized(300) }), TEST_WORLD, 0)
     const many = step(spacefaring({ colonies: sized(5e6) }), TEST_WORLD, 0)
     expect(many.state.energy).toBe(few.state.energy)
@@ -396,5 +408,177 @@ describe('leaving the planet, end to end', () => {
     const left = worldMetrics(spaced.state, spaced.world).crowding
     const stayed = worldMetrics(stuck.state, stuck.world).crowding
     expect(left).toBeLessThan(stayed)
+  })
+})
+
+describe('the events a colony writes', () => {
+  const spaceIndex = EVENTS.findIndex((def) => def.id === 'space_era')
+  const free = system(TEST_WORLD.seed).filter(colonisable)
+  const best = free.reduce((a, b) => (b.habitability > a.habitability ? b : a))
+  const reached = (overrides: Partial<WorldState> = {}): WorldState =>
+    makeState({
+      eras: Era.space,
+      energy: 14,
+      technology: 95,
+      economy: 9,
+      population: 4e6,
+      food: 8e6,
+      active: [{ def: spaceIndex, record: 9, start: 0 }],
+      ...overrides,
+    })
+
+  it('writes the founding down, and hangs it on the era that opened the door', () => {
+    const result = step(reached(), TEST_WORLD, 12)
+    const founding = result.started.find((record) => record.event === 'colony_founded')
+    expect(founding).toEqual({
+      event: 'colony_founded',
+      start: 0,
+      end: 0,
+      causes: [{ kind: 'event', record: 9 }],
+    })
+    expect(result.state.colonies[0]?.record).toBe(12)
+  })
+
+  it('writes the loss down, pointing back at the founding it undoes', () => {
+    const doomedColony: Colony = {
+      body: best.index,
+      founded: -50,
+      population: 200,
+      support: 0,
+      record: 6,
+    }
+    const result = step(reached({ energy: 9.5, colonies: [doomedColony] }), TEST_WORLD, 20)
+    expect(result.state.colonies).toEqual([])
+    expect(result.started.find((record) => record.event === 'colony_lost')).toEqual({
+      event: 'colony_lost',
+      start: 0,
+      end: 0,
+      causes: [{ kind: 'event', record: 6 }],
+    })
+  })
+
+  it('leaves both moments out of a world that never left the planet', () => {
+    const grounded = step({ ...state, eras: 0 }, world, 0)
+    expect(grounded.started.map((record) => record.event)).not.toContain('colony_founded')
+    expect(grounded.started.map((record) => record.event)).not.toContain('colony_lost')
+  })
+})
+
+describe('inheritance', () => {
+  // FEAT: o sistema da semente 482913 tem um corpo que comporta uma colônia do tamanho de um herdeiro
+  const free = system(world.seed).filter(colonisable)
+  const best = free.reduce((a, b) => (b.habitability > a.habitability ? b : a))
+  const standing = (overrides: Partial<Colony> = {}): Colony => ({
+    body: best.index,
+    founded: 100,
+    population: 5e5,
+    support: 1,
+    record: 4,
+    ...overrides,
+  })
+  // FEAT: energia sem folga nenhuma, para o ano do fim ser só o ano do fim: nada se funda nele
+  const doomed = (colonies: readonly Colony[], overrides: Partial<WorldState> = {}): WorldState =>
+    makeState({
+      tick: 2400,
+      eras: Era.space,
+      energy: 9,
+      technology: 95,
+      economy: 9,
+      population: 500,
+      food: 1e6,
+      colonies,
+      ...overrides,
+    })
+  const events = (result: ReturnType<typeof step>) => result.started.map((record) => record.event)
+
+  it('ends the history exactly as it does today when no colony stands on its own', () => {
+    const alone = step(doomed([]), world, 0)
+    const young = step(doomed([standing({ population: 1000 })]), world, 0)
+    const failing = step(doomed([standing({ support: 0.5 })]), world, 0)
+    for (const result of [alone, young, failing]) {
+      expect(result.state.status).toBe('extinct')
+      expect(events(result)).toContain('extinction')
+      expect(events(result)).not.toContain('inheritance')
+      expect(result.state.home).toBeNull()
+    }
+  })
+
+  it('continues the history on the colony that stands on its own', () => {
+    // FEAT: a mesma gente de menos um, o mesmo ano no mundo natal, e nenhum herdeiro: a régua
+    const lacking = step(doomed([standing({ population: COLONY_SEED_POP / 2 })]), world, 0)
+    const result = step(doomed([standing()]), world, 0)
+    const moved = result.state
+    expect(moved.status).toBe('running')
+    expect(events(result)).toContain('extinction')
+    expect(events(result)).toContain('inheritance')
+    // FEAT: a gente é a da colônia, contada depois do ano dela
+    expect(moved.population).toBeGreaterThan(5e5)
+    expect(lacking.state.status).toBe('extinct')
+    expect(moved.technology).toBe(lacking.state.technology)
+    expect(moved.environment).toBeCloseTo(INHERIT_ENVIRONMENT * best.habitability, 9)
+    expect(moved.stability).toBeCloseTo(lacking.state.stability - INHERIT_SHOCK, 9)
+    expect(moved.food).toBeCloseTo(moved.population * GENESIS_FOOD_RESERVE, 6)
+    expect(moved.energy).toBe(INHERIT_ENERGY)
+    expect(moved.economy).toBe(INHERIT_ECONOMY)
+    expect(moved.colonies).toEqual([])
+    expect(moved.home).toBe(best.index)
+  })
+
+  it('reads the heir in the year the world ends, not in the year it first stood alone', () => {
+    // FEAT: uma colônia que cruza o limiar no próprio ano do fim ainda herda
+    const late = step(doomed([standing({ population: COLONY_SEED_POP - 1 })]), world, 0)
+    expect(late.state.status).toBe('running')
+    // FEAT: e uma que já esteve de pé, mas perdeu o sustento no caminho, não herda
+    const faded = step(doomed([standing({ support: COLONY_SELF - 0.05 })]), world, 0)
+    expect(faded.state.status).toBe('extinct')
+  })
+
+  it('saves a collapsing world as readily as a dying one, and takes the paradox off it', () => {
+    const idle: Allocation = { agriculture: 40, industry: 60, research: 0, conservation: 0 }
+    const heavy: Debt = { kind: 'knowledge', owed: 40, since: 0, origin: 'B' }
+    const overdue: Paradox = { kind: 'debt', since: 0, deadline: 0 }
+    const falling = (colonies: readonly Colony[]) =>
+      doomed(colonies, {
+        population: 4e6,
+        allocation: idle,
+        debts: [heavy],
+        paradox: overdue,
+        strain: PARADOX_PATIENCE,
+      })
+    expect(step(falling([]), world, 0).state.status).toBe('collapsed')
+    const result = step(falling([standing()]), world, 0)
+    expect(events(result)).toContain('collapse')
+    expect(result.state.status).toBe('running')
+    expect(result.state.paradox).toBeNull()
+    expect(result.state.strain).toBe(0)
+  })
+
+  it('lands the moment in the year the world ended, and reaches back to the founding', () => {
+    const result = step(doomed([standing({ record: 4 })]), world, 7)
+    const moment = result.started.at(-1)
+    const terminal = result.started.findIndex((record) => record.event === 'extinction')
+    expect(moment?.event).toBe('inheritance')
+    expect(moment?.start).toBe(2400)
+    expect(moment?.end).toBe(2400)
+    expect(moment?.causes).toEqual([
+      { kind: 'event', record: 7 + terminal },
+      { kind: 'event', record: 4 },
+    ])
+  })
+
+  it('happens once, and the body left behind never becomes home again', () => {
+    let current = step(doomed([standing()]), world, 0).state
+    let records = 0
+    const seen: string[] = []
+    for (let year = 0; year < 300 && current.status === 'running'; year++) {
+      const result = step(current, world, records)
+      records += result.started.length
+      seen.push(...result.started.map((record) => record.event))
+      current = result.state
+      expect(current.home).toBe(best.index)
+      expect(current.colonies.some((colony) => colony.body === best.index)).toBe(false)
+    }
+    expect(seen).not.toContain('inheritance')
+    expect(current.status).toBe('running')
   })
 })

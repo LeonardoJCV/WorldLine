@@ -9,7 +9,7 @@ import {
   type CrossingKind,
   type Dose,
 } from './crossing.ts'
-import { GOLDEN_CASES, GOLDEN_SCRIPTS } from './golden.ts'
+import { GOLDEN_CASES, GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
 import { Era, VARIABLES, hasEra, type Allocation, type Decision } from './state.ts'
@@ -105,6 +105,30 @@ describe('golden hashes', () => {
     const w = new Worldline(seed, plan.decisions, null, plan.crossings)
     w.advance(year)
     expect(w.hashAt(year)).toBe(hash)
+  })
+})
+
+describe('the inheritance fingerprint', () => {
+  it('reproduces the first year of a history that outlived its own world', () => {
+    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const w = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+    w.advance(INHERITANCE_CASE.year)
+    expect(w.present.tick).toBe(INHERITANCE_CASE.year)
+    expect(w.present.status).toBe('running')
+    expect(w.present.home).not.toBeNull()
+    expect(w.hashAt(INHERITANCE_CASE.year)).toBe(INHERITANCE_CASE.hash)
+  })
+
+  it('leaves the twelve original fingerprints alone, which is the whole point', () => {
+    // FEAT: nenhum roteiro de referência chega ao espaço, então nenhum deles sente esta tarefa
+    for (const { seed, script, year, hash } of GOLDEN_CASES) {
+      const plan = GOLDEN_SCRIPTS[script]
+      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      w.advance(year)
+      expect(w.present.colonies).toEqual([])
+      expect(w.present.home).toBeNull()
+      expect(w.hashAt(year)).toBe(hash)
+    }
   })
 })
 

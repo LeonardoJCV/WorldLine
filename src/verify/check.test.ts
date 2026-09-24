@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GOLDEN_CASES } from '../engine/golden.ts'
+import { GOLDEN_CASES, INHERITANCE_CASE } from '../engine/golden.ts'
 import { CAUSAL_WINDOW } from '../engine/params.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
@@ -8,6 +8,7 @@ import {
   COLLAPSE_DECISIONS,
   runCollapseCheck,
   runGoldenChecks,
+  runInheritanceCheck,
 } from './check.ts'
 
 describe('runGoldenChecks', () => {
@@ -38,5 +39,23 @@ describe('runCollapseCheck', () => {
       tick: gift?.tick,
       crossing: gift?.kind,
     })
+  })
+})
+
+describe('runInheritanceCheck', () => {
+  it('reaches the inheritance and reproduces its fingerprint', () => {
+    const result = runInheritanceCheck()
+    expect(result.status).toBe('running')
+    expect(result.moved).toBe(INHERITANCE_CASE.ended)
+    expect(result.settled).toBe(INHERITANCE_CASE.founded)
+    expect(result.home).not.toBeNull()
+    expect(result.computed).toBe(INHERITANCE_CASE.hash)
+    expect(result.ok).toBe(true)
+  })
+
+  it('proves the history changed home instead of ending', () => {
+    // FEAT: o ano da queda vem antes do primeiro ano na casa nova, e a fundação vem antes dos dois
+    expect(INHERITANCE_CASE.founded).toBeLessThan(INHERITANCE_CASE.ended)
+    expect(INHERITANCE_CASE.ended).toBeLessThan(INHERITANCE_CASE.year)
   })
 })

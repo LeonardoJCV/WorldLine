@@ -3,6 +3,7 @@ import {
   SPACE_ERA,
   foundColony,
   heir,
+  inherit,
   selfSufficient,
   tickColonies,
   type Colony,
@@ -20,8 +21,14 @@ import {
   COLONY_START_POP,
   COLONY_SUPPORT_RATE,
   COLONY_UPKEEP,
+  GENESIS_FOOD_RESERVE,
+  INHERIT_ECONOMY,
+  INHERIT_ENERGY,
+  INHERIT_ENVIRONMENT,
+  INHERIT_SHOCK,
 } from './params.ts'
 import type { Body, BodyKind } from './system.ts'
+import { makeState } from './testing.ts'
 
 function body(index: number, kind: BodyKind, habitability: number, home = false): Body {
   return { index, kind, distance: 1 + index, habitability, home }
@@ -39,45 +46,45 @@ const BODIES: readonly Body[] = [
 const BARREN: readonly Body[] = [body(0, 'rocky', 0.95, true), body(1, 'ice', 0.05)]
 
 function world(overrides: Partial<ColonisingWorld> = {}): ColonisingWorld {
-  return { eras: SPACE_ERA, energy: 14, population: 1e6, colonies: [], ...overrides }
+  return { eras: SPACE_ERA, energy: 14, population: 1e6, colonies: [], home: null, ...overrides }
 }
 
 function colony(overrides: Partial<Colony> = {}): Colony {
-  return { body: 3, founded: 0, population: 1000, support: 0, ...overrides }
+  return { body: 3, founded: 0, population: 1000, support: 0, record: 0, ...overrides }
 }
 
 describe('foundColony', () => {
   it('founds nothing before the space era', () => {
-    expect(foundColony(world({ eras: 0 }), BODIES, 2400)).toBeNull()
-    expect(foundColony(world({ eras: 1 | 2 | 4 }), BODIES, 2400)).toBeNull()
+    expect(foundColony(world({ eras: 0 }), BODIES, 2400, 7)).toBeNull()
+    expect(foundColony(world({ eras: 1 | 2 | 4 }), BODIES, 2400, 7)).toBeNull()
   })
 
   it('founds nothing without energy to spare', () => {
-    expect(foundColony(world({ energy: 9 }), BODIES, 2400)).toBeNull()
-    expect(foundColony(world({ energy: 9.9 }), BODIES, 2400)).toBeNull()
-    expect(foundColony(world({ energy: 10 }), BODIES, 2400)).not.toBeNull()
+    expect(foundColony(world({ energy: 9 }), BODIES, 2400, 7)).toBeNull()
+    expect(foundColony(world({ energy: 9.9 }), BODIES, 2400, 7)).toBeNull()
+    expect(foundColony(world({ energy: 10 }), BODIES, 2400, 7)).not.toBeNull()
   })
 
   it('counts the colonies it already keeps before spending on another', () => {
     const kept = [colony({ body: 3, support: 0 })]
     // FEAT: a energia livre é 1, e o que já existe cobra meia unidade dela
-    expect(foundColony(world({ energy: 10, colonies: kept }), BODIES, 2400)).toBeNull()
-    expect(foundColony(world({ energy: 11, colonies: kept }), BODIES, 2400)?.body).toBe(2)
+    expect(foundColony(world({ energy: 10, colonies: kept }), BODIES, 2400, 7)).toBeNull()
+    expect(foundColony(world({ energy: 11, colonies: kept }), BODIES, 2400, 7)?.body).toBe(2)
   })
 
   it('does not count a colony that pays its own way', () => {
     const kept = (support: number) => [colony({ body: 2, support })]
-    expect(foundColony(world({ energy: 10, colonies: kept(0) }), BODIES, 2400)).toBeNull()
-    expect(foundColony(world({ energy: 10, colonies: kept(1) }), BODIES, 2400)?.body).toBe(3)
+    expect(foundColony(world({ energy: 10, colonies: kept(0) }), BODIES, 2400, 7)).toBeNull()
+    expect(foundColony(world({ energy: 10, colonies: kept(1) }), BODIES, 2400, 7)?.body).toBe(3)
   })
 
   it('founds nothing on a body the surplus could never support', () => {
     // FEAT: com excedente 1 partido em dois, o corpo 2 promete menos do que o ponto de apoio
-    expect(foundColony(world({ energy: 10, colonies: [colony({ body: 3 })] }), BODIES, 2400)).toBe(
-      null,
-    )
     expect(
-      foundColony(world({ energy: 14, colonies: [colony({ body: 3 })] }), BODIES, 2400)?.body,
+      foundColony(world({ energy: 10, colonies: [colony({ body: 3 })] }), BODIES, 2400, 7),
+    ).toBe(null)
+    expect(
+      foundColony(world({ energy: 14, colonies: [colony({ body: 3 })] }), BODIES, 2400, 7)?.body,
     ).toBe(2)
   })
 
@@ -86,31 +93,57 @@ describe('foundColony', () => {
       body(0, 'rocky', 0.95, true),
       body(1, 'rocky', COLONY_START_POP / COLONY_CAPACITY / 2),
     ]
-    expect(foundColony(world({ energy: 1000 }), roomless, 2400)).toBeNull()
+    expect(foundColony(world({ energy: 1000 }), roomless, 2400, 7)).toBeNull()
   })
 
   it('picks the free colonisable body with the highest habitability', () => {
-    expect(foundColony(world(), BODIES, 2400)?.body).toBe(3)
-    expect(foundColony(world({ colonies: [colony({ body: 3 })] }), BODIES, 2400)?.body).toBe(2)
+    expect(foundColony(world(), BODIES, 2400, 7)?.body).toBe(3)
+    expect(foundColony(world({ colonies: [colony({ body: 3 })] }), BODIES, 2400, 7)?.body).toBe(2)
     expect(
       foundColony(
         world({ energy: 16, colonies: [colony({ body: 3 }), colony({ body: 2 })] }),
         BODIES,
         2400,
+        7,
       )?.body,
+    ).toBe(4)
+  })
+
+  it('never picks the body the history lives on today', () => {
+    // FEAT: depois de uma herança o lar não é mais o corpo natal, e o novo lar não é destino
+    expect(foundColony(world({ home: 3 }), BODIES, 2400, 7)?.body).toBe(2)
+    expect(
+      foundColony(world({ home: 2, colonies: [colony({ body: 3 })] }), BODIES, 2400, 7)?.body,
     ).toBe(4)
   })
 
   it('never picks a gas giant, the home world or a taken body', () => {
     const full = [colony({ body: 2 }), colony({ body: 3 }), colony({ body: 4 })]
-    expect(foundColony(world({ energy: 1000, colonies: full }), BODIES, 2400)).toBeNull()
+    expect(foundColony(world({ energy: 1000, colonies: full }), BODIES, 2400, 7)).toBeNull()
   })
 
   it('founds one at a time, with the year and the first crew', () => {
-    const first = foundColony(world({ energy: 1000 }), BODIES, 2400)
-    expect(first).toEqual({ body: 3, founded: 2400, population: COLONY_START_POP, support: 0 })
-    const second = foundColony(world({ energy: 1000, colonies: [first as Colony] }), BODIES, 2401)
-    expect(second).toEqual({ body: 2, founded: 2401, population: COLONY_START_POP, support: 0 })
+    const first = foundColony(world({ energy: 1000 }), BODIES, 2400, 7)
+    expect(first).toEqual({
+      body: 3,
+      founded: 2400,
+      population: COLONY_START_POP,
+      support: 0,
+      record: 7,
+    })
+    const second = foundColony(
+      world({ energy: 1000, colonies: [first as Colony] }),
+      BODIES,
+      2401,
+      8,
+    )
+    expect(second).toEqual({
+      body: 2,
+      founded: 2401,
+      population: COLONY_START_POP,
+      support: 0,
+      record: 8,
+    })
   })
 })
 
@@ -263,7 +296,13 @@ describe('tickColonies', () => {
 describe('selfSufficient', () => {
   it('needs both the support and the people', () => {
     expect(
-      selfSufficient({ body: 2, founded: 0, population: COLONY_SEED_POP, support: COLONY_SELF }),
+      selfSufficient({
+        body: 2,
+        founded: 0,
+        population: COLONY_SEED_POP,
+        support: COLONY_SELF,
+        record: 0,
+      }),
     ).toBe(true)
     expect(
       selfSufficient({
@@ -271,10 +310,17 @@ describe('selfSufficient', () => {
         founded: 0,
         population: COLONY_SEED_POP,
         support: COLONY_SELF - 0.01,
+        record: 0,
       }),
     ).toBe(false)
     expect(
-      selfSufficient({ body: 2, founded: 0, population: COLONY_SEED_POP - 1, support: 1 }),
+      selfSufficient({
+        body: 2,
+        founded: 0,
+        population: COLONY_SEED_POP - 1,
+        support: 1,
+        record: 0,
+      }),
     ).toBe(false)
     expect(selfSufficient(colony())).toBe(false)
   })
@@ -286,6 +332,7 @@ describe('heir', () => {
     founded: 2400,
     population,
     support: COLONY_SELF,
+    record: b,
   })
 
   it('has nothing to give without colonies', () => {
@@ -305,5 +352,70 @@ describe('heir', () => {
       ready(3, COLONY_SEED_POP * 5),
     ])
     expect(chosen?.body).toBe(3)
+  })
+})
+
+describe('inherit', () => {
+  const dead = makeState({
+    technology: 87.5,
+    environment: 92,
+    stability: 70,
+    population: 4e6,
+    food: 9e5,
+    energy: 13,
+    economy: 9,
+    eras: SPACE_ERA,
+    colonies: [colony({ body: 3, population: 2e5, support: 1, record: 4 })],
+    echoes: [{ target: 'technology', remaining: 3 }],
+    debts: [{ kind: 'knowledge', owed: 30, since: 1950, origin: 'B' }],
+    paradox: { kind: 'debt', since: 2030, deadline: 2230 },
+    strain: 200,
+    status: 'extinct',
+  })
+  const moved = inherit(
+    dead,
+    colony({ body: 3, population: 2e5, support: 1, record: 4 }),
+    BODIES[3],
+  )
+
+  it('takes the people of the colony and the sky of its body', () => {
+    expect(moved.population).toBe(2e5)
+    expect(moved.environment).toBeCloseTo(INHERIT_ENVIRONMENT * 0.7, 9)
+  })
+
+  it('keeps the knowledge, because it does not die with a planet', () => {
+    expect(moved.technology).toBe(dead.technology)
+    expect(moved.eras).toBe(dead.eras)
+    expect(moved.allocation).toEqual(dead.allocation)
+  })
+
+  it('restarts the stores small', () => {
+    expect(moved.food).toBeCloseTo(2e5 * GENESIS_FOOD_RESERVE, 9)
+    expect(moved.energy).toBe(INHERIT_ENERGY)
+    expect(moved.economy).toBe(INHERIT_ECONOMY)
+    expect(moved.recentEconomy).toEqual(dead.recentEconomy.map(() => INHERIT_ECONOMY))
+  })
+
+  it('shakes the stability without ever driving it out of range', () => {
+    expect(moved.stability).toBeCloseTo(dead.stability - INHERIT_SHOCK, 9)
+    expect(inherit({ ...dead, stability: 5 }, colony(), BODIES[3]).stability).toBe(0)
+  })
+
+  it('makes the heir body the new home and leaves the rest of the fleet behind', () => {
+    expect(moved.home).toBe(3)
+    expect(moved.colonies).toEqual([])
+  })
+
+  it('leaves the ledger and the contradiction with the world that died', () => {
+    expect(moved.status).toBe('running')
+    expect(moved.paradox).toBeNull()
+    expect(moved.strain).toBe(0)
+    expect(moved.debts).toEqual([])
+    expect(moved.echoes).toEqual([])
+  })
+
+  it('never inherits a negative crowd, whatever it is handed', () => {
+    expect(inherit(dead, colony({ population: -5 }), undefined).population).toBe(0)
+    expect(inherit(dead, colony({ population: -5 }), undefined).environment).toBe(0)
   })
 })

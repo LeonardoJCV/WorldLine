@@ -281,8 +281,8 @@ export const EVENTS: readonly EventDef[] = [
     cooldown: 0,
     influences: ['population', 'energy'],
   },
-  // FEAT: os três a seguir nascem por colônia, o que nenhuma métrica descreve hoje; o gatilho
-  // abaixo nunca vale (população nunca é negativa) até uma tarefa futura registrar o evento direto
+  // FEAT: os três a seguir nascem por colônia, o que nenhuma métrica descreve; quem os escreve é a
+  // camada das colônias, no próprio ano, e o gatilho abaixo nunca vale — população nunca é negativa
   {
     id: 'colony_founded',
     kind: 'pulse',

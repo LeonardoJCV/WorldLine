@@ -1,4 +1,4 @@
-import { foundColony, tickColonies, type Colony } from './colony.ts'
+import { foundColony, heir, inherit, tickColonies, type Colony } from './colony.ts'
 import type { Crossing } from './crossing.ts'
 import {
   addDebt,
@@ -11,7 +11,15 @@ import {
   type Paradox,
 } from './debt.ts'
 import { addEcho, assimilate } from './echo.ts'
-import { collectModifiers, computeMetrics, evaluateEvents, type EventRecord } from './events.ts'
+import {
+  EVENTS,
+  collectModifiers,
+  computeMetrics,
+  evaluateEvents,
+  type Cause,
+  type EventId,
+  type EventRecord,
+} from './events.ts'
 import { PARADOX_GRACE } from './params.ts'
 import { Channel, uniform } from './rng.ts'
 import { derive, integrate } from './rules.ts'
@@ -77,15 +85,37 @@ function arrivingParadox(
 interface Departure {
   readonly state: WorldState
   readonly migrated: number
+  readonly started: readonly EventRecord[]
+}
+
+const NO_RECORDS: readonly EventRecord[] = []
+
+// FEAT: uma colônia nasce e se perde dentro de um ano só, então o acontecimento já nasce fechado
+function moment(event: EventId, tick: number, causes: readonly Cause[]): EventRecord {
+  return { event, start: tick, end: tick, causes }
+}
+
+// FEAT: toda colônia desce da era espacial, e é por ela que a cadeia causal sobe
+function spaceEra(s: WorldState): readonly Cause[] {
+  const era = s.active.find((entry) => EVENTS[entry.def]?.id === 'space_era')
+  return era ? [{ kind: 'event', record: era.record }] : []
 }
 
 // FEAT: a camada das colônias corre antes do derive: quem parte e a frota que o ano cobra mudam ele
-function colonise(s: WorldState, world: WorldConfig): Departure {
-  if ((s.eras & Era.space) === 0 && s.colonies.length === 0) return { state: s, migrated: 0 }
+function colonise(s: WorldState, world: WorldConfig, nextRecord: number): Departure {
+  if ((s.eras & Era.space) === 0 && s.colonies.length === 0) {
+    return { state: s, migrated: 0, started: NO_RECORDS }
+  }
   const bodies = system(world.seed)
-  const born = foundColony(s, bodies, s.tick)
+  const started: EventRecord[] = []
+  const born = foundColony(s, bodies, s.tick, nextRecord)
+  if (born) started.push(moment('colony_founded', s.tick, spaceEra(s)))
   const fleet: readonly Colony[] = born ? [...s.colonies, born] : s.colonies
   const year = tickColonies(fleet, s, bodies)
+  for (const gone of fleet) {
+    if (year.colonies.some((colony) => colony.body === gone.body)) continue
+    started.push(moment('colony_lost', s.tick, [{ kind: 'event', record: gone.record }]))
+  }
   return {
     state: {
       ...s,
@@ -93,6 +123,7 @@ function colonise(s: WorldState, world: WorldConfig): Departure {
       population: Math.max(0, s.population - year.migrated),
     },
     migrated: year.migrated,
+    started,
   }
 }
 
@@ -123,7 +154,7 @@ export function step(
   const crossed = applyCrossings(decided, crossings)
   const assimilated = assimilate(crossed)
   const owing = applyDebts({ ...crossed, ...assimilated }, crossings)
-  const departure = colonise(owing, world)
+  const departure = colonise(owing, world, nextRecord)
   const peopled = departure.state
 
   // Efeitos de eventos novos só entram no ano seguinte
@@ -143,18 +174,31 @@ export function step(
     strain: resolution.strain,
   }
 
-  const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, nextRecord)
+  const first = nextRecord + departure.started.length
+  const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, first)
   const integrated = integrate(settled, derived, mods, departure.migrated)
+  const ending: WorldState = {
+    ...integrated,
+    eras: outcome.eras,
+    active: outcome.active,
+    lastEnded: outcome.lastEnded,
+    status: outcome.extinct ? 'extinct' : outcome.collapsed ? 'collapsed' : 'running',
+  }
+  const started = [...departure.started, ...outcome.started]
 
+  // FEAT: o herdeiro é lido no instante em que o mundo natal acaba, porque a autossuficiência
+  // pode ter sido perdida no caminho; sem ele a realidade termina exatamente como sempre terminou
+  const successor = ending.status === 'running' ? null : heir(ending.colonies)
+  if (successor === null) return { state: ending, started, ended: outcome.ended }
+
+  const terminal = outcome.started.findIndex(
+    (r) => r.event === 'extinction' || r.event === 'collapse',
+  )
+  const causes: Cause[] = [{ kind: 'event', record: successor.record }]
+  if (terminal >= 0) causes.unshift({ kind: 'event', record: first + terminal })
   return {
-    state: {
-      ...integrated,
-      eras: outcome.eras,
-      active: outcome.active,
-      lastEnded: outcome.lastEnded,
-      status: outcome.extinct ? 'extinct' : outcome.collapsed ? 'collapsed' : 'running',
-    },
-    started: outcome.started,
+    state: inherit(ending, successor, system(world.seed)[successor.body]),
+    started: [...started, moment('inheritance', s.tick, causes)],
     ended: outcome.ended,
   }
 }

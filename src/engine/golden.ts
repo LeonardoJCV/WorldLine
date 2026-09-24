@@ -1,7 +1,7 @@
 import type { Crossing } from './crossing.ts'
 import type { Decision } from './state.ts'
 
-export type GoldenScript = 'steady' | 'shifting' | 'crossed'
+export type GoldenScript = 'steady' | 'shifting' | 'crossed' | 'inherited'
 
 export interface GoldenPlan {
   readonly decisions: readonly Decision[]
@@ -55,10 +55,30 @@ const CROSSED: readonly Crossing[] = [
   },
 ]
 
+// FEAT: indústria e pesquisa sem trégua, o único caminho que chega à era espacial
+const SPACEFARING: readonly Decision[] = [
+  { tick: 0, allocation: { agriculture: 20, industry: 50, research: 30, conservation: 0 } },
+]
+
+// FEAT: um presente que um mundo de tecnologia saturada não tem como quitar; a dívida vira
+// paradoxo, o paradoxo vence o prazo, e o mundo natal cai — com uma colônia de pé
+const UNPAYABLE: readonly Crossing[] = [
+  {
+    tick: 1950,
+    kind: 'knowledge',
+    dose: 3,
+    amounts: [5],
+    origin: { world: 'B', tick: 1950 },
+    cost: 30,
+    direction: 'in',
+  },
+]
+
 export const GOLDEN_SCRIPTS: Readonly<Record<GoldenScript, GoldenPlan>> = {
   steady: { decisions: [], crossings: [] },
   shifting: { decisions: SHIFTING, crossings: [] },
   crossed: { decisions: SHIFTING, crossings: CROSSED },
+  inherited: { decisions: SPACEFARING, crossings: UNPAYABLE },
 }
 
 export interface GoldenCase {
@@ -84,3 +104,24 @@ export const GOLDEN_CASES: readonly GoldenCase[] = [
   { seed: 482913, script: 'crossed', year: 1000, hash: '6fe1fab6' },
   { seed: 482913, script: 'crossed', year: 5000, hash: '8347686d' },
 ]
+
+// FEAT: o roteiro que sobrevive ao próprio mundo, fora dos doze para não mexer em nenhum deles
+export interface InheritanceCase {
+  readonly seed: number
+  readonly script: GoldenScript
+  // FEAT: o ano em que a colônia herdeira foi fundada, o ano em que o mundo natal caiu e o
+  // primeiro ano da história na casa nova, onde o fingerprint é fixado
+  readonly founded: number
+  readonly ended: number
+  readonly year: number
+  readonly hash: string
+}
+
+export const INHERITANCE_CASE: InheritanceCase = {
+  seed: 482913,
+  script: 'inherited',
+  founded: 1803,
+  ended: 2229,
+  year: 2230,
+  hash: 'bc190222',
+}

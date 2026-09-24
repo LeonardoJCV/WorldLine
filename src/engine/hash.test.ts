@@ -87,11 +87,11 @@ describe('hashState', () => {
   it('separates two worlds that keep different colonies', () => {
     const a = hashState({
       ...state,
-      colonies: [{ body: 2, founded: 400, population: 1000, support: 0.2 }],
+      colonies: [{ body: 2, founded: 400, population: 1000, support: 0.2, record: 3 }],
     })
     const b = hashState({
       ...state,
-      colonies: [{ body: 3, founded: 400, population: 1000, support: 0.2 }],
+      colonies: [{ body: 3, founded: 400, population: 1000, support: 0.2, record: 3 }],
     })
     expect(a).not.toBe(b)
     expect(a).not.toBe(hashState(state))

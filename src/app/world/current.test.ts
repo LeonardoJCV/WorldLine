@@ -37,6 +37,7 @@ const worlds: WorldView[] = [
     debts: [],
     previousDebts: null,
     paradox: null,
+    colonies: [],
   },
   {
     info: { id: 'C', parent: 'A', fork: 40, generation: 3 },
@@ -47,6 +48,7 @@ const worlds: WorldView[] = [
     debts: [],
     previousDebts: null,
     paradox: null,
+    colonies: [],
   },
   {
     info: { id: 'B', parent: 'C', fork: 60, generation: 4 },
@@ -57,6 +59,7 @@ const worlds: WorldView[] = [
     debts: [],
     previousDebts: null,
     paradox: null,
+    colonies: [],
   },
 ]
 

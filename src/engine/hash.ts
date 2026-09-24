@@ -78,5 +78,8 @@ export function hashState(s: WorldState): string {
       h = feed(h, colony.support)
     }
   }
+  // FEAT: o número do acontecimento que fundou a colônia é escrituração, não física, e fica fora;
+  // o lar só entra quando a história já mudou de corpo, no mesmo padrão condicional
+  if (s.home !== null) h = feed(h, s.home)
   return h.toString(16).padStart(8, '0')
 }

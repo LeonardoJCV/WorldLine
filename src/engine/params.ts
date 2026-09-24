@@ -128,3 +128,11 @@ export const COLONY_CAPACITY = 2_000_000
 export const COLONY_SELF = 0.8
 // FEAT: gente que basta para uma colônia recomeçar a história sozinha
 export const COLONY_SEED_POP = 100_000
+// FEAT: ambiente do novo lar, em pontos por unidade de habitabilidade do corpo herdeiro
+export const INHERIT_ENVIRONMENT = 100
+// FEAT: energia com que a história recomeça no corpo novo
+export const INHERIT_ENERGY = 1
+// FEAT: economia com que a história recomeça no corpo novo
+export const INHERIT_ECONOMY = 1
+// FEAT: o abalo na estabilidade no ano em que a história perde o planeta em que nasceu
+export const INHERIT_SHOCK = 25

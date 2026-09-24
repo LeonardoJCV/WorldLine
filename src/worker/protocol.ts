@@ -1,3 +1,4 @@
+import type { Colony } from '../engine/colony.ts'
 import type { Crossing, CrossingKind, Dose } from '../engine/crossing.ts'
 import type { Debt, Paradox } from '../engine/debt.ts'
 import { EVENTS, type EventId, type EventRecord } from '../engine/events.ts'
@@ -54,6 +55,7 @@ export interface WorldProgress {
   readonly crossings: readonly Crossing[]
   readonly debts: readonly Debt[]
   readonly paradox: Paradox | null
+  readonly colonies: readonly Colony[]
 }
 
 export type Series = Readonly<Record<Variable, Float32Array>>

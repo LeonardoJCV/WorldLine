@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react'
 import { formatYear } from '../app/i18n/format.ts'
 import { useT } from '../app/i18n/index.ts'
+import { INHERITANCE_CASE } from '../engine/golden.ts'
 import {
   runCollapseCheck,
   runGoldenChecks,
+  runInheritanceCheck,
   type CollapseResult,
   type GoldenResult,
+  type InheritanceResult,
 } from './check.ts'
 
 export function VerifyPage() {
   const t = useT()
   const [results, setResults] = useState<readonly GoldenResult[] | null>(null)
   const [collapse, setCollapse] = useState<CollapseResult | null>(null)
+  const [inheritance, setInheritance] = useState<InheritanceResult | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setResults(runGoldenChecks())
       setCollapse(runCollapseCheck())
+      setInheritance(runInheritanceCheck())
     }, 50)
     return () => clearTimeout(timer)
   }, [])
@@ -100,6 +105,49 @@ export function VerifyPage() {
                 <code>{collapse.computed}</code>
               </td>
               <td>{collapse.ok ? t('verify.match') : t('verify.mismatch')}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      <h2 className="verify__title">{t('verify.inheritance.title')}</h2>
+      <p className="verify__lead">
+        {t('verify.inheritance.lead', {
+          founded: formatYear(INHERITANCE_CASE.founded),
+          ended: formatYear(INHERITANCE_CASE.ended),
+          year: formatYear(INHERITANCE_CASE.year),
+        })}
+      </p>
+      <p className="verify__status" role="status">
+        {inheritance === null
+          ? t('verify.inheritance.running')
+          : inheritance.ok
+            ? t('verify.inheritance.passed')
+            : t('verify.inheritance.mismatch')}
+      </p>
+      {inheritance && (
+        <table className="verify__table">
+          <thead>
+            <tr>
+              <th scope="col">{t('verify.seed')}</th>
+              <th scope="col">{t('verify.decisions')}</th>
+              <th scope="col">{t('verify.year')}</th>
+              <th scope="col">{t('verify.expected')}</th>
+              <th scope="col">{t('verify.computed')}</th>
+              <th scope="col">{t('verify.result')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-ok={inheritance.ok}>
+              <td>{inheritance.seed}</td>
+              <td>{t('verify.inheritance.script')}</td>
+              <td>{formatYear(inheritance.year)}</td>
+              <td>
+                <code>{inheritance.hash}</code>
+              </td>
+              <td>
+                <code>{inheritance.computed}</code>
+              </td>
+              <td>{inheritance.ok ? t('verify.match') : t('verify.mismatch')}</td>
             </tr>
           </tbody>
         </table>

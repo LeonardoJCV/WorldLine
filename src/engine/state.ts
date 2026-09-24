@@ -64,6 +64,8 @@ export interface WorldState {
   readonly strain: number
   readonly status: Status
   readonly colonies: readonly Colony[]
+  // FEAT: o corpo que a história chama de lar; null enquanto ela nunca saiu do planeta natal
+  readonly home: number | null
 }
 
 export function isValidAllocation(allocation: Allocation): boolean {

@@ -15,8 +15,13 @@ import {
   COLONY_SUPPORT_NEED,
   COLONY_SUPPORT_RATE,
   COLONY_UPKEEP,
+  GENESIS_FOOD_RESERVE,
+  INHERIT_ECONOMY,
+  INHERIT_ENERGY,
+  INHERIT_ENVIRONMENT,
+  INHERIT_SHOCK,
 } from './params.ts'
-import { Era } from './state.ts'
+import { Era, type WorldState } from './state.ts'
 import { colonisable, type Body } from './system.ts'
 
 // FEAT: um só lugar dono do bit da era espacial, agora que `Era` mora em state.ts
@@ -27,6 +32,8 @@ export interface Colony {
   readonly founded: number
   readonly population: number
   readonly support: number
+  // FEAT: o acontecimento que registrou a fundação, para a herança poder apontar de volta para ele
+  readonly record: number
 }
 
 export interface HomeWorld {
@@ -37,6 +44,7 @@ export interface HomeWorld {
 export interface ColonisingWorld extends HomeWorld {
   readonly eras: number
   readonly colonies: readonly Colony[]
+  readonly home: number | null
 }
 
 export interface ColonyTick {
@@ -64,6 +72,7 @@ export function foundColony(
   state: ColonisingWorld,
   bodies: readonly Body[],
   year: number,
+  record: number,
 ): Colony | null {
   if ((state.eras & SPACE_ERA) === 0) return null
   if (spareEnergy(state) - colonyCost(state.colonies) < COLONY_FOUND_COST) return null
@@ -71,6 +80,8 @@ export function foundColony(
   let best: Body | null = null
   for (const body of bodies) {
     if (!colonisable(body)) continue
+    // FEAT: o corpo onde a história mora hoje não é destino, mesmo que tenha sido colônia ontem
+    if (body.index === state.home) continue
     // FEAT: um corpo que não comporta nem a primeira leva não é destino nenhum
     if (COLONY_CAPACITY * body.habitability < COLONY_START_POP) continue
     if (state.colonies.some((colony) => colony.body === body.index)) continue
@@ -83,7 +94,7 @@ export function foundColony(
     return null
   }
 
-  return { body: best.index, founded: year, population: COLONY_START_POP, support: 0 }
+  return { body: best.index, founded: year, population: COLONY_START_POP, support: 0, record }
 }
 
 export function tickColonies(
@@ -138,4 +149,30 @@ export function heir(colonies: readonly Colony[]): Colony | null {
     if (best === null || colony.population > best.population) best = colony
   }
   return best
+}
+
+// FEAT: a história muda de casa — a gente é a da colônia, os estoques recomeçam pequenos e o
+// conhecimento atravessa, porque ele não morre com um planeta
+export function inherit(s: WorldState, colony: Colony, body: Body | undefined): WorldState {
+  const population = Math.max(0, colony.population)
+  return {
+    ...s,
+    population,
+    food: population * GENESIS_FOOD_RESERVE,
+    energy: INHERIT_ENERGY,
+    economy: INHERIT_ECONOMY,
+    environment: clamp(INHERIT_ENVIRONMENT * (body?.habitability ?? 0), 0, 100),
+    stability: clamp(s.stability - INHERIT_SHOCK, 0, 100),
+    recentEconomy: s.recentEconomy.map(() => INHERIT_ECONOMY),
+    // FEAT: a frota que o mundo natal sustentava se perde com ele; só o herdeiro sobrevive, como lar
+    colonies: [],
+    home: colony.body,
+    // FEAT: o que era devido, o que estava a caminho e a contradição que matou o planeta ficam com
+    // ele; o herdeiro leva o conhecimento, não as contas — e por isso a realidade volta a correr
+    echoes: [],
+    debts: [],
+    paradox: null,
+    strain: 0,
+    status: 'running',
+  }
 }

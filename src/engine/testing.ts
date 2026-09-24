@@ -27,6 +27,7 @@ export function makeState(overrides: Partial<WorldState> = {}): WorldState {
     strain: 0,
     status: 'running',
     colonies: [],
+    home: null,
     ...overrides,
   }
 }

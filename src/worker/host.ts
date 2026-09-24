@@ -653,6 +653,7 @@ export class SimulationHost {
       })),
       debts: worldline.present.debts,
       paradox: worldline.present.paradox,
+      colonies: worldline.present.colonies,
     }
   }
 
