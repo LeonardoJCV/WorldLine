@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Colony } from '../../engine/colony.ts'
+import type { EventRecord } from '../../engine/events.ts'
 import { COLONY_SEED_POP, COLONY_SELF } from '../../engine/params.ts'
 import { system } from '../../engine/system.ts'
-import { bodyName, colonyView } from './colonies.ts'
+import {
+  bodyName,
+  colonyView,
+  homeBody,
+  inheritanceHeir,
+  inheritanceView,
+  lastInheritance,
+} from './colonies.ts'
 
 function colony(overrides: Partial<Colony> = {}): Colony {
   return {
@@ -92,5 +100,74 @@ describe('colonyView', () => {
     const enough = colony({ body: 2, support: COLONY_SELF, population: COLONY_SEED_POP })
     expect(colonyView([short], 482913)?.anySelf).toBe(false)
     expect(colonyView([short, enough], 482913)?.anySelf).toBe(true)
+  })
+})
+
+describe('homeBody', () => {
+  it('is the body the system itself marks as home', () => {
+    for (const seed of [1, 2, 3, 482913, 999999]) {
+      const bodies = system(seed)
+      expect(bodies[homeBody(seed)]?.home).toBe(true)
+    }
+  })
+})
+
+// FEAT: a mesma cadeia que o motor grava — a herança aponta para o colapso e para a fundação
+const FOUNDED: EventRecord = { event: 'colony_founded', start: 1803, end: 1803, causes: [] }
+const COLLAPSE: EventRecord = { event: 'collapse', start: 2283, end: null, causes: [] }
+const MOVED: EventRecord = {
+  event: 'inheritance',
+  start: 2283,
+  end: 2283,
+  causes: [
+    { kind: 'event', record: 1 },
+    { kind: 'event', record: 0 },
+  ],
+}
+const RECORDS: readonly EventRecord[] = [FOUNDED, COLLAPSE, MOVED]
+
+describe('lastInheritance', () => {
+  it('is null on a history that never changed worlds', () => {
+    expect(lastInheritance([FOUNDED, COLLAPSE])).toBeNull()
+  })
+
+  it('finds the inheritance among the records', () => {
+    expect(lastInheritance(RECORDS)).toBe(MOVED)
+  })
+
+  it('keeps the latest when a history changed worlds more than once', () => {
+    const again: EventRecord = { ...MOVED, start: 4000, end: 4000 }
+    expect(lastInheritance([...RECORDS, again])).toBe(again)
+    expect(lastInheritance([again, ...RECORDS])).toBe(again)
+  })
+})
+
+describe('inheritanceHeir', () => {
+  it('follows the pointer the engine wrote, not a rule of its own', () => {
+    const heir = colony({ body: 1, record: 0, population: 835_635 })
+    const other = colony({ body: 3, record: 9, population: 2_000_000 })
+    expect(inheritanceHeir(MOVED, RECORDS, [other, heir])).toBe(heir)
+  })
+
+  it('ignores causes that do not point at a founding', () => {
+    const wrong = colony({ body: 2, record: 1 })
+    expect(inheritanceHeir(MOVED, RECORDS, [wrong])).toBeNull()
+  })
+
+  it('is null when the heir was never seen on screen', () => {
+    expect(inheritanceHeir(MOVED, RECORDS, [])).toBeNull()
+  })
+})
+
+describe('inheritanceView', () => {
+  it('says where the history went, from where, in what year and with how many', () => {
+    const heir = colony({ body: 1, record: 0, population: 835_635 })
+    const view = inheritanceView(MOVED, heir, 482913, homeBody(482913))
+    expect(view).toEqual({
+      year: 2283,
+      body: bodyName(482913, 1),
+      home: bodyName(482913, homeBody(482913)),
+      people: 835_635,
+    })
   })
 })

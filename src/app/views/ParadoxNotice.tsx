@@ -4,6 +4,7 @@ import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
 import { formatCompact, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
+import { lastInheritance } from './colonies.ts'
 import { endingYear, paradoxView, repayHint } from './debt.ts'
 
 // FEAT: o alívio dura tempo de leitura, não anos simulados — a ×256 alguns anos passariam num piscar
@@ -13,6 +14,7 @@ type Spoken = {
   readonly id: WorldlineId
   readonly kind: ParadoxKind | null
   readonly status: Snapshot['status'] | null
+  readonly inherited: number | null
 }
 
 export function ParadoxNotice() {
@@ -28,17 +30,20 @@ export function ParadoxNotice() {
   const kind = view?.kind ?? null
   const hint = repayHint(debts.map((debt) => debt.kind))
   const [announced, setAnnounced] = useState<'relief' | 'collapse' | null>(null)
+  const inherited = lastInheritance(events)?.start ?? null
   // FEAT: anuncia-se a espécie do paradoxo e o estado deste mundo, não o objeto, que nasce a cada quadro
-  const spoken = useRef<Spoken>({ id: focus, kind: null, status })
+  const spoken = useRef<Spoken>({ id: focus, kind: null, status, inherited })
 
   useEffect(() => {
     const before = spoken.current
-    spoken.current = { id: focus, kind, status }
+    spoken.current = { id: focus, kind, status, inherited }
     // FEAT: só o colapso visto acontecer se anuncia; um mundo que já chega colapsado do endereço, não
     if (before.id !== focus) setAnnounced(null)
     else if (before.status === 'running' && status === 'collapsed') setAnnounced('collapse')
+    // FIX: a herança zera o paradoxo sem quitar nada; quem fala desse ano é o anúncio da herança
+    else if (before.inherited !== inherited) setAnnounced(null)
     else if (before.kind !== null && kind === null) setAnnounced('relief')
-  }, [focus, kind, status])
+  }, [focus, kind, status, inherited])
 
   useEffect(() => {
     if (announced === null) return

@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../src/engine/golden.ts'
+import { MODEL_VERSION } from '../src/engine/params.ts'
+import { encodeMultiverse } from '../src/app/world/link.ts'
 import { useGraphics } from './stage.ts'
 import { installParadox, pickOrigin, runToCollapse, runToParadox } from './support.ts'
 
@@ -267,6 +270,31 @@ test('state colonies', async ({ page }) => {
   await panel.scrollIntoViewIfNeeded()
   await page.waitForTimeout(300)
   await panel.screenshot({ path: 'screens/state-colonies.png' })
+})
+
+test('inheritance notice', async ({ page }) => {
+  test.slow()
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // FEAT: o roteiro dourado da herança (golden.ts), aberto treze anos antes da queda do mundo natal
+  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+  const link = encodeMultiverse({
+    version: MODEL_VERSION,
+    seed: INHERITANCE_CASE.seed,
+    tick: INHERITANCE_CASE.ended - 13,
+    decisions: plan.decisions,
+    crossings: plan.crossings,
+    branches: [],
+  })
+  await page.goto(`/#/m/${link}`)
+  await expect(page.locator('.state__colonies')).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('button', { name: '×16' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  const notice = page.locator('.inheritance')
+  await expect(notice).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'screens/inheritance-notice.png' })
 })
 
 for (const viewport of VIEWPORTS) {

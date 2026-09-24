@@ -287,6 +287,66 @@
   font-size: var(--text-sm);
 }
 
+/* FEAT: o anúncio de uma história que trocou de mundo é a coisa mais visível da tela enquanto dura */
+.notices > .inheritance {
+  justify-self: stretch;
+}
+
+.inheritance {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-6);
+  border: 1px solid var(--v-food);
+  border-inline-start-width: 5px;
+  border-radius: var(--radius);
+  background: linear-gradient(rgb(242 211 94 / 0.12), rgb(242 211 94 / 0.12)), rgb(10 11 30 / 0.86);
+  color: var(--starlight);
+  animation: inheritance-arrive var(--motion-slow) var(--ease);
+}
+
+.inheritance__when {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  color: var(--v-food);
+  font-size: var(--text-sm);
+  font-stretch: 87%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inheritance__mark {
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.inheritance__moved {
+  font-size: clamp(1.25rem, 2.6vw, 1.75rem);
+  font-weight: 700;
+  font-stretch: 112%;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.inheritance__kept {
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+
+@keyframes inheritance-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inheritance {
+    animation: none;
+  }
+}
+
 /* FEAT: no celular a barra é só o ano e o que se toca enquanto se observa; o resto é uma linha atrás do ⋯ */
 @media (max-width: 900px) {
   .topbar {

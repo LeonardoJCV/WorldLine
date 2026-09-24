@@ -72,6 +72,9 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'colonies.many': '{count}, a maior em {body}',
   'colonies.self': 'autossuficiente',
   'colonies.supported': 'ainda sustentada pelo mundo natal',
+  'inheritance.year': 'Ano {year}',
+  'inheritance.moved': 'A história se mudou para {body}. {people} sobreviveram ao fim de {home}.',
+  'inheritance.kept': 'O que o mundo sabia não se perdeu.',
   'paradox.debt': 'Esta história não se sustenta mais: depende de mais do que jamais produziu.',
   'paradox.leap':
     'Esta história não se sustenta mais: recebeu o que sua época ainda não podia conter.',

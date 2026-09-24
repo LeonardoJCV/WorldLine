@@ -74,6 +74,9 @@ export const en = {
   'colonies.many': '{count}, the largest on {body}',
   'colonies.self': 'self-sufficient',
   'colonies.supported': 'still supported from home',
+  'inheritance.year': 'Year {year}',
+  'inheritance.moved': 'The history moved to {body}. {people} survived the end of {home}.',
+  'inheritance.kept': 'What the world knew was not lost.',
   'paradox.debt': 'This history no longer holds: it depends on more than it ever produced.',
   'paradox.leap': 'This history no longer holds: it received what its age could not yet hold.',
   'paradox.circular':

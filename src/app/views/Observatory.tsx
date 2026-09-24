@@ -22,6 +22,7 @@ import { CrossPanel } from './CrossPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
 import { sheetReserve } from './hud.ts'
 import { useSheet } from './hudStore.ts'
+import { InheritanceNotice } from './InheritanceNotice.tsx'
 import { PanelCard } from './PanelCard.tsx'
 import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
@@ -103,6 +104,8 @@ export function Observatory({
 
   const notices = (
     <div className="notices" role="status" ref={setNoticeBand}>
+      {/* FEAT: a mudança de mundo é o que há de maior para anunciar; fala antes do paradoxo */}
+      <InheritanceNotice />
       <ParadoxNotice />
       {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
         <p>{t('link.version', { version: linkVersion })}</p>
