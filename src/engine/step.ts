@@ -174,7 +174,7 @@ export function step(
   let seamed = crossed
   if (merge) {
     const stamp = { tick: merge.tick, other: merge.other }
-    const owedBefore = totalOwed(s.debts) + totalOwed(merge.debts ?? [])
+    const owedBefore = totalOwed(crossed.debts) + totalOwed(merge.debts ?? [])
     seamed = { ...mergeStates(crossed, merge), lastMerge: stamp }
     mergeStarted.push(moment('merge', s.tick, [{ kind: 'merge', ...stamp }]))
     if (totalOwed(seamed.debts) < owedBefore) {

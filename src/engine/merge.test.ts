@@ -317,6 +317,16 @@ describe('mergeStates, homes', () => {
     expect(merged.colonies.find((c) => c.body === 2)?.population).toBe(1_000_000)
   })
 
+  it('writes the natal body as null when the heavier history never left it', () => {
+    const merged = mergeStates(
+      world({ population: 1_000_000, home: 2 }),
+      incoming({ population: 9_000_000 }, { natal: 7, home: 7 }),
+    )
+    expect(merged.home).toBeNull()
+    expect(merged.population).toBe(9_000_000)
+    expect(merged.colonies.find((c) => c.body === 2)?.population).toBe(1_000_000)
+  })
+
   it('folds a foreign colony into the population instead of leaving it on the body that becomes home', () => {
     const merged = mergeStates(
       world({ population: 3_000_000, home: 2, colonies: [] }),

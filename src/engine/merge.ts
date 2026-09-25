@@ -97,8 +97,9 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
   const ownWins = sameHome || ownHeavier
   const ownLostHome = !sameHome && !ownHeavier
   const otherLostHome = !sameHome && ownHeavier
-  const home = ownWins ? s.home : (incoming.home ?? null)
   const resolvedHome = ownWins ? ownHome : otherHome
+  // FIX: o corpo natal se escreve `null`, senão dois estados iguais teriam hashes diferentes
+  const home = resolvedHome === incoming.natal ? null : resolvedHome
 
   // FEAT: lares diferentes não somam gente; a história mais leve perde a casa, não o povo — o
   // lar dela vira colônia da vencedora, com support 1 porque quem já se bastava segue se bastando
