@@ -3,7 +3,7 @@ import type { Colony } from './colony.ts'
 import type { Debt } from './debt.ts'
 import { mergeColonies, mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
-import { VARIABLES, type Variable, type WorldState } from './state.ts'
+import { NEVER, VARIABLES, type Variable, type WorldState } from './state.ts'
 import { makeState } from './testing.ts'
 
 function world(overrides: Partial<WorldState> = {}): WorldState {
@@ -232,6 +232,28 @@ describe('mergeStates, homes', () => {
     expect(merged.population).toBe(9_000_000)
     expect(merged.colonies.find((c) => c.body === 2)?.population).toBe(1_000_000)
   })
+
+  it('folds a foreign colony into the population instead of leaving it on the body that becomes home', () => {
+    const merged = mergeStates(
+      world({ population: 3_000_000, home: 2, colonies: [] }),
+      incoming(
+        { population: 1_000_000 },
+        { home: 4, colonies: [colony({ body: 2, population: 50_000, support: 0.6 })] },
+      ),
+    )
+    expect(merged.home).toBe(2)
+    expect(merged.population).toBe(3_050_000)
+    expect(merged.colonies.find((c) => c.body === 2)).toBeUndefined()
+    expect(merged.colonies.find((c) => c.body === 4)?.population).toBe(1_000_000)
+  })
+
+  it('never lets a colony crossing the seam alone carry a causal record into the survivor', () => {
+    const merged = mergeStates(
+      world({ population: 3_000_000, home: null }),
+      incoming({ population: 1_000_000 }, { home: 5, colonies: [colony({ body: 7, record: 9 })] }),
+    )
+    expect(merged.colonies.find((c) => c.body === 7)?.record).toBe(NEVER)
+  })
 })
 
 describe('mergeColonies', () => {
@@ -263,5 +285,24 @@ describe('mergeColonies', () => {
   it('orders the fleet by body so the same seam always reads the same', () => {
     const merged = mergeColonies([colony({ body: 4 })], [colony({ body: 1 })], { a: 0.5, b: 0.5 })
     expect(merged.map((c) => c.body)).toEqual([1, 4])
+  })
+
+  it('never keeps a record that points into the other side, native or merged', () => {
+    const solo = mergeColonies([], [colony({ body: 4, record: 9 })], { a: 0.5, b: 0.5 })
+    expect(solo[0]?.record).toBe(NEVER)
+
+    const incomingOlder = mergeColonies(
+      [colony({ body: 4, founded: 2200, record: 1 })],
+      [colony({ body: 4, founded: 1900, record: 9 })],
+      { a: 0.5, b: 0.5 },
+    )
+    expect(incomingOlder[0]?.record).toBe(NEVER)
+
+    const ownOlder = mergeColonies(
+      [colony({ body: 4, founded: 1900, record: 1 })],
+      [colony({ body: 4, founded: 2200, record: 9 })],
+      { a: 0.5, b: 0.5 },
+    )
+    expect(ownOlder[0]?.record).toBe(1)
   })
 })

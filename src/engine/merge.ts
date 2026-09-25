@@ -55,16 +55,17 @@ export function mergeColonies(
   for (const colony of incoming) {
     const there = byBody.get(colony.body)
     if (there === undefined) {
-      byBody.set(colony.body, colony)
+      // FEAT: sem par do lado nativo, o record cruza sozinho; vira NEVER, não a causa de outra história
+      byBody.set(colony.body, { ...colony, record: NEVER })
       continue
     }
-    const older = there.founded <= colony.founded ? there : colony
+    const ownOlder = there.founded <= colony.founded
     byBody.set(colony.body, {
       body: colony.body,
-      founded: older.founded,
+      founded: ownOlder ? there.founded : colony.founded,
       population: there.population + colony.population,
       support: there.support * weights.a + colony.support * weights.b,
-      record: older.record,
+      record: ownOlder ? there.record : NEVER,
     })
   }
   return [...byBody.values()].sort((a, b) => a.body - b.body)
@@ -81,8 +82,11 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
   const otherHome = incoming.home ?? incoming.natal
   const sameHome = ownHome === otherHome
   const ownHeavier = s.population >= value('population')
+  const ownWins = sameHome || ownHeavier
   const ownLostHome = !sameHome && !ownHeavier
   const otherLostHome = !sameHome && ownHeavier
+  const home = ownWins ? s.home : (incoming.home ?? null)
+  const resolvedHome = ownWins ? ownHome : otherHome
 
   // FEAT: lares diferentes não somam gente; a história mais leve perde a casa, não o povo — o
   // lar dela vira colônia da vencedora, com support 1 porque quem já se bastava segue se bastando
@@ -99,21 +103,27 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
     ? [...incomingColonies, demoted(otherHome, value('population'))]
     : incomingColonies
 
+  // FEAT: colônia nunca fica no corpo que é o lar; se a estrangeira caía lá, vira gente do lar
+  const united = mergeColonies(ownFleet, otherFleet, weights)
+  const capital = united.find((colony) => colony.body === resolvedHome)
+  const colonies = capital ? united.filter((colony) => colony.body !== resolvedHome) : united
+  const basePopulation = sameHome
+    ? s.population + value('population')
+    : ownHeavier
+      ? s.population
+      : value('population')
+
   return {
     ...s,
-    home: sameHome || ownHeavier ? s.home : (incoming.home ?? null),
-    population: sameHome
-      ? s.population + value('population')
-      : ownHeavier
-        ? s.population
-        : value('population'),
+    home,
+    population: basePopulation + (capital?.population ?? 0),
     food: s.food + value('food'),
     energy: blend('energy'),
     technology: blend('technology'),
     economy: blend('economy'),
     environment: blend('environment'),
     stability: clamp(blend('stability') - MERGE_SHOCK, 0, 100),
-    colonies: mergeColonies(ownFleet, otherFleet, weights),
+    colonies,
     debts: settleDebts(s.debts, incoming.debts ?? [], [incoming.self, incoming.other]),
     echoes: [...s.echoes, ...(incoming.echoes ?? [])],
     paradox: nearerParadox(s.paradox, incoming.paradox ?? null),
