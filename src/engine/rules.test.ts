@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { crossingAmounts, crossingCost, type Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
 import { EVENTS, METRICS, worldMetrics } from './events.ts'
+import { PARAMS as K } from './params.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
 import { Era, VARIABLES } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
@@ -261,5 +262,13 @@ describe('a world emptied by an out-crossing where the land already collapsed', 
     if (!crowdingTrigger) throw new Error('epidemic must trigger on crowding')
     expect(crowdingTrigger.op).toBe('>')
     expect(crowded.crowding).toBeGreaterThan(crowdingTrigger.value)
+  })
+})
+
+describe('parameter invariants', () => {
+  it('keeps the carrying-capacity factor positive, or crowding loses its sign in every world', () => {
+    // FEAT: carryingCapacity = capacity * (1 - 1/(laborShare*y0)); se o fator virasse negativo,
+    // crowding ficaria negativo em todo mundo com ambiente, e epidemic nunca mais dispararia
+    expect(K.laborShare * K.y0).toBeGreaterThan(1)
   })
 })
