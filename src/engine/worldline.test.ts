@@ -381,8 +381,9 @@ describe('a year that carries a confluence', () => {
     const line = new Worldline(SEED)
     line.advance(400)
     const before = line.present.population
-    const seam = line.merge(arriving(400))
-    expect(line.merges).toEqual([seam])
+    line.merge(arriving(400))
+    // FEAT: o log guarda o recibo inteiro, conferido contra um igual construído à parte
+    expect(line.merges).toEqual([arriving(400)])
     line.advance(1)
     expect(line.present.population).toBeGreaterThan(before)
     expect(line.present.lastMerge).toEqual({ tick: 400, other: 'B' })

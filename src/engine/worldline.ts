@@ -141,6 +141,7 @@ export class Worldline {
       const away = seam?.direction === 'out'
       let due: Decision | undefined
       let arriving: readonly Crossing[] = NO_CROSSINGS
+      // FEAT: precaução, não comportamento provado — nada aqui é observável pela API pública hoje
       if (!away) {
         due = this.#dueDecision(this.#nextDecision, this.#state.tick)
         if (due) this.#nextDecision++
