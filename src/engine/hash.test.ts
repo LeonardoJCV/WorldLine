@@ -98,7 +98,10 @@ describe('hashState', () => {
   })
 
   it('ignores the merge field while it is empty', () => {
-    expect(hashState({ ...state, lastMerge: null })).toBe(hashState(state))
+    const merged = { ...state, lastMerge: { tick: 1450, other: 'B' } }
+    expect(hashState(merged)).not.toBe(hashState(state))
+    // FIX: comparado ao hash fixo, não a uma nova chamada, para pegar um campo que vaza mesmo vazio
+    expect(hashState({ ...merged, lastMerge: null })).toBe('77ebb9f5')
   })
 
   it('hashes the year of a merge but never the name of the other history', () => {
@@ -110,11 +113,32 @@ describe('hashState', () => {
     )
   })
 
-  it('leaves the three old status codes where they were', () => {
-    expect(hashState({ ...state, status: 'merged' })).not.toBe(hashState(state))
-    expect(hashState({ ...state, status: 'extinct' })).not.toBe(
-      hashState({ ...state, status: 'merged' }),
-    )
+  it('gives each of the four statuses its own code, and leaves the three old ones where they were', () => {
+    const running = hashState(state)
+    const extinct = hashState({ ...state, status: 'extinct' })
+    const collapsed = hashState({ ...state, status: 'collapsed' })
+    const merged = hashState({ ...state, status: 'merged' })
+    // FIX: comparação par a par, não só contra 'merged', para pegar uma colisão entre dois antigos
+    expect(new Set([running, extinct, collapsed, merged]).size).toBe(4)
+    expect(running).toBe('77ebb9f5')
+    expect(extinct).toBe('26389b1a')
+    expect(collapsed).toBe('1f93f1b5')
+  })
+
+  it('pins a state with several optional blocks populated at once, so no block can move', () => {
+    // FIX: nenhum teste isolado prova a ordem dos blocos condicionais; este cobre todos de uma vez
+    const composite = {
+      ...state,
+      echoes: [{ target: 'technology' as const, remaining: 10 }],
+      lastCrossing: { tick: 5, kind: 'knowledge' as const },
+      debts: [{ kind: 'knowledge' as const, owed: 10, since: 0, origin: 'other' }],
+      paradox: { kind: 'circular' as const, since: 2, deadline: 10 },
+      strain: 3,
+      colonies: [{ body: 2, founded: 400, population: 1000, support: 0.2, record: 3 }],
+      home: 2,
+      lastMerge: { tick: 1450, other: 'B' },
+    }
+    expect(hashState(composite)).toBe('18c12365')
   })
 
   it('ignores a new event that never fired, but reacts once one has', () => {
