@@ -49,7 +49,6 @@ function nearerParadox(a: Paradox | null, b: Paradox | null): Paradox | null {
 export function mergeColonies(
   own: readonly Colony[],
   incoming: readonly Colony[],
-  weights: { readonly a: number; readonly b: number },
 ): readonly Colony[] {
   const byBody = new Map<number, Colony>(own.map((colony) => [colony.body, colony]))
   for (const colony of incoming) {
@@ -60,11 +59,13 @@ export function mergeColonies(
       continue
     }
     const ownOlder = there.founded <= colony.founded
+    // FIX: sustento é grandeza da colônia, então mistura pelos colonos dos dois lados, não pelas metrópoles
+    const settlers = mergeWeights(there.population, colony.population)
     byBody.set(colony.body, {
       body: colony.body,
       founded: ownOlder ? there.founded : colony.founded,
       population: there.population + colony.population,
-      support: there.support * weights.a + colony.support * weights.b,
+      support: there.support * settlers.a + colony.support * settlers.b,
       record: ownOlder ? there.record : NEVER,
     })
   }
@@ -104,7 +105,7 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
     : incomingColonies
 
   // FEAT: colônia nunca fica no corpo que é o lar; se a estrangeira caía lá, vira gente do lar
-  const united = mergeColonies(ownFleet, otherFleet, weights)
+  const united = mergeColonies(ownFleet, otherFleet)
   const capital = united.find((colony) => colony.body === resolvedHome)
   const colonies = capital ? united.filter((colony) => colony.body !== resolvedHome) : united
   const basePopulation = sameHome

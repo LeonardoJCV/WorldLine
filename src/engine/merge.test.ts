@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Colony } from './colony.ts'
+import { selfSufficient, type Colony } from './colony.ts'
 import type { Debt } from './debt.ts'
 import { mergeColonies, mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
@@ -256,9 +256,40 @@ describe('mergeStates, homes', () => {
   })
 })
 
+describe('mergeStates, colonies', () => {
+  it('blends a shared colony support by the two colonies, not by the two homes', () => {
+    const merged = mergeStates(
+      world({
+        population: 100_000,
+        home: null,
+        colonies: [colony({ body: 4, population: 1_500_000, support: 0.95 })],
+      }),
+      incoming(
+        { population: 5_000_000 },
+        { home: null, colonies: [colony({ body: 4, population: 1_000, support: 0.05 })] },
+      ),
+    )
+    const shared = merged.colonies.find((c) => c.body === 4)
+    expect(shared?.population).toBe(1_501_000)
+    expect(shared?.support).toBeCloseTo(0.9494, 4)
+    expect(shared ? selfSufficient(shared) : false).toBe(true)
+  })
+
+  it('splits a shared colony evenly when neither side left anybody on that body', () => {
+    const merged = mergeStates(
+      world({ population: 1_000_000, colonies: [colony({ body: 4, population: 0, support: 1 })] }),
+      incoming(
+        { population: 3_000_000 },
+        { colonies: [colony({ body: 4, population: 0, support: 0 })] },
+      ),
+    )
+    expect(merged.colonies.find((c) => c.body === 4)?.support).toBeCloseTo(0.5)
+  })
+})
+
 describe('mergeColonies', () => {
   it('joins the two fleets', () => {
-    const merged = mergeColonies([colony({ body: 1 })], [colony({ body: 4 })], { a: 0.5, b: 0.5 })
+    const merged = mergeColonies([colony({ body: 1 })], [colony({ body: 4 })])
     expect(merged.map((c) => c.body).sort()).toEqual([1, 4])
   })
 
@@ -266,7 +297,6 @@ describe('mergeColonies', () => {
     const merged = mergeColonies(
       [colony({ body: 4, population: 300_000, support: 0.9 })],
       [colony({ body: 4, population: 100_000, support: 0.5 })],
-      { a: 0.75, b: 0.25 },
     )
     expect(merged).toHaveLength(1)
     expect(merged[0]?.population).toBe(400_000)
@@ -277,31 +307,28 @@ describe('mergeColonies', () => {
     const merged = mergeColonies(
       [colony({ body: 4, founded: 2200 })],
       [colony({ body: 4, founded: 1900 })],
-      { a: 0.5, b: 0.5 },
     )
     expect(merged[0]?.founded).toBe(1900)
   })
 
   it('orders the fleet by body so the same seam always reads the same', () => {
-    const merged = mergeColonies([colony({ body: 4 })], [colony({ body: 1 })], { a: 0.5, b: 0.5 })
+    const merged = mergeColonies([colony({ body: 4 })], [colony({ body: 1 })])
     expect(merged.map((c) => c.body)).toEqual([1, 4])
   })
 
   it('never keeps a record that points into the other side, native or merged', () => {
-    const solo = mergeColonies([], [colony({ body: 4, record: 9 })], { a: 0.5, b: 0.5 })
+    const solo = mergeColonies([], [colony({ body: 4, record: 9 })])
     expect(solo[0]?.record).toBe(NEVER)
 
     const incomingOlder = mergeColonies(
       [colony({ body: 4, founded: 2200, record: 1 })],
       [colony({ body: 4, founded: 1900, record: 9 })],
-      { a: 0.5, b: 0.5 },
     )
     expect(incomingOlder[0]?.record).toBe(NEVER)
 
     const ownOlder = mergeColonies(
       [colony({ body: 4, founded: 1900, record: 1 })],
       [colony({ body: 4, founded: 2200, record: 9 })],
-      { a: 0.5, b: 0.5 },
     )
     expect(ownOlder[0]?.record).toBe(1)
   })
