@@ -193,10 +193,9 @@ export const ERA_ROW_HEIGHT = 20
 export const EPISODE_ROW_HEIGHT = 8
 
 export function eraLabelY(frame: Frame, row: number): number {
-  const desired = frame.centerY - frame.height * 0.26
-  // FIX: em quadro baixo, desce a pilha inteira, para a fileira mais alta não passar do topo do quadro
-  const ceiling = frame.centerY - frame.height / 2 + (ERA_ROWS - 1) * ERA_ROW_HEIGHT
-  return Math.max(desired, ceiling) - Math.max(row, 0) * ERA_ROW_HEIGHT
+  const wanted = frame.centerY - frame.height * 0.26 - Math.max(row, 0) * ERA_ROW_HEIGHT
+  // FIX: cada fileira sobe até o topo do quadro, nunca além -- fileiras que já cabiam não se mexem
+  return Math.max(wanted, frame.centerY - frame.height / 2)
 }
 
 export function episodeY(frame: Frame, row: number): number {

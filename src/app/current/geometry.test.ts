@@ -278,12 +278,15 @@ describe('layoutEvents', () => {
 
 describe('eraLabelY', () => {
   // FIX: 320px de largura com o palco no piso de MIN_STAGE (120), a tela mais curta que o app desenha
-  it('keeps the highest era row inside the frame on the shortest stage a phone can draw', () => {
+  it('keeps every era row inside the frame on both edges, on the shortest stage a phone can draw', () => {
     for (const width of [320, 719, 1024]) {
       const { frame: short } = stageLayout(width, 120)
       const top = short.centerY - short.height / 2
+      const bottom = short.centerY + short.height / 2
       for (let row = 0; row < ERA_ROWS; row++) {
-        expect(eraLabelY(short, row), `width=${width} row=${row}`).toBeGreaterThanOrEqual(top)
+        const y = eraLabelY(short, row)
+        expect(y, `width=${width} row=${row} (top)`).toBeGreaterThanOrEqual(top)
+        expect(y, `width=${width} row=${row} (bottom)`).toBeLessThanOrEqual(bottom)
       }
     }
   })
