@@ -71,8 +71,10 @@ export function derive(
   const carryingCapacity = capacity * (1 - 1 / (K.laborShare * K.y0))
   const shock = (1 + K.harvestNoise * (2 * harvestNoise - 1)) * mods.harvest
   const stabilityYield = K.harvestStabilityBase + ((1 - K.harvestStabilityBase) * s.stability) / 100
+  const demand = labor + capacity / K.y0
+  // FIX: sem ninguém e sem terra os dois zeram juntos, e colheita nenhuma é zero, não indefinida
   const foodProduction =
-    ((capacity * labor) / (labor + capacity / K.y0)) * shock * stabilityYield * mods.production
+    demand > 0 ? ((capacity * labor) / demand) * shock * stabilityYield * mods.production : 0
   const foodAvailable = s.food * (1 - K.spoil) + foodProduction
   // FIX: sem ninguém para alimentar, a comida por pessoa não é uma divisão
   const foodSecurity = s.population > 0 ? foodAvailable / s.population : Number.POSITIVE_INFINITY

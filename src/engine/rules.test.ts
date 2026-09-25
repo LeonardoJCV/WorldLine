@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { crossingAmounts, crossingCost, type Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
 import { Era, VARIABLES } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
+import { Worldline } from './worldline.ts'
 
 const neutral = NEUTRAL_MODIFIERS
 const calm = 0.5
@@ -76,6 +78,25 @@ describe('derive', () => {
     const lean = derive(makeState(), TEST_WORLD, neutral, 0)
     const rich = derive(makeState(), TEST_WORLD, neutral, 0.999)
     expect(rich.foodProduction).toBeGreaterThan(lean.foodProduction)
+  })
+
+  it('harvests nothing when there is nobody to work and nothing to grow on', () => {
+    // FEAT: os dois zeros juntos davam 0/0; separados, cada um já dava zero e sempre deu
+    const empty = derive(makeState({ population: 0, environment: 0 }), TEST_WORLD, neutral, calm)
+    expect(Number.isFinite(empty.foodProduction)).toBe(true)
+    expect(empty.foodProduction).toBe(0)
+  })
+
+  it('already harvested nothing with either zero alone, and still does', () => {
+    const noPeople = derive(
+      makeState({ population: 0, environment: 50 }),
+      TEST_WORLD,
+      neutral,
+      calm,
+    )
+    const noLand = derive(makeState({ population: 1e6, environment: 0 }), TEST_WORLD, neutral, calm)
+    expect(noPeople.foodProduction).toBe(0)
+    expect(noLand.foodProduction).toBe(0)
   })
 })
 
@@ -185,5 +206,45 @@ describe('integrate', () => {
     expect(smallPenalty).toBeGreaterThan(0)
     expect(bigPenalty).toBeGreaterThan(0)
     expect(bigPenalty).toBeLessThan(smallPenalty)
+  })
+})
+
+// FEAT: o mundo alcançado pelo revisor: semente 0, um presente de recurso no ano 0 colapsa o
+// ambiente, e uma saída de gente no ano 19 leva embora exatamente a população daquele ano
+describe('a world emptied by an out-crossing where the land already collapsed', () => {
+  const DONOR = { technology: 40, food: 600, energy: 400, population: 900 }
+
+  const gift: Crossing = {
+    tick: 0,
+    kind: 'resource',
+    dose: 3,
+    amounts: crossingAmounts('resource', 3, DONOR),
+    origin: { world: 'donor', tick: 0 },
+    cost: crossingCost('resource', 3, 0),
+    direction: 'in',
+  }
+
+  it('reaches nowhere to grow on by year 19, through the public API', () => {
+    const probe = new Worldline(0, [], null, [gift])
+    probe.advance(19)
+    expect(probe.present.environment).toBe(0)
+  })
+
+  it('harvests nothing instead of throwing, once the population that year also leaves', () => {
+    const probe = new Worldline(0, [], null, [gift])
+    probe.advance(19)
+    const departure: Crossing = {
+      tick: 19,
+      kind: 'people',
+      dose: 3,
+      amounts: [probe.present.population],
+      origin: { world: 'donor', tick: 19 },
+      cost: 0,
+      direction: 'out',
+    }
+    const w = new Worldline(0, [], null, [gift, departure])
+    w.advance(20)
+    expect(w.present.population).toBe(0)
+    for (const variable of VARIABLES) expect(Number.isFinite(w.present[variable])).toBe(true)
   })
 })
