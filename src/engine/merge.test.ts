@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { selfSufficient, type Colony } from './colony.ts'
 import { repay, type Debt } from './debt.ts'
-import { worldDerived } from './events.ts'
+import { EVENTS, worldDerived } from './events.ts'
 import { mergeColonies, mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
 import { NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
@@ -93,6 +93,22 @@ describe('mergeStates', () => {
     )
     expect(merged.stability).toBeCloseTo(80 - MERGE_SHOCK)
     expect(MERGE_SHOCK).toBeLessThan(INHERIT_SHOCK)
+  })
+
+  // FEAT: a E1 vive na camada dos acontecimentos, e é lá que o abalo tem de ser medido
+  it('buys no golden age for two histories that were both already above its trigger', () => {
+    const golden = EVENTS.find((def) => def.id === 'golden_age')
+    const trigger = golden?.trigger.find((condition) => condition.metric === 'stability')
+    const release = golden?.release?.find((condition) => condition.metric === 'stability')
+    expect(trigger?.op).toBe('>')
+    expect(release?.op).toBe('<')
+    const stability = (trigger?.value ?? 0) + 5
+    const merged = mergeStates(
+      world({ population: 2_000_000, stability }),
+      incoming({ population: 2_000_000, stability }),
+    )
+    expect(merged.stability).toBeLessThanOrEqual(trigger?.value ?? 0)
+    expect(merged.stability).toBeGreaterThanOrEqual(release?.value ?? 100)
   })
 
   it('keeps the shaken stability off the floor instead of going negative', () => {
