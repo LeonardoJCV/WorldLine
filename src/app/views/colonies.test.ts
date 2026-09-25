@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { Colony } from '../../engine/colony.ts'
 import type { EventRecord } from '../../engine/events.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
 import { COLONY_SEED_POP, COLONY_SELF } from '../../engine/params.ts'
 import { system } from '../../engine/system.ts'
+import { Worldline } from '../../engine/worldline.ts'
+import { toSnapshot } from '../../worker/protocol.ts'
 import {
   bodyName,
   colonyView,
+  currentHome,
   homeBody,
   inheritanceHeir,
   inheritanceView,
@@ -170,5 +174,30 @@ describe('inheritanceView', () => {
       home: bodyName(482913, homeBody(482913)),
       people: 835_635,
     })
+  })
+})
+
+describe('the snapshot carrying home', () => {
+  // FEAT: o mesmo caminho que worldline.test.ts:289-294 usa para chegar ao mundo que mudou de casa
+  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+  const line = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+  line.advance(3000)
+
+  it('carries the body the history lives on into the snapshot', () => {
+    const before = line.stateAt(INHERITANCE_CASE.ended)
+    const after = line.stateAt(INHERITANCE_CASE.year)
+    expect(toSnapshot(before).home).toBeNull()
+    expect(toSnapshot(after).home).toBe(after.home)
+    expect(toSnapshot(after).home).not.toBeNull()
+  })
+})
+
+describe('currentHome', () => {
+  it('falls back to the natal body when the history never left it', () => {
+    expect(currentHome(482913, null)).toBe(homeBody(482913))
+  })
+
+  it('returns the body itself once the history has a home on record', () => {
+    expect(currentHome(482913, 2)).toBe(2)
   })
 })

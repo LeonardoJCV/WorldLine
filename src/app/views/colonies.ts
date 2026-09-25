@@ -38,6 +38,11 @@ export function homeBody(seed: number): number {
   return system(seed).find((body) => body.home)?.index ?? 0
 }
 
+// FEAT: resolve o lar de Snapshot.home — null cai no corpo natal, um índice devolve ele mesmo
+export function currentHome(seed: number, home: number | null): number {
+  return home ?? homeBody(seed)
+}
+
 export interface InheritanceView {
   readonly year: number
   readonly body: string

@@ -26,6 +26,8 @@ export interface Snapshot {
   readonly active: readonly EventId[]
   readonly allocation: Allocation
   readonly status: Status
+  // FEAT: o corpo onde a história mora hoje; null enquanto ela nunca saiu do planeta natal
+  readonly home: number | null
 }
 
 export interface EventUpdate {
@@ -175,5 +177,6 @@ export function toSnapshot(
     }),
     allocation: state.allocation,
     status: state.status,
+    home: state.home,
   }
 }
