@@ -168,7 +168,8 @@ export function SystemView({
   // FEAT: o texto do rótulo é a distinção sem cor — morto e vazio só se separam pelas palavras
   const label = (body: PlacedBody): string => {
     const params: Record<string, string> = { name: body.name }
-    if (body.colony) params.people = formatCompact(body.colony.population, locale)
+    // FIX: gente não vem em décimos — arredonda só a exibição, a população do modelo fica intacta
+    if (body.colony) params.people = formatCompact(Math.round(body.colony.population), locale)
     return t(bodyLabelKey(body), params)
   }
 

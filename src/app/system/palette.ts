@@ -103,7 +103,7 @@ const EMPTY_STATE: PlanetState = {
 
 export function bodyState(body: PlacedBody, present: Snapshot): PlanetState {
   if (body.living) return planetState(present)
-  // FEAT: piso e alcance mais baixos que os do mundo natal — a colônia acende cedo, mas fraco perto da capital
+  // FEAT: piso mais baixo e alcance mais largo que os do mundo natal — a colônia acende cedo, mas fraco perto da capital
   if (body.colony)
     return { ...EMPTY_STATE, lights: populationLights(body.colony.population, 1, 10) }
   // FEAT: o corpo natal abandonado ainda se lê como morto, não como se nunca tivesse tido dono

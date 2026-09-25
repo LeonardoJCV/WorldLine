@@ -193,6 +193,24 @@ test('keeps the phone sheet off the orbit plane', async ({ page }) => {
   expect(audit.every(Boolean)).toBe(true)
 })
 
+test('keeps the title readable above the exit row at phone width', async ({ page }) => {
+  // FIX: scrollWidth não vê um elemento pintado por cima de outro; isto olha o próprio pixel do título
+  await useGraphics(page, 'high')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openPlanet(page)
+  await page.getByRole('button', { name: 'View the system' }).click()
+  const title = page.locator('.system__title')
+  await expect(title).toBeVisible()
+  const clear = await page.evaluate(() => {
+    const node = document.querySelector('.system__title')
+    if (!node) return false
+    const box = node.getBoundingClientRect()
+    const found = document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2)
+    return found !== null && found.closest('.system__title') !== null
+  })
+  expect(clear).toBe(true)
+})
+
 test('dives to the planet with the visible way down, no gesture needed', async ({ page }) => {
   // FEAT: sem pinça, o toque só desce por este botão — a mesma disciplina do botão que sobe
   await openPlanet(page)
@@ -214,7 +232,8 @@ test('reads the natal body alive and the colony with people before the inheritan
   const labels = page.locator('.system__body')
   await expect(labels.first()).toBeVisible()
   await expect(labels.nth(1)).toHaveText(/ — where the history began$/)
-  await expect(labels.nth(0)).toHaveText(/ — \S+ settled$/)
+  // FIX: \S+ também casaria com "{people}" sem preencher; exige um dígito para provar que o número chegou
+  await expect(labels.nth(0)).toHaveText(/ — \d\S* settled$/)
 })
 
 test('reads the natal body as ended and the heir as home after the inheritance', async ({
@@ -233,7 +252,4 @@ test('reads the natal body as ended and the heir as home after the inheritance',
   await expect(labels.nth(0)).toHaveText(/ — home$/)
   // FEAT: morto e vazio só se separam pelas palavras — a asserção é sobre o texto, não sobre a cor
   await expect(labels.nth(2)).toHaveText(/ — no one there$/)
-  const dead = await labels.nth(1).textContent()
-  const empty = await labels.nth(2).textContent()
-  expect(dead).not.toBe(empty)
 })

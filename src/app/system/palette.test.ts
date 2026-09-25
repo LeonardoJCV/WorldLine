@@ -144,7 +144,12 @@ describe('bodyLabelKey', () => {
     const dead = moved.bodies.find((b) => b.dead)
     const living = moved.bodies.find((b) => b.living)
     const empty = moved.bodies.find((b) => !b.dead && !b.living && b.colony === null)
-    const keys = [dead, living, empty].map((b) => b && bodyLabelKey(b))
-    expect(new Set(keys).size).toBe(3)
+    if (!dead || !living || !empty) {
+      throw new Error('seed 482913 should have a dead, a living and an empty body once moved')
+    }
+    // FIX: cada corpo com a chave que lhe é própria — um Set só de tamanho não pega troca nem falta
+    expect(bodyLabelKey(dead)).toBe('system.dead')
+    expect(bodyLabelKey(living)).toBe('system.home')
+    expect(bodyLabelKey(empty)).toBe('system.empty')
   })
 })
