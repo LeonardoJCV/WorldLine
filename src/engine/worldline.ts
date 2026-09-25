@@ -2,6 +2,7 @@ import { validateCrossings, type Crossing } from './crossing.ts'
 import type { EventRecord } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
+import type { Merge } from './merge.ts'
 import { CHECKPOINT_INTERVAL, HORIZON } from './params.ts'
 import {
   VARIABLES,
@@ -59,17 +60,34 @@ function validateDecisions(decisions: readonly Decision[]): Decision[] {
   return decisions.map((d) => ({ tick: d.tick, allocation: { ...d.allocation } }))
 }
 
+// FEAT: um ano recebe uma costura só, porque `step()` aplica uma só, e a que deságua encerra a fila
+function validateMerges(merges: readonly Merge[]): Merge[] {
+  let previous = -1
+  let away = false
+  for (const merge of merges) {
+    if (!Number.isInteger(merge.tick) || merge.tick <= previous || merge.tick >= HORIZON) {
+      throw new RangeError('merges must have increasing whole years inside the horizon')
+    }
+    if (away) throw new RangeError('a history that flowed away cannot merge again')
+    away = merge.direction === 'out'
+    previous = merge.tick
+  }
+  return [...merges]
+}
+
 export class Worldline {
   readonly world: WorldConfig
   readonly lineage: Lineage | null
   readonly records: EventRecord[] = []
   readonly #decisions: Decision[]
   readonly #crossings: Crossing[]
+  readonly #merges: Merge[]
   readonly #checkpoints = new Map<number, Checkpoint>()
   #columns: Columns
   #length = 0
   #nextDecision = 0
   #nextCrossing = 0
+  #nextMerge = 0
   #state: WorldState
 
   constructor(
@@ -77,12 +95,14 @@ export class Worldline {
     decisions: readonly Decision[] = [],
     lineage: Lineage | null = null,
     crossings: readonly Crossing[] = [],
+    merges: readonly Merge[] = [],
   ) {
     const origin = genesis(seed)
     this.world = origin.world
     this.lineage = lineage
     this.#decisions = validateDecisions(decisions)
     this.#crossings = validateCrossings(crossings)
+    this.#merges = validateMerges(merges)
     this.#columns = allocateColumns(1024)
     this.#state = origin.state
     this.#record(origin.state)
@@ -104,6 +124,10 @@ export class Worldline {
     return this.#crossings
   }
 
+  get merges(): readonly Merge[] {
+    return this.#merges
+  }
+
   get ended(): boolean {
     return this.#state.status !== 'running' || this.#state.tick >= HORIZON
   }
@@ -111,21 +135,45 @@ export class Worldline {
   advance(years: number): number {
     let advanced = 0
     while (advanced < years && !this.ended) {
-      const due = this.#dueDecision(this.#nextDecision, this.#state.tick)
-      if (due) this.#nextDecision++
-      const arriving = this.#dueCrossings(this.#nextCrossing, this.#state.tick)
-      this.#nextCrossing = arriving.next
-      const result = step(this.#state, this.world, this.records.length, due, arriving.due)
+      const seam = this.#dueMerge(this.#nextMerge, this.#state.tick)
+      if (seam) this.#nextMerge++
+      // FIX: quem deságua não vive o ano, então nada daquele ano é consumido, gravado nem contado
+      const away = seam?.direction === 'out'
+      let due: Decision | undefined
+      let arriving: readonly Crossing[] = NO_CROSSINGS
+      if (!away) {
+        due = this.#dueDecision(this.#nextDecision, this.#state.tick)
+        if (due) this.#nextDecision++
+        const crossings = this.#dueCrossings(this.#nextCrossing, this.#state.tick)
+        this.#nextCrossing = crossings.next
+        arriving = crossings.due
+      }
+      const result = step(this.#state, this.world, this.records.length, due, arriving, seam)
       this.records.push(...result.started)
       for (const index of result.ended) {
         const record = this.records[index]
         if (record) record.end = this.#state.tick
       }
       this.#state = result.state
+      if (away) break
       this.#record(result.state)
       advanced++
     }
     return advanced
+  }
+
+  // FEAT: registra a confluência no ano presente, do lado que recebe ou do lado que deságua
+  merge(incoming: Merge): Merge {
+    if (this.ended) throw new Error('worldline has ended')
+    if (incoming.tick !== this.#state.tick) {
+      throw new RangeError(`merge for year ${incoming.tick} applied at year ${this.#state.tick}`)
+    }
+    const last = this.#merges.at(-1)
+    if (last && last.tick >= incoming.tick) {
+      throw new Error('a year carries one confluence only')
+    }
+    this.#merges.push(incoming)
+    return incoming
   }
 
   decide(allocation: Allocation): Decision {
@@ -177,12 +225,16 @@ export class Worldline {
     if (index === -1) index = this.#decisions.length
     let crossed = this.#crossings.findIndex((c) => c.tick >= base)
     if (crossed === -1) crossed = this.#crossings.length
+    let seamed = this.#merges.findIndex((m) => m.tick >= base)
+    if (seamed === -1) seamed = this.#merges.length
     while (state.tick < tick) {
       const due = this.#dueDecision(index, state.tick)
       if (due) index++
       const arriving = this.#dueCrossings(crossed, state.tick)
       crossed = arriving.next
-      const result = step(state, this.world, records, due, arriving.due)
+      const seam = this.#dueMerge(seamed, state.tick)
+      if (seam) seamed++
+      const result = step(state, this.world, records, due, arriving.due, seam)
       records += result.started.length
       state = result.state
     }
@@ -229,7 +281,15 @@ export class Worldline {
     this.#assertRecorded(tick)
     const inherited = this.#decisions.filter((d) => d.tick < tick)
     const inheritedCrossings = this.#crossings.filter((c) => c.tick < tick)
-    const child = new Worldline(this.seed, inherited, { parent: this, tick }, inheritedCrossings)
+    // FEAT: uma costura antes do ponto de partida faz parte do passado que o filho tem de reviver
+    const inheritedMerges = this.#merges.filter((m) => m.tick < tick)
+    const child = new Worldline(
+      this.seed,
+      inherited,
+      { parent: this, tick },
+      inheritedCrossings,
+      inheritedMerges,
+    )
     child.advance(tick)
     return child
   }
@@ -237,6 +297,11 @@ export class Worldline {
   #dueDecision(index: number, tick: number): Decision | undefined {
     const decision = this.#decisions[index]
     return decision?.tick === tick ? decision : undefined
+  }
+
+  #dueMerge(index: number, tick: number): Merge | undefined {
+    const merge = this.#merges[index]
+    return merge?.tick === tick ? merge : undefined
   }
 
   // FEAT: várias travessias podem cair no mesmo ano; uma entrada vencida nunca trava o cursor

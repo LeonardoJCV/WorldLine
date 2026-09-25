@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Crossing } from './crossing.ts'
 import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
 import { hashState } from './hash.ts'
+import type { Merge } from './merge.ts'
 import { HORIZON, PARADOX_GRACE } from './params.ts'
 import { Worldline } from './worldline.ts'
 
@@ -347,5 +348,112 @@ describe('a worldline that outlives its world', () => {
     late.advance(INHERITANCE_CASE.year - late.present.tick)
     expect(late.present.home).toBe(line.present.home)
     expect(hashState(late.present)).toBe(line.hashAt(INHERITANCE_CASE.year))
+  })
+})
+
+describe('a year that carries a confluence', () => {
+  // FEAT: uma história estrangeira reduzida ao recibo, porque o motor nunca resolve o outro lado
+  const arriving = (tick: number): Merge => ({
+    tick,
+    self: 'A',
+    other: 'B',
+    direction: 'in',
+    natal: 0,
+    values: {
+      population: 1_000_000,
+      food: 200_000,
+      energy: 2,
+      technology: 30,
+      economy: 3,
+      environment: 60,
+      stability: 50,
+    },
+  })
+  const leaving = (tick: number): Merge => ({
+    tick,
+    self: 'B',
+    other: 'A',
+    direction: 'out',
+    natal: 0,
+  })
+
+  it('applies a confluence registered in the present year', () => {
+    const line = new Worldline(SEED)
+    line.advance(400)
+    const before = line.present.population
+    const seam = line.merge(arriving(400))
+    expect(line.merges).toEqual([seam])
+    line.advance(1)
+    expect(line.present.population).toBeGreaterThan(before)
+    expect(line.present.lastMerge).toEqual({ tick: 400, other: 'B' })
+    expect(line.records.filter((record) => record.event === 'merge')).toHaveLength(1)
+  })
+
+  it('refuses a confluence dated in another year, or a second one in the same year', () => {
+    const line = new Worldline(SEED)
+    line.advance(400)
+    expect(() => line.merge(arriving(399))).toThrow(RangeError)
+    line.merge(arriving(400))
+    expect(() => line.merge(arriving(400))).toThrow(Error)
+    expect(line.merges).toHaveLength(1)
+  })
+
+  it('refuses a confluence once the worldline has ended', () => {
+    const line = new Worldline(SEED)
+    line.advance(300)
+    line.merge(leaving(300))
+    line.advance(1)
+    expect(() => line.merge(arriving(300))).toThrow(Error)
+  })
+
+  it('rejects a malformed confluence log', () => {
+    expect(() => new Worldline(SEED, [], null, [], [arriving(400), arriving(100)])).toThrow(
+      RangeError,
+    )
+    expect(() => new Worldline(SEED, [], null, [], [arriving(0.5)])).toThrow(RangeError)
+    expect(() => new Worldline(SEED, [], null, [], [leaving(100), arriving(400)])).toThrow(
+      RangeError,
+    )
+  })
+
+  // FIX: o ano do deságue não é vivido, então não entra na coluna nem na conta de anos avançados
+  it('does not record or count the year a history flows away in', () => {
+    const line = new Worldline(SEED)
+    line.advance(300)
+    const before = line.present
+    line.merge(leaving(300))
+    expect(line.advance(5)).toBe(0)
+    expect(line.present.tick).toBe(300)
+    expect(line.present.status).toBe('merged')
+    expect(line.valueAt('population', 300)).toBe(before.population)
+    expect(() => line.valueAt('population', 301)).toThrow(RangeError)
+    expect(line.records.filter((record) => record.event === 'merged_away')).toHaveLength(1)
+  })
+
+  it('replays a seamed history from a checkpoint', () => {
+    const log = [arriving(300)]
+    const line = new Worldline(SEED, [], null, [], log)
+    line.advance(900)
+    for (const year of [299, 300, 301, 512, 900]) {
+      const short = new Worldline(SEED, [], null, [], log)
+      short.advance(year)
+      expect(line.hashAt(year)).toBe(hashState(short.present))
+    }
+  })
+
+  it('keeps a fork free of later confluences', () => {
+    const line = new Worldline(SEED, [], null, [], [arriving(100), arriving(400)])
+    line.advance(600)
+    const child = line.fork(200)
+    expect(child.merges.map((seam) => seam.tick)).toEqual([100])
+    expect(child.hashAt(200)).toBe(line.hashAt(200))
+  })
+
+  it('leaves a world without confluences identical to a world built with an empty list', () => {
+    const plain = new Worldline(SEED)
+    plain.advance(1200)
+    const empty = new Worldline(SEED, [], null, [], [])
+    empty.advance(1200)
+    expect(plain.hashAt(1200)).toBe(empty.hashAt(1200))
   })
 })
