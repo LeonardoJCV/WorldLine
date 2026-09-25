@@ -6,12 +6,16 @@ import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import { terrainMap } from '../surface/runtime.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
+import { layoutLabels, type LabelBox } from './labels.ts'
 import { bodyLabelKey, systemPlacement, type PlacedBody } from './model.ts'
 import type { Escape, SystemScene } from './scene.ts'
 import './system.css'
 
 const WHEEL_STEP = 1.15
 const LABEL_GAP = 6
+const GUTTER = 16
+// FIX: o minimapa desenha 36px a 16px da borda; nenhum rótulo desce até essa faixa nem a encosta
+const FLOOR_BAND = 58
 
 export function SystemView({
   width,
@@ -134,14 +138,34 @@ export function SystemView({
       frame = requestAnimationFrame(step)
       const scene = sceneRef.current
       if (!scene) return
+      // FEAT: mede todos antes de mover qualquer um, senão cada rótulo força um recálculo de layout
+      const boxes: LabelBox[] = []
       for (const body of placementRef.current.bodies) {
         const el = elsRef.current.get(body.index)
         if (!el) continue
         const p = scene.project(body.index)
-        el.style.visibility = p.visible ? 'visible' : 'hidden'
-        if (p.visible) {
-          el.style.transform = `translate(${p.x}px, ${p.y + LABEL_GAP}px) translate(-50%, 0)`
-        }
+        boxes.push({
+          index: body.index,
+          x: p.x,
+          y: p.y + LABEL_GAP,
+          width: el.offsetWidth,
+          height: el.offsetHeight,
+          visible: p.visible,
+        })
+      }
+      const size = sizeRef.current
+      const spots = layoutLabels(boxes, {
+        width: size.width,
+        height: size.height,
+        gutter: GUTTER,
+        floor: FLOOR_BAND,
+      })
+      for (const spot of spots) {
+        const el = elsRef.current.get(spot.index)
+        if (!el) continue
+        const wanted = spot.visible ? 'visible' : 'hidden'
+        if (el.style.visibility !== wanted) el.style.visibility = wanted
+        if (spot.visible) el.style.transform = `translate(${spot.left}px, ${spot.top}px)`
       }
     }
     frame = requestAnimationFrame(step)

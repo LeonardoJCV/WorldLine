@@ -152,6 +152,23 @@ test('holds the system still when motion is turned down', async ({ page }) => {
   expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(1)
 })
 
+test('freezes the shader clock too, so no cloud drifts under reduced motion', async ({ page }) => {
+  // FIX: a caixa de um rótulo não vê uTime; dois quadros iguais pixel a pixel vêem
+  test.slow()
+  await useGraphics(page, 'high')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openPlanet(page)
+  await page.getByRole('button', { name: 'View the system' }).click()
+  const sky = page.getByRole('img', { name: `The bodies of ${SEED}` })
+  await expect(sky).toBeVisible()
+  await page.waitForTimeout(1200)
+  const before = await sky.screenshot()
+  await page.waitForTimeout(2500)
+  const after = await sky.screenshot()
+  expect(before.length).toBeGreaterThan(1000)
+  expect(Buffer.compare(before, after)).toBe(0)
+})
+
 test('leaves the system with the wheel only after the span runs out', async ({ page }) => {
   await openPlanet(page)
   await page.getByRole('button', { name: 'View the system' }).click()
@@ -191,6 +208,66 @@ test('keeps the phone sheet off the orbit plane', async ({ page }) => {
   })
   expect(audit.length).toBe(BODIES)
   expect(audit.every(Boolean)).toBe(true)
+})
+
+test('keeps every body name off the others, off the frame edge and off the minimap', async ({
+  page,
+}) => {
+  // FIX: a auditoria que existia só comparava rótulo contra .hud, então rótulo sobre rótulo passava
+  test.slow()
+  await useGraphics(page, 'high')
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(size)
+    await openPlanet(page)
+    await page.getByRole('button', { name: 'View the system' }).click()
+    await expect(page.locator('.system__body').first()).toBeVisible()
+    await page.waitForTimeout(400)
+    const audit = await page.evaluate(() => {
+      const frame = document.querySelector('.system')?.getBoundingClientRect()
+      if (!frame) return null
+      const map = document.querySelector('.minimap')?.getBoundingClientRect() ?? null
+      const labels = [...document.querySelectorAll('.system__body')]
+        .filter((node) => getComputedStyle(node).visibility !== 'hidden')
+        .map((node) => ({ text: node.textContent ?? '', box: node.getBoundingClientRect() }))
+      // FIX: um pixel de arredondamento entre duas bordas encostadas não é sobreposição
+      const over = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1
+      const stacked: string[] = []
+      for (let i = 0; i < labels.length; i++) {
+        for (let j = i + 1; j < labels.length; j++) {
+          const a = labels[i]
+          const b = labels[j]
+          if (a && b && over(a.box, b.box)) stacked.push(`${a.text} / ${b.text}`)
+        }
+      }
+      return {
+        count: labels.length,
+        stacked,
+        cropped: labels
+          .filter(
+            (label) =>
+              label.box.left < frame.left + 15 ||
+              label.box.right > frame.right - 15 ||
+              label.box.top < frame.top - 1 ||
+              label.box.bottom > frame.bottom + 1,
+          )
+          .map((label) => label.text),
+        onMap: labels
+          .filter((label) => map !== null && map.height > 0 && over(label.box, map))
+          .map((label) => label.text),
+      }
+    })
+    if (!audit) throw new Error('the system lens did not open')
+    const where = `${size.width}x${size.height}`
+    expect(audit.count, where).toBeGreaterThan(0)
+    expect(audit.stacked, where).toEqual([])
+    expect(audit.cropped, where).toEqual([])
+    expect(audit.onMap, where).toEqual([])
+  }
 })
 
 test('keeps the title readable above the exit row at phone width', async ({ page }) => {
