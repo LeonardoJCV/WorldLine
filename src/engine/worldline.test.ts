@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Crossing } from './crossing.ts'
+import type { Debt } from './debt.ts'
 import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
 import { hashState } from './hash.ts'
 import type { Merge } from './merge.ts'
-import { HORIZON, PARADOX_GRACE } from './params.ts'
+import { DEFAULT_ALLOCATION, HORIZON, PARADOX_GRACE } from './params.ts'
 import { Worldline } from './worldline.ts'
 
 const SEED = 482913
@@ -405,6 +406,34 @@ describe('a year that carries a confluence', () => {
     line.merge(leaving(300))
     line.advance(1)
     expect(() => line.merge(arriving(300))).toThrow(Error)
+  })
+
+  // FEAT: a doutrina é conferida nas duas portas: o log do construtor e a costura do presente
+  it('rejects a confluence whose doctrine debt carries no allocation', () => {
+    const unpayable: Debt = { kind: 'doctrine', owed: 4, since: 300, origin: 'D' }
+    const seam: Merge = { ...arriving(400), debts: [unpayable] }
+    expect(() => new Worldline(SEED, [], null, [], [seam])).toThrow(RangeError)
+    const line = new Worldline(SEED)
+    line.advance(400)
+    expect(() => line.merge(seam)).toThrow(RangeError)
+    expect(line.merges).toEqual([])
+    line.merge({ ...arriving(400), debts: [{ ...unpayable, allocation: DEFAULT_ALLOCATION }] })
+    expect(line.merges).toHaveLength(1)
+  })
+
+  // FIX: o ano do deságue é sempre o presente da história, então nunca há ano depois dele para reviver
+  it('never replays a year past the confluence a history flowed away in', () => {
+    const line = new Worldline(SEED, [], null, [], [leaving(300)])
+    line.advance(400)
+    expect(line.present.tick).toBe(300)
+    expect(line.present.status).toBe('merged')
+    expect(line.stateAt(300)).toBe(line.present)
+    expect(() => line.stateAt(301)).toThrow(RangeError)
+    const plain = new Worldline(SEED)
+    plain.advance(300)
+    expect(line.hashAt(299)).toBe(plain.hashAt(299))
+    // FEAT: e nenhuma filha herda o deságue, porque a bifurcação para no ano dele
+    expect(line.fork(300).merges).toEqual([])
   })
 
   it('rejects a malformed confluence log', () => {

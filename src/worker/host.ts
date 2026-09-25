@@ -11,6 +11,7 @@ import {
 } from '../engine/crossing.ts'
 import { bearsDebt, circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
+import { validateMerge, type Merge } from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
   VARIABLES,
@@ -20,6 +21,7 @@ import {
   type Variable,
   type WorldState,
 } from '../engine/state.ts'
+import { system } from '../engine/system.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
   MAX_WORLDLINES,
@@ -120,6 +122,9 @@ export class SimulationHost {
             message.kind,
             message.dose,
           )
+          break
+        case 'merge':
+          this.#merge(message.requestId, message.survivor, message.other)
           break
         case 'remove':
           this.#remove(message.world)
@@ -327,8 +332,15 @@ export class SimulationHost {
   #living(entry: Entry, role: string): void {
     if (entry.worldline.ended) {
       const status = entry.worldline.present.status
+      // FIX: uma história que desaguou em outra não está no horizonte; diz o que houve com ela
       const state =
-        status === 'extinct' ? 'extinct' : status === 'collapsed' ? 'collapsed' : 'past the horizon'
+        status === 'extinct'
+          ? 'extinct'
+          : status === 'collapsed'
+            ? 'collapsed'
+            : status === 'merged'
+              ? 'already merged into another history'
+              : 'past the horizon'
       throw new RangeError(`the ${role} worldline ${entry.info.id} is ${state}`)
     }
   }
@@ -500,6 +512,67 @@ export class SimulationHost {
     this.#send({ type: 'branched', requestId, world: id })
   }
 
+  // FEAT: o corpo natal vem da semente, que é do hospedeiro; a engine nunca resolve o outro lado
+  #natal(): number {
+    const home = system(this.#seed).find((body) => body.home)
+    if (!home) throw new Error(`world ${this.#seed} has no home body`)
+    return home.index
+  }
+
+  // FEAT: confere as duas pontas antes de gravar qualquer uma, porque meia costura não tem volta
+  #ensureSeamable(entry: Entry, seam: Merge, role: string): void {
+    const line = entry.worldline
+    this.#living(entry, role)
+    if (seam.tick !== line.present.tick) {
+      throw new RangeError(
+        `confluence for year ${seam.tick} applied to the ${role} worldline ${entry.info.id} at year ${line.present.tick}`,
+      )
+    }
+    const last = line.merges.at(-1)
+    if (last && last.tick >= seam.tick) {
+      throw new RangeError(
+        `worldline ${entry.info.id} already carries a confluence in year ${seam.tick}`,
+      )
+    }
+    validateMerge(seam)
+  }
+
+  // FEAT: duas histórias viram uma: a sobrevivente recebe os números da outra, e a outra deságua
+  #merge(requestId: number, survivorId: WorldlineId, otherId: WorldlineId): void {
+    const survivor = this.#entry(survivorId)
+    const other = this.#entry(otherId)
+    if (survivorId === otherId) {
+      throw new RangeError('the surviving and the departing worldline are the same')
+    }
+    const tick = this.#now
+    const natal = this.#natal()
+    const leaving = other.worldline.present
+    const arrival: Merge = {
+      tick,
+      self: survivorId,
+      other: otherId,
+      direction: 'in',
+      natal,
+      values: toSnapshot(leaving).values,
+      debts: leaving.debts,
+      echoes: leaving.echoes,
+      paradox: leaving.paradox,
+      strain: leaving.strain,
+      colonies: leaving.colonies,
+      home: leaving.home,
+    }
+    const departure: Merge = { tick, self: otherId, other: survivorId, direction: 'out', natal }
+    this.#ensureSeamable(survivor, arrival, 'surviving')
+    this.#ensureSeamable(other, departure, 'departing')
+    survivor.worldline.merge(arrival)
+    other.worldline.merge(departure)
+    // FEAT: o deságue é imediato e não vive o ano da costura, como uma extinção para onde parou
+    other.worldline.advance(1)
+
+    this.#report()
+    this.#send({ type: 'merged', requestId, world: survivorId })
+  }
+
   #remove(id: WorldlineId): void {
     this.#entry(id)
     if (id === 'A') throw new RangeError('the original worldline cannot be removed')
@@ -662,11 +735,14 @@ export class SimulationHost {
     let ended: EndReason | null = null
     if (this.#allEnded()) {
       // FEAT: colapso é motivo próprio de fim — não é o mesmo destino que a extinção
+      // FEAT: e a confluência explica por que sobraram menos histórias, antes de como a última caiu
       ended = this.#entries.some((entry) => entry.worldline.present.status === 'running')
         ? 'horizon'
-        : this.#entries.some((entry) => entry.worldline.present.status === 'collapsed')
-          ? 'collapse'
-          : 'extinction'
+        : this.#entries.some((entry) => entry.worldline.present.status === 'merged')
+          ? 'merge'
+          : this.#entries.some((entry) => entry.worldline.present.status === 'collapsed')
+            ? 'collapse'
+            : 'extinction'
     }
     this.#send({
       type: 'progress',

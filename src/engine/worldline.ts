@@ -2,7 +2,7 @@ import { validateCrossings, type Crossing } from './crossing.ts'
 import type { EventRecord } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
-import type { Merge } from './merge.ts'
+import { validateMerge, type Merge } from './merge.ts'
 import { CHECKPOINT_INTERVAL, HORIZON } from './params.ts'
 import {
   VARIABLES,
@@ -69,6 +69,7 @@ function validateMerges(merges: readonly Merge[]): Merge[] {
       throw new RangeError('merges must have increasing whole years inside the horizon')
     }
     if (away) throw new RangeError('a history that flowed away cannot merge again')
+    validateMerge(merge)
     away = merge.direction === 'out'
     previous = merge.tick
   }
@@ -173,6 +174,7 @@ export class Worldline {
     if (last && last.tick >= incoming.tick) {
       throw new Error('a year carries one confluence only')
     }
+    validateMerge(incoming)
     this.#merges.push(incoming)
     return incoming
   }
@@ -235,6 +237,10 @@ export class Worldline {
       crossed = arriving.next
       const seam = this.#dueMerge(seamed, state.tick)
       if (seam) seamed++
+      // FIX: quem deságua para no ano da costura, então não existe ano depois dele para reviver
+      if (seam?.direction === 'out') {
+        throw new RangeError(`year ${tick} is past the confluence of year ${seam.tick}`)
+      }
       const result = step(state, this.world, records, due, arriving.due, seam)
       records += result.started.length
       state = result.state

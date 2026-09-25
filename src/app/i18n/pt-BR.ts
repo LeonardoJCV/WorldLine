@@ -22,6 +22,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'ended.extinction': 'Esta civilização foi extinta.',
   'ended.horizon': 'A simulação chegou ao horizonte.',
   'ended.collapse': 'Esta história colapsou sob um paradoxo que não conseguiu quitar.',
+  'ended.merge': 'Estas histórias convergiram numa só, e nenhuma delas corre mais.',
   'error.simulation': 'A simulação parou: {message}',
   'variable.population': 'População',
   'variable.food': 'Reserva de comida',

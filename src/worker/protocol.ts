@@ -63,7 +63,7 @@ export interface WorldProgress {
 export type Series = Readonly<Record<Variable, Float32Array>>
 
 // FEAT: um mundo colapsado terminou, mas não do mesmo jeito que um extinto — o motivo é distinto
-export type EndReason = 'horizon' | 'extinction' | 'collapse'
+export type EndReason = 'horizon' | 'extinction' | 'collapse' | 'merge'
 
 export type ToWorker =
   | {
@@ -101,6 +101,12 @@ export type ToWorker =
       readonly origin: WorldlineId
       readonly kind: CrossingKind
       readonly dose: Dose
+    }
+  | {
+      readonly type: 'merge'
+      readonly requestId: number
+      readonly survivor: WorldlineId
+      readonly other: WorldlineId
     }
   | { readonly type: 'remove'; readonly world: WorldlineId }
   | {
@@ -145,6 +151,7 @@ export type FromWorker =
     }
   | { readonly type: 'inspect'; readonly requestId: number; readonly snapshot: Snapshot }
   | { readonly type: 'branched'; readonly requestId: number; readonly world: WorldlineId }
+  | { readonly type: 'merged'; readonly requestId: number; readonly world: WorldlineId }
   | {
       readonly type: 'crossed'
       readonly requestId: number

@@ -912,3 +912,178 @@ describe('SimulationHost: crossings', () => {
     expect(last(sent, 'progress')?.worlds).toHaveLength(2)
   })
 })
+
+describe('SimulationHost: confluences', () => {
+  // FEAT: duas histórias vivas no mesmo ano, no molde do `pair()` das travessias
+  function pair() {
+    const context = setup()
+    context.open()
+    context.host.handle({ type: 'step', years: 2000 })
+    context.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    return context
+  }
+
+  function living(sent: readonly FromWorker[]) {
+    return last(sent, 'progress')?.worlds.filter((w) => w.present.status === 'running') ?? []
+  }
+
+  it('seams two living histories into one', () => {
+    const { host, sent } = pair()
+    const a = world(sent, 'A')?.present.values.population ?? 0
+    const b = world(sent, 'B')?.present.values.population ?? 0
+    expect(b).toBeGreaterThan(0)
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 2, world: 'A' })
+    expect(world(sent, 'A')?.present.status).toBe('running')
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    expect(world(sent, 'B')?.present.tick).toBe(2000)
+    const events = all(sent, 'progress').flatMap(
+      (progress) => progress.worlds.find((w) => w.info.id === 'B')?.events ?? [],
+    )
+    expect(events.some((event) => event.record.event === 'merged_away')).toBe(true)
+    // FEAT: a costura entra no ano seguinte, como a travessia, e é ali que a gente soma
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'A')?.present.values.population).toBeGreaterThan(Math.max(a, b))
+  })
+
+  it('keeps a merged history in the list, frozen in the year of the seam', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 1 })
+    expect(last(sent, 'progress')?.worlds.map((w) => w.info.id)).toEqual(['A', 'B'])
+    expect(world(sent, 'B')?.present.tick).toBe(2000)
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    expect(world(sent, 'A')?.present.tick).toBe(2001)
+    expect(last(sent, 'progress')?.now).toBe(2001)
+  })
+
+  it('refuses a confluence with itself, with an unknown letter, and with a dead history', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'merge', requestId: 1, survivor: 'A', other: 'A' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 1 })
+    expect(last(sent, 'error')?.message).toMatch(/same/)
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'F' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 2, message: 'unknown worldline F' })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 2000 })
+    expect(world(sent, 'B')?.present.status).toBe('extinct')
+    host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'B' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
+    expect(last(sent, 'error')?.message).toMatch(/extinct/)
+    host.handle({ type: 'merge', requestId: 5, survivor: 'B', other: 'A' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 5 })
+    expect(last(sent, 'error')?.message).toMatch(/extinct/)
+    expect(world(sent, 'A')?.present.status).toBe('running')
+    expect(all(sent, 'merged')).toEqual([])
+  })
+
+  it('refuses to seam a history that already flowed away, and says what happened to it', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({ type: 'merge', requestId: 3, survivor: 'A', other: 'B' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 3 })
+    expect(last(sent, 'error')?.message).toMatch(/merged into another history/)
+    expect(last(sent, 'error')?.message).not.toMatch(/horizon/)
+  })
+
+  it('refuses a second confluence in the same year and leaves the other end untouched', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 200, allocation: balanced })
+    host.handle({ type: 'merge', requestId: 3, survivor: 'A', other: 'B' })
+    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 3, world: 'A' })
+    host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'C' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
+    expect(last(sent, 'error')?.message).toMatch(/year 2000/)
+    // FIX: meia costura é o pior estado possível, então C segue viva e inteira no seu ano
+    expect(world(sent, 'C')?.present.status).toBe('running')
+    expect(world(sent, 'C')?.present.tick).toBe(2000)
+    host.handle({ type: 'step', years: 1 })
+    host.handle({ type: 'merge', requestId: 5, survivor: 'A', other: 'C' })
+    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 5, world: 'A' })
+    expect(world(sent, 'C')?.present.status).toBe('merged')
+    expect(world(sent, 'C')?.present.tick).toBe(2001)
+  })
+
+  it('carries the other ledger over and dissolves what the two owed each other', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 200, allocation: balanced })
+    host.handle({ type: 'decide', world: 'A', allocation: starved })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({
+      type: 'cross',
+      requestId: 3,
+      origin: 'A',
+      destination: 'B',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    host.handle({
+      type: 'cross',
+      requestId: 4,
+      origin: 'C',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'B')?.debts).toMatchObject([
+      { kind: 'doctrine', origin: 'A', allocation: starved },
+      { kind: 'knowledge', origin: 'C' },
+    ])
+    host.handle({ type: 'merge', requestId: 5, survivor: 'A', other: 'B' })
+    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 5, world: 'A' })
+    host.handle({ type: 'step', years: 1 })
+    // FEAT: a dívida com quem se mesclou virou interna; a de fora atravessa com a história
+    expect(world(sent, 'A')?.debts).toMatchObject([{ kind: 'knowledge', origin: 'C' }])
+  })
+
+  it('takes six histories down to one living, five confluences later', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 200 })
+    for (let i = 1; i <= 5; i++) {
+      host.handle({ type: 'branch', requestId: i, parent: 'A', tick: 100, allocation: balanced })
+    }
+    expect(living(sent)).toHaveLength(6)
+    const others = ['B', 'C', 'D', 'E', 'F'] as const
+    for (const [index, other] of others.entries()) {
+      host.handle({ type: 'merge', requestId: 10 + index, survivor: 'A', other })
+      expect(last(sent, 'merged')?.world).toBe('A')
+      expect(living(sent)).toHaveLength(5 - index)
+      host.handle({ type: 'step', years: 1 })
+    }
+    expect(living(sent).map((w) => w.info.id)).toEqual(['A'])
+    expect(last(sent, 'progress')?.worlds).toHaveLength(6)
+  })
+
+  it('names the confluence as the end once nothing runs any more', () => {
+    const { host, sent, open } = setup()
+    open(0, [{ tick: 0, allocation: industrial }])
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 100 })
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 3000 })
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    expect(world(sent, 'A')?.present.status).toBe('extinct')
+    expect(last(sent, 'progress')?.ended).toBe('merge')
+  })
+
+  it('still names the horizon while the surviving history runs', () => {
+    const { host, sent, clock } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'play', speed: 'max' })
+    clock.advance(1000)
+    expect(world(sent, 'A')?.present.status).toBe('running')
+    expect(last(sent, 'progress')?.now).toBe(HORIZON)
+    expect(last(sent, 'progress')?.ended).toBe('horizon')
+  })
+})
