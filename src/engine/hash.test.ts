@@ -97,6 +97,26 @@ describe('hashState', () => {
     expect(a).not.toBe(hashState(state))
   })
 
+  it('ignores the merge field while it is empty', () => {
+    expect(hashState({ ...state, lastMerge: null })).toBe(hashState(state))
+  })
+
+  it('hashes the year of a merge but never the name of the other history', () => {
+    // FEAT: a identidade da outra é nome em recibo, não física — a mesma exclusão de Debt.origin
+    const merged = { ...state, lastMerge: { tick: 1450, other: 'B' } }
+    expect(hashState(merged)).toBe(hashState({ ...merged, lastMerge: { tick: 1450, other: 'F' } }))
+    expect(hashState(merged)).not.toBe(
+      hashState({ ...merged, lastMerge: { tick: 1451, other: 'B' } }),
+    )
+  })
+
+  it('leaves the three old status codes where they were', () => {
+    expect(hashState({ ...state, status: 'merged' })).not.toBe(hashState(state))
+    expect(hashState({ ...state, status: 'extinct' })).not.toBe(
+      hashState({ ...state, status: 'merged' }),
+    )
+  })
+
   it('ignores a new event that never fired, but reacts once one has', () => {
     // FIX: os cinco eventos da dívida (Tarefa 4) só entram no hash depois que dispararam uma vez;
     // um mundo que nunca cruzou nada tem lastEnded[11..] sempre em NEVER e reproduz o fingerprint antigo

@@ -130,6 +130,17 @@ describe('the inheritance fingerprint', () => {
       expect(w.hashAt(year)).toBe(hash)
     }
   })
+
+  it('leaves all sixteen fingerprints alone, because no reference script merges', () => {
+    for (const { seed, script, year, hash } of GOLDEN_CASES) {
+      const plan = GOLDEN_SCRIPTS[script]
+      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      w.advance(year)
+      expect(w.present.lastMerge).toBeNull()
+      expect(w.present.status).not.toBe('merged')
+      expect(w.hashAt(year)).toBe(hash)
+    }
+  })
 })
 
 describe('space era gate', () => {
