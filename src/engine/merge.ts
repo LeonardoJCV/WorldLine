@@ -3,7 +3,7 @@ import { addDebt, type Debt, type Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
 import { clamp } from './math.ts'
 import { MERGE_SHOCK } from './params.ts'
-import type { Variable, WorldState } from './state.ts'
+import { NEVER, type Variable, type WorldState } from './state.ts'
 
 export interface Merge {
   readonly tick: number
@@ -46,21 +46,74 @@ function nearerParadox(a: Paradox | null, b: Paradox | null): Paradox | null {
   return a.deadline <= b.deadline ? a : b
 }
 
+export function mergeColonies(
+  own: readonly Colony[],
+  incoming: readonly Colony[],
+  weights: { readonly a: number; readonly b: number },
+): readonly Colony[] {
+  const byBody = new Map<number, Colony>(own.map((colony) => [colony.body, colony]))
+  for (const colony of incoming) {
+    const there = byBody.get(colony.body)
+    if (there === undefined) {
+      byBody.set(colony.body, colony)
+      continue
+    }
+    const older = there.founded <= colony.founded ? there : colony
+    byBody.set(colony.body, {
+      body: colony.body,
+      founded: older.founded,
+      population: there.population + colony.population,
+      support: there.support * weights.a + colony.support * weights.b,
+      record: older.record,
+    })
+  }
+  return [...byBody.values()].sort((a, b) => a.body - b.body)
+}
+
 export function mergeStates(s: WorldState, incoming: Merge): WorldState {
   const value = (variable: Variable): number => incoming.values?.[variable] ?? 0
   const weights = mergeWeights(s.population, value('population'))
   const blend = (variable: Variable): number =>
     s[variable] * weights.a + value(variable) * weights.b
+  const incomingColonies = incoming.colonies ?? []
+
+  const ownHome = s.home ?? incoming.natal
+  const otherHome = incoming.home ?? incoming.natal
+  const sameHome = ownHome === otherHome
+  const ownHeavier = s.population >= value('population')
+  const ownLostHome = !sameHome && !ownHeavier
+  const otherLostHome = !sameHome && ownHeavier
+
+  // FEAT: lares diferentes não somam gente; a história mais leve perde a casa, não o povo — o
+  // lar dela vira colônia da vencedora, com support 1 porque quem já se bastava segue se bastando
+  const demoted = (body: number, population: number): Colony => ({
+    body,
+    founded: incoming.tick,
+    population,
+    support: 1,
+    record: NEVER,
+  })
+
+  const ownFleet = ownLostHome ? [...s.colonies, demoted(ownHome, s.population)] : s.colonies
+  const otherFleet = otherLostHome
+    ? [...incomingColonies, demoted(otherHome, value('population'))]
+    : incomingColonies
 
   return {
     ...s,
-    population: s.population + value('population'),
+    home: sameHome || ownHeavier ? s.home : (incoming.home ?? null),
+    population: sameHome
+      ? s.population + value('population')
+      : ownHeavier
+        ? s.population
+        : value('population'),
     food: s.food + value('food'),
     energy: blend('energy'),
     technology: blend('technology'),
     economy: blend('economy'),
     environment: blend('environment'),
     stability: clamp(blend('stability') - MERGE_SHOCK, 0, 100),
+    colonies: mergeColonies(ownFleet, otherFleet, weights),
     debts: settleDebts(s.debts, incoming.debts ?? [], [incoming.self, incoming.other]),
     echoes: [...s.echoes, ...(incoming.echoes ?? [])],
     paradox: nearerParadox(s.paradox, incoming.paradox ?? null),

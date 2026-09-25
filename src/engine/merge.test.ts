@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import type { Colony } from './colony.ts'
 import type { Debt } from './debt.ts'
-import { mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
+import { mergeColonies, mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
 import { VARIABLES, type Variable, type WorldState } from './state.ts'
 import { makeState } from './testing.ts'
@@ -19,13 +20,16 @@ function debt(overrides: Partial<Debt> = {}): Debt {
   return { kind: 'resource', owed: 10, since: 0, origin: 'C', ...overrides }
 }
 
+function colony(overrides: Partial<Colony> = {}): Colony {
+  return { body: 3, founded: 0, population: 1000, support: 0, record: 0, ...overrides }
+}
+
 describe('mergeWeights', () => {
   it('weighs each history by its people', () => {
     expect(mergeWeights(3_000_000, 1_000_000)).toEqual({ a: 0.75, b: 0.25 })
   })
 
   it('splits evenly when nobody is left on either side', () => {
-    // FEAT: na prática as duas estão vivas, mas uma média ponderada deste motor nunca divide por zero
     expect(mergeWeights(0, 0)).toEqual({ a: 0.5, b: 0.5 })
   })
 })
@@ -90,7 +94,6 @@ describe('mergeStates', () => {
   })
 
   it('is the same seam whichever order the two histories are named', () => {
-    // FEAT: a costura é comutativa nas variáveis; quem sobrevive muda a letra, não a aritmética
     const a = world({ population: 3_000_000, technology: 90 })
     const b = { population: 1_000_000, technology: 50 }
     const left = mergeStates(a, incoming(b))
@@ -116,7 +119,6 @@ describe('settleDebts', () => {
     const settled = settleDebts(own, theirs, ['A', 'B'])
     expect(settled).toHaveLength(1)
     expect(settled[0]?.owed).toBe(70)
-    // FEAT: a dívida mais velha é a que manda no prazo, então é o ano dela que fica
     expect(settled[0]?.since).toBe(900)
   })
 
@@ -164,12 +166,102 @@ describe('mergeStates, the ledger', () => {
   })
 
   it('does not wipe the ledger the way inheritance does', () => {
-    // FEAT: a herança apaga tudo porque custa um planeta; aqui não custa, e apagar seria a saída grátis
     const merged = mergeStates(
       world({ debts: [debt({ owed: 60, origin: 'C' })], strain: 9 }),
       incoming({}),
     )
     expect(merged.debts).not.toEqual([])
     expect(merged.strain).toBe(9)
+  })
+})
+
+describe('mergeStates, homes', () => {
+  it('adds the people when both histories live on the same body', () => {
+    const merged = mergeStates(
+      world({ population: 3_000_000, home: null }),
+      incoming({ population: 1_000_000 }, { home: null }),
+    )
+    expect(merged.population).toBe(4_000_000)
+    expect(merged.home).toBeNull()
+    expect(merged.colonies).toEqual([])
+  })
+
+  it('treats null and the shared natal index as the same home', () => {
+    const merged = mergeStates(
+      world({ population: 3_000_000, home: null }),
+      incoming({ population: 1_000_000 }, { natal: 7, home: 7 }),
+    )
+    expect(merged.population).toBe(4_000_000)
+    expect(merged.colonies).toEqual([])
+  })
+
+  it('moves the lighter history home into a colony instead of inventing people', () => {
+    const merged = mergeStates(
+      world({ population: 3_000_000, home: null }),
+      incoming({ population: 1_000_000 }, { home: 5 }),
+    )
+    expect(merged.home).toBeNull()
+    expect(merged.population).toBe(3_000_000)
+    const moved = merged.colonies.find((colony) => colony.body === 5)
+    expect(moved?.population).toBe(1_000_000)
+    expect(moved?.support).toBe(1)
+  })
+
+  it('conserves the people whichever way the homes fall', () => {
+    for (const [ha, hb] of [
+      [null, null],
+      [null, 5],
+      [5, null],
+      [2, 4],
+    ] as const) {
+      const merged = mergeStates(
+        world({ population: 3_000_000, home: ha }),
+        incoming({ population: 1_000_000 }, { home: hb }),
+      )
+      const total = merged.population + merged.colonies.reduce((sum, c) => sum + c.population, 0)
+      expect(total).toBe(4_000_000)
+    }
+  })
+
+  it('lives where the heavier history lived, not where the receiving one did', () => {
+    const merged = mergeStates(
+      world({ population: 1_000_000, home: 2 }),
+      incoming({ population: 9_000_000 }, { home: 4 }),
+    )
+    expect(merged.home).toBe(4)
+    expect(merged.population).toBe(9_000_000)
+    expect(merged.colonies.find((c) => c.body === 2)?.population).toBe(1_000_000)
+  })
+})
+
+describe('mergeColonies', () => {
+  it('joins the two fleets', () => {
+    const merged = mergeColonies([colony({ body: 1 })], [colony({ body: 4 })], { a: 0.5, b: 0.5 })
+    expect(merged.map((c) => c.body).sort()).toEqual([1, 4])
+  })
+
+  it('adds the settlers and blends the support where both settled one body', () => {
+    const merged = mergeColonies(
+      [colony({ body: 4, population: 300_000, support: 0.9 })],
+      [colony({ body: 4, population: 100_000, support: 0.5 })],
+      { a: 0.75, b: 0.25 },
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.population).toBe(400_000)
+    expect(merged[0]?.support).toBeCloseTo(0.8)
+  })
+
+  it('keeps the older founding year when two colonies become one', () => {
+    const merged = mergeColonies(
+      [colony({ body: 4, founded: 2200 })],
+      [colony({ body: 4, founded: 1900 })],
+      { a: 0.5, b: 0.5 },
+    )
+    expect(merged[0]?.founded).toBe(1900)
+  })
+
+  it('orders the fleet by body so the same seam always reads the same', () => {
+    const merged = mergeColonies([colony({ body: 4 })], [colony({ body: 1 })], { a: 0.5, b: 0.5 })
+    expect(merged.map((c) => c.body)).toEqual([1, 4])
   })
 })
