@@ -364,7 +364,9 @@ export function PlanetView({
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY === 0) return
       event.preventDefault()
-      sceneRef.current?.zoom(event.deltaY > 0 ? WHEEL_STEP : 1 / WHEEL_STEP)
+      const inside = sceneRef.current?.zoom(event.deltaY > 0 ? WHEEL_STEP : 1 / WHEEL_STEP)
+      // FEAT: pedir para fora já no teto da órbita não para em nada — abre o sistema inteiro
+      if (inside === false) lensStore.getState().setLens('system')
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
@@ -382,12 +384,18 @@ export function PlanetView({
 
   const leave = () => (still ? exitRef.current() : setLeaving(true))
 
+  const openSystem = () => lensStore.getState().setLens('system')
+
+  const away = (inside: boolean | undefined) => {
+    if (inside === false) openSystem()
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
     const scene = sceneRef.current
     const moves: Record<string, () => void> = {
       '+': () => scene?.zoom(0.8),
       '=': () => scene?.zoom(0.8),
-      '-': () => scene?.zoom(1.25),
+      '-': () => away(scene?.zoom(1.25)),
       ArrowLeft: () => scene?.pan(-40, 0),
       ArrowRight: () => scene?.pan(40, 0),
       ArrowUp: () => scene?.pan(0, -40),
@@ -544,9 +552,15 @@ export function PlanetView({
           {t('surface.autoHour')}
         </label>
       </div>
-      <button type="button" className="surface__exit" onClick={leave}>
-        {t('surface.exit')}
-      </button>
+      <div className="surface__ways">
+        <button type="button" className="surface__exit" onClick={leave}>
+          {t('surface.exit')}
+        </button>
+        {/* FEAT: a roda também abre o sistema, mas só um botão o torna alcançável sem gesto nenhum */}
+        <button type="button" className="surface__system" onClick={openSystem}>
+          {t('system.enter')}
+        </button>
+      </div>
     </div>
   )
 }

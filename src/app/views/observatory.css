@@ -476,7 +476,9 @@
 }
 
 /* FEAT: dentro do planeta quem conta a história é a ficha da cidade e a superfície; a lista dos rumos sai do caminho */
-.observatory:has(.stage[data-lens='planet']) .hud__right {
+.observatory:has(.stage[data-lens='planet']) .hud__right,
+/* FEAT: no sistema o nome de cada corpo é tudo o que há, e a coluna cobriria justo o corpo mais externo */
+.observatory:has(.stage[data-lens='system']) .hud__right {
   display: none;
 }
 
