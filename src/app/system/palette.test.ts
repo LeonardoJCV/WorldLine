@@ -119,13 +119,16 @@ describe('bodyState', () => {
   })
 
   it('lights a hundred thousand settlers well below a hundred million citizens', () => {
-    // FEAT: a mesma forma logarítmica do mundo natal, senão uma colônia recém-fundada brilha como capital
-    const colony = bodyState(
-      bodyAt(null, [colonyOn(heirIndex, 100_000)], heirIndex),
-      snapshotFixture(),
-    )
-    const world = planetState(snapshotFixture())
-    expect(colony.lights).toBeLessThan(world.lights)
+    // FEAT: a capital é cem milhões de verdade, não a população que o roteiro tiver no ano do fixture
+    const fixture = snapshotFixture()
+    const capital = planetState({
+      ...fixture,
+      values: { ...fixture.values, population: 100_000_000 },
+    })
+    const colony = bodyState(bodyAt(null, [colonyOn(heirIndex, 100_000)], heirIndex), fixture)
+    expect(capital.lights).toBe(1)
+    expect(colony.lights).toBeGreaterThan(0)
+    expect(colony.lights).toBeLessThan(capital.lights * 0.6)
   })
 
   it('leaves the dead home world dark and marked as ended', () => {
