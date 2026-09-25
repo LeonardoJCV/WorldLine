@@ -237,7 +237,7 @@ export class Worldline {
       crossed = arriving.next
       const seam = this.#dueMerge(seamed, state.tick)
       if (seam) seamed++
-      // FIX: quem deságua para no ano da costura, então não existe ano depois dele para reviver
+      // FEAT: precaução, não comportamento provado — nenhum ano gravado vem depois de um deságue
       if (seam?.direction === 'out') {
         throw new RangeError(`year ${tick} is past the confluence of year ${seam.tick}`)
       }

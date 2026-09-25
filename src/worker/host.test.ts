@@ -35,6 +35,21 @@ function world(sent: readonly FromWorker[], id: WorldlineId) {
   return last(sent, 'progress')?.worlds.find((w) => w.info.id === id)
 }
 
+// FEAT: duas histórias vivas no mesmo ano, a base tanto das travessias quanto das costuras
+function pair() {
+  const context = setup()
+  context.open()
+  context.host.handle({ type: 'step', years: 2000 })
+  context.host.handle({
+    type: 'branch',
+    requestId: 1,
+    parent: 'A',
+    tick: 100,
+    allocation: balanced,
+  })
+  return context
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -422,20 +437,6 @@ describe('SimulationHost: the multiverse', () => {
 })
 
 describe('SimulationHost: crossings', () => {
-  function pair() {
-    const context = setup()
-    context.open()
-    context.host.handle({ type: 'step', years: 2000 })
-    context.host.handle({
-      type: 'branch',
-      requestId: 1,
-      parent: 'A',
-      tick: 100,
-      allocation: balanced,
-    })
-    return context
-  }
-
   it('moves knowledge from one worldline into another', () => {
     const { host, sent } = pair()
     const before = last(sent, 'progress')?.credit ?? 0
@@ -914,23 +915,15 @@ describe('SimulationHost: crossings', () => {
 })
 
 describe('SimulationHost: confluences', () => {
-  // FEAT: duas histórias vivas no mesmo ano, no molde do `pair()` das travessias
-  function pair() {
-    const context = setup()
-    context.open()
-    context.host.handle({ type: 'step', years: 2000 })
-    context.host.handle({
-      type: 'branch',
-      requestId: 1,
-      parent: 'A',
-      tick: 100,
-      allocation: balanced,
-    })
-    return context
-  }
-
   function living(sent: readonly FromWorker[]) {
     return last(sent, 'progress')?.worlds.filter((w) => w.present.status === 'running') ?? []
+  }
+
+  function causesOf(sent: readonly FromWorker[], id: WorldlineId, event: string) {
+    return all(sent, 'progress')
+      .flatMap((progress) => progress.worlds.find((w) => w.info.id === id)?.events ?? [])
+      .filter((update) => update.record.event === event)
+      .flatMap((update) => update.record.causes)
   }
 
   it('seams two living histories into one', () => {
@@ -943,13 +936,12 @@ describe('SimulationHost: confluences', () => {
     expect(world(sent, 'A')?.present.status).toBe('running')
     expect(world(sent, 'B')?.present.status).toBe('merged')
     expect(world(sent, 'B')?.present.tick).toBe(2000)
-    const events = all(sent, 'progress').flatMap(
-      (progress) => progress.worlds.find((w) => w.info.id === 'B')?.events ?? [],
-    )
-    expect(events.some((event) => event.record.event === 'merged_away')).toBe(true)
-    // FEAT: a costura entra no ano seguinte, como a travessia, e é ali que a gente soma
+    expect(causesOf(sent, 'B', 'merged_away')).toEqual([{ kind: 'merge', tick: 2000, other: 'A' }])
     host.handle({ type: 'step', years: 1 })
-    expect(world(sent, 'A')?.present.values.population).toBeGreaterThan(Math.max(a, b))
+    // FEAT: cada recibo nomeia a OUTRA história, e é por essa ordem que a costura se lê dos dois lados
+    expect(causesOf(sent, 'A', 'merge')).toEqual([{ kind: 'merge', tick: 2000, other: 'B' }])
+    // FIX: 1,8x separa a união (1,92x) do ano de crescimento sozinho (1,006x); a soma crua falharia
+    expect(world(sent, 'A')?.present.values.population).toBeGreaterThan(1.8 * Math.max(a, b))
   })
 
   it('keeps a merged history in the list, frozen in the year of the seam', () => {
@@ -1003,13 +995,35 @@ describe('SimulationHost: confluences', () => {
     host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'C' })
     expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
     expect(last(sent, 'error')?.message).toMatch(/year 2000/)
-    // FIX: meia costura é o pior estado possível, então C segue viva e inteira no seu ano
-    expect(world(sent, 'C')?.present.status).toBe('running')
-    expect(world(sent, 'C')?.present.tick).toBe(2000)
+    expect(all(sent, 'merged')).toHaveLength(1)
+    // FIX: a recusa não relata nada, então C só se lê viva perguntando de novo, agora
+    host.handle({ type: 'inspect', requestId: 5, world: 'C', tick: 2000 })
+    expect(last(sent, 'inspect')?.snapshot).toMatchObject({ tick: 2000, status: 'running' })
     host.handle({ type: 'step', years: 1 })
-    host.handle({ type: 'merge', requestId: 5, survivor: 'A', other: 'C' })
-    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 5, world: 'A' })
+    host.handle({ type: 'merge', requestId: 6, survivor: 'A', other: 'C' })
+    // FIX: e a costura que C ainda consegue dar é o que prova que o log dela não ficou pela metade
+    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 6, world: 'A' })
     expect(world(sent, 'C')?.present.status).toBe('merged')
+    expect(world(sent, 'C')?.present.tick).toBe(2001)
+  })
+
+  it('gives a branch of the survivor the confluence from before its fork', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 2001, allocation: balanced })
+    // FIX: sem herdar a costura a filha nasceria com metade da mãe no ano em que diz sair dela
+    expect(world(sent, 'C')?.present.tick).toBe(2001)
+    expect(world(sent, 'C')?.present.values).toEqual(world(sent, 'A')?.present.values)
+  })
+
+  it('never hands the outflow to a branch of the history that flowed away', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({ type: 'branch', requestId: 3, parent: 'B', tick: 2000, allocation: balanced })
+    // FEAT: o deságue é do ano da bifurcação, e só o que vem estritamente antes dela se herda
+    expect(world(sent, 'C')?.present.status).toBe('running')
     expect(world(sent, 'C')?.present.tick).toBe(2001)
   })
 

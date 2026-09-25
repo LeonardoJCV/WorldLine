@@ -197,11 +197,14 @@ export class SimulationHost {
     }
     const inherited = parent.worldline.decisions.filter((decision) => decision.tick < fork)
     const crossed = parent.worldline.crossings.filter((crossing) => crossing.tick < fork)
+    // FIX: uma costura antes da bifurcação é passado da filha; sem ela a filha não seria a mãe nesse ano
+    const seamed = parent.worldline.merges.filter((seam) => seam.tick < fork)
     const line = new Worldline(
       seed,
       [...inherited, ...own],
       { parent: parent.worldline, tick: fork },
       [...crossed, ...ownCrossings],
+      seamed,
     )
     line.advance(target)
     return line
@@ -523,6 +526,7 @@ export class SimulationHost {
   #ensureSeamable(entry: Entry, seam: Merge, role: string): void {
     const line = entry.worldline
     this.#living(entry, role)
+    // FEAT: precaução, não comportamento provado — toda worldline viva está no ano de `#now` hoje
     if (seam.tick !== line.present.tick) {
       throw new RangeError(
         `confluence for year ${seam.tick} applied to the ${role} worldline ${entry.info.id} at year ${line.present.tick}`,
