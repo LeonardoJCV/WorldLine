@@ -40,6 +40,7 @@ describe('lensStore', () => {
   })
 
   it('does not revive a target when returning from the system to the planet', () => {
+    lensStore.getState().openAt(target)
     lensStore.getState().setLens('system')
     lensStore.getState().setLens('planet')
     expect(lensStore.getState().lens).toBe('planet')
