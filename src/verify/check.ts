@@ -1,10 +1,14 @@
 import type { Crossing } from '../engine/crossing.ts'
+import { totalOwed } from '../engine/debt.ts'
 import {
   GOLDEN_CASES,
   GOLDEN_SCRIPTS,
   INHERITANCE_CASE,
+  MERGE_CASE,
+  mergeSeam,
   type GoldenCase,
   type InheritanceCase,
+  type MergeCase,
 } from '../engine/golden.ts'
 import type { Decision, Status } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
@@ -114,5 +118,59 @@ export function runInheritanceCheck(): InheritanceResult {
       settled === INHERITANCE_CASE.founded &&
       world.present.home !== null &&
       computed === INHERITANCE_CASE.hash,
+  }
+}
+
+export interface MergeResult extends MergeCase {
+  readonly computed: string
+  readonly status: Status
+  readonly away: Status
+  readonly seam: number
+  readonly lived: number
+  readonly settled: boolean
+  readonly ok: boolean
+}
+
+// FEAT: prova a confluência inteira, não só o hash: o ano da costura, a história que deságua e para
+// no mesmo ano, a dívida entre as duas que virou interna, e o fingerprint de quem recebeu
+export function runMergeCheck(): MergeResult {
+  const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
+  const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
+  const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
+  const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+  receives.advance(MERGE_CASE.tick)
+  departs.advance(MERGE_CASE.tick)
+
+  const owed = totalOwed(departs.present.debts)
+  const seam = mergeSeam(departs.present)
+  departs.merge(seam.departs)
+  const lived = departs.advance(1)
+  receives.merge(seam.receives)
+  receives.advance(MERGE_CASE.year - MERGE_CASE.tick)
+
+  const moments = receives.records.filter((record) => record.event === 'merge')
+  const at = moments.length === 1 ? (moments[0]?.start ?? -1) : -1
+  const settled = receives.records.some((record) => record.event === 'debt_settled')
+  const computed = receives.hashAt(Math.min(MERGE_CASE.year, receives.present.tick))
+  return {
+    ...MERGE_CASE,
+    computed,
+    status: receives.present.status,
+    away: departs.present.status,
+    seam: at,
+    lived,
+    settled,
+    ok:
+      receives.present.status === 'running' &&
+      receives.present.tick === MERGE_CASE.year &&
+      receives.present.lastMerge?.tick === MERGE_CASE.tick &&
+      departs.present.status === 'merged' &&
+      departs.present.tick === MERGE_CASE.tick &&
+      at === MERGE_CASE.tick &&
+      lived === 0 &&
+      owed > 0 &&
+      settled &&
+      totalOwed(receives.present.debts) === 0 &&
+      computed === MERGE_CASE.hash,
   }
 }

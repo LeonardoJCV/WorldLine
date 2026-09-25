@@ -26,13 +26,26 @@ test('reproduces the collapse, and its fingerprint, in this browser', async ({ p
 test('reproduces the history that outlived its own world in this browser', async ({ page }) => {
   await page.goto('/verify.html')
   const status = page.getByRole('status')
-  await expect(status.last()).toHaveText(
+  await expect(status.nth(2)).toHaveText(
     'The inheritance and its fingerprint match in this browser.',
     { timeout: 60_000 },
   )
   await expect(
     page.getByRole('heading', { name: 'A history that outlives its world' }),
   ).toBeVisible()
+  const row = page.locator('table').nth(2).locator('tbody tr')
+  await expect(row).toHaveCount(1)
+  await expect(row).toHaveAttribute('data-ok', 'true')
+})
+
+test('reproduces the two histories that become one in this browser', async ({ page }) => {
+  await page.goto('/verify.html')
+  const status = page.getByRole('status')
+  await expect(status.last()).toHaveText(
+    'The confluence and its fingerprint match in this browser.',
+    { timeout: 60_000 },
+  )
+  await expect(page.getByRole('heading', { name: 'Two histories that become one' })).toBeVisible()
   const row = page.locator('table').last().locator('tbody tr')
   await expect(row).toHaveCount(1)
   await expect(row).toHaveAttribute('data-ok', 'true')

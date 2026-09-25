@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GOLDEN_CASES, INHERITANCE_CASE } from '../engine/golden.ts'
+import { GOLDEN_CASES, INHERITANCE_CASE, MERGE_CASE } from '../engine/golden.ts'
 import { CAUSAL_WINDOW } from '../engine/params.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
@@ -9,6 +9,7 @@ import {
   runCollapseCheck,
   runGoldenChecks,
   runInheritanceCheck,
+  runMergeCheck,
 } from './check.ts'
 
 describe('runGoldenChecks', () => {
@@ -57,5 +58,35 @@ describe('runInheritanceCheck', () => {
     // FEAT: o ano da queda vem antes do primeiro ano na casa nova, e a fundação vem antes dos dois
     expect(INHERITANCE_CASE.founded).toBeLessThan(INHERITANCE_CASE.ended)
     expect(INHERITANCE_CASE.ended).toBeLessThan(INHERITANCE_CASE.year)
+  })
+})
+
+describe('runMergeCheck', () => {
+  it('seams two histories into one and reproduces the fingerprint of the one that received', () => {
+    const result = runMergeCheck()
+    expect(result.status).toBe('running')
+    expect(result.away).toBe('merged')
+    expect(result.seam).toBe(MERGE_CASE.tick)
+    expect(result.lived).toBe(0)
+    expect(result.settled).toBe(true)
+    expect(result.computed).toBe(MERGE_CASE.hash)
+    expect(result.ok).toBe(true)
+  })
+
+  it('proves the two histories became one before the year that is pinned', () => {
+    expect(MERGE_CASE.tick).toBeLessThan(MERGE_CASE.year)
+    expect(MERGE_CASE.script).not.toBe(MERGE_CASE.other)
+  })
+
+  it('keeps every published fingerprint distinct, all seventeen of them', () => {
+    // FEAT: dois casos com o mesmo hash seriam duas provas valendo uma; o Set pega a colisão
+    const published = [
+      ...GOLDEN_CASES.map((golden) => golden.hash),
+      COLLAPSE_CASE.hash,
+      INHERITANCE_CASE.hash,
+      MERGE_CASE.hash,
+    ]
+    expect(published).toHaveLength(17)
+    expect(new Set(published).size).toBe(17)
   })
 })
