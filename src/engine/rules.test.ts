@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crossingAmounts, crossingCost, type Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
+import { METRICS, worldMetrics } from './events.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
 import { Era, VARIABLES } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
@@ -246,5 +247,10 @@ describe('a world emptied by an out-crossing where the land already collapsed', 
     w.advance(20)
     expect(w.present.population).toBe(0)
     for (const variable of VARIABLES) expect(Number.isFinite(w.present[variable])).toBe(true)
+    // FEAT: o mesmo 0/0 vive em crowding; a entrada do ano 19 é o estado empurrado a zero.
+    // foodSecurity pode ser +Infinity por desenho (ninguém para alimentar); NaN nunca é legítimo
+    const entering = { ...probe.present, population: 0 }
+    const metrics = worldMetrics(entering, w.world)
+    for (const metric of METRICS) expect(Number.isNaN(metrics[metric])).toBe(false)
   })
 })
