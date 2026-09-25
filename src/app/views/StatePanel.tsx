@@ -1,3 +1,4 @@
+import type { Colony } from '../../engine/colony.ts'
 import type { Debt } from '../../engine/debt.ts'
 import type { Variable } from '../../engine/state.ts'
 import { STRANDS, type Strand } from '../current/normalize.ts'
@@ -11,11 +12,13 @@ import {
 import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import { STRAND_COLORS } from '../theme/palette.ts'
+import { colonyView } from './colonies.ts'
 import { debtView } from './debt.ts'
 
 const ROWS: readonly Variable[] = [...STRANDS, 'stability']
 // FIX: referência estável, senão o seletor devolveria um array novo a cada render e travaria a store
 const NO_DEBTS: readonly Debt[] = []
+const NO_COLONIES: readonly Colony[] = []
 
 function isStrand(variable: Variable): variable is Strand {
   return (STRANDS as readonly Variable[]).includes(variable)
@@ -51,6 +54,13 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
   const inPast = useSimulation((s) => s.cursor !== null)
   // FIX: o instantâneo de um ano não carrega dívidas, e a de hoje não vale para o ano observado
   const debt = inPast ? null : debtView(debts, previousDebts)
+  const seed = useSimulation((s) => s.seed ?? 0)
+  const colonies = useSimulation(
+    (s) => s.worlds.find((world) => world.info.id === s.focus)?.colonies ?? NO_COLONIES,
+  )
+  // FIX: mesma regra da dívida — colonies é o presente do mundo, não vale para o ano observado
+  const colony = inPast ? null : colonyView(colonies, seed)
+  const leader = colony?.leader ?? null
 
   return (
     <section className="panel state" aria-labelledby="state-title">
@@ -136,6 +146,16 @@ export function StatePanel({ focus, onFocus }: StatePanelProps) {
           })}
           {' — '}
           {t(`debt.${debt.trend}`)}
+        </p>
+      )}
+      {colony && leader && (
+        <p className="state__colonies">
+          <span className="state__coloniesLabel">{t('colonies.title')}</span>{' '}
+          {colony.count === 1
+            ? t('colonies.one', { body: leader.body })
+            : t('colonies.many', { count: colony.count, body: leader.body })}
+          {' — '}
+          {t(leader.self ? 'colonies.self' : 'colonies.supported')}
         </p>
       )}
     </section>

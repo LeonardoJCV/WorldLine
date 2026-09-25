@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
@@ -20,11 +20,36 @@ export function CausalPanel() {
     () => (selected === null ? null : buildCausalTree(events, selected)),
     [events, selected],
   )
+  // FEAT: a fila de causas de um acontecimento já gravado não muda, então a linha da raiz é estável
+  // por todo o tempo em que ele fica selecionado — só troca quando `selected` troca
+  const rootRow = tree?.nodes.find((node) => node.depth === 0)?.row
 
+  // FIX: a cadeia nem sempre cabe na coluna; a borda do lado que continua desvanece, para um nó
+  // cortado ao meio ler como "há mais" e não como falha de desenho
+  const markEdges = useCallback(() => {
+    const element = scrollRef.current
+    if (!element) return
+    const { scrollTop, scrollLeft, clientHeight, clientWidth, scrollHeight, scrollWidth } = element
+    element.dataset.up = String(scrollTop > 1)
+    element.dataset.down = String(scrollTop + clientHeight < scrollHeight - 1)
+    element.dataset.left = String(scrollLeft > 1)
+    element.dataset.right = String(scrollLeft + clientWidth < scrollWidth - 1)
+  }, [])
+
+  // FIX: sem centralizar a raiz na vertical, uma árvore com dois ramos (como a herança, que sobe
+  // tanto pelo colapso quanto pela colônia) deixa o ramo mais baixo fora da faixa visível
   useEffect(() => {
     const element = scrollRef.current
-    if (element) element.scrollLeft = element.scrollWidth
-  }, [selected])
+    if (!element) return
+    element.scrollLeft = element.scrollWidth
+    if (rootRow !== undefined) {
+      element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
+    }
+    markEdges()
+    const observer = new ResizeObserver(markEdges)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [selected, rootRow, markEdges])
 
   const root = selected === null ? undefined : events[selected]
   if (!tree || !root) {
@@ -77,18 +102,35 @@ export function CausalPanel() {
     }
   }
 
+  // FEAT: a medida da cadeia é o tamanho que o cartão pede; quanto ele ganha de fato é do CSS
+  const cardStyle = {
+    '--causal-width': `${width}px`,
+    '--causal-height': `${height}px`,
+  } as CSSProperties
+
   return (
-    <section className="panel causal" aria-labelledby="causal-title">
+    // FIX: data-wide só existe com uma árvore de verdade; sem evento selecionado o cartão volta ao
+    // tamanho de sempre — sem o atributo, 100% de uma largura fit-content vira uma conta circular
+    <section
+      className="panel causal"
+      aria-labelledby="causal-title"
+      data-wide="true"
+      style={cardStyle}
+    >
       <h2 className="panel__title" id="causal-title">
         {t('causal.title')}
       </h2>
-      <div className="causal__scroll" ref={scrollRef}>
-        <div
-          className="causal__canvas"
-          role="group"
-          aria-label={t('causal.label', { event: t(`event.${root.event}`) })}
-          style={{ width, height }}
-        >
+      {/* FIX: a cadeia cortada só se alcançava clicando num nó, e os nós de condição não são botões;
+          focável, ela rola pelas setas como qualquer outra região de rolagem */}
+      <div
+        className="causal__scroll"
+        ref={scrollRef}
+        onScroll={markEdges}
+        tabIndex={0}
+        role="group"
+        aria-label={t('causal.label', { event: t(`event.${root.event}`) })}
+      >
+        <div className="causal__canvas" style={{ width, height }}>
           <svg className="causal__links" width={width} height={height} aria-hidden="true">
             {tree.nodes.map((node) => {
               const parent = node.parent === null ? undefined : byKey.get(node.parent)

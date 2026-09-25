@@ -287,6 +287,67 @@
   font-size: var(--text-sm);
 }
 
+/* FEAT: o anúncio de uma história que trocou de mundo é a coisa mais visível da tela enquanto dura */
+.notices > .inheritance {
+  justify-self: stretch;
+}
+
+.inheritance {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-6);
+  border: 1px solid var(--v-food);
+  border-inline-start-width: 5px;
+  border-radius: var(--radius);
+  background: linear-gradient(rgb(242 211 94 / 0.12), rgb(242 211 94 / 0.12)), rgb(10 11 30 / 0.86);
+  color: var(--starlight);
+  animation: inheritance-arrive var(--motion-slow) var(--ease);
+}
+
+.inheritance__when {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  color: var(--v-food);
+  font-size: var(--text-sm);
+  font-stretch: 87%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inheritance__mark {
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.inheritance__moved {
+  font-size: clamp(1.25rem, 2.6vw, 1.75rem);
+  font-weight: 700;
+  font-stretch: 112%;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.inheritance__kept {
+  /* FEAT: a frase que fecha a herança precisa ler como a mais bonita do projeto, não como legenda */
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+@keyframes inheritance-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inheritance {
+    animation: none;
+  }
+}
+
 /* FEAT: no celular a barra é só o ano e o que se toca enquanto se observa; o resto é uma linha atrás do ⋯ */
 @media (max-width: 900px) {
   .topbar {
@@ -367,6 +428,14 @@
 
 /* FEAT: o painel de bordo flutua sobre o palco e só os cartões capturam o ponteiro */
 .hud {
+  /* FEAT: a largura da coluna da esquerda, nomeada para quem cresce sobre o palco saber onde parar */
+  --hud-left: 20rem;
+  /* FIX: o vão livre à esquerda da coluna direita — o cartão causal cresce só até aqui, nunca sobre a coluna de estado */
+  --causal-max: min(
+    94vw,
+    60rem,
+    calc(100vw - var(--gutter) * 2 - var(--hud-left) - var(--space-7))
+  );
   /* FIX: absoluto na área do palco: por cheia que fique, a camada não estica a página nem empurra o minimapa para fora */
   position: absolute;
   inset: 0;
@@ -374,7 +443,7 @@
   grid-column: 1;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(230px, 20rem) minmax(80px, 1fr) minmax(230px, 21rem);
+  grid-template-columns: minmax(230px, var(--hud-left)) minmax(80px, 1fr) minmax(230px, 21rem);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
     'left . right'
@@ -390,7 +459,8 @@
 /* FIX: o painel do modo pede mais largura que o de estado, e só ele estica a coluna */
 .hud:has(.card--allocation),
 .hud:has(.card--cross) {
-  grid-template-columns: minmax(280px, 34rem) minmax(80px, 1fr) minmax(230px, 21rem);
+  --hud-left: 34rem;
+  grid-template-columns: minmax(280px, var(--hud-left)) minmax(80px, 1fr) minmax(230px, 21rem);
 }
 
 /* FIX: a regra global só encurta a duração; sem isto a transição ainda corre e o valor computado atrasa um quadro */
@@ -546,6 +616,7 @@
   /* FEAT: a altura anima pela pista de grade enquanto o conteúdo continua montado; ele sai do DOM no fim */
   transition:
     grid-template-rows var(--motion-fast) var(--ease),
+    min-height var(--motion-fast) var(--ease),
     gap var(--motion-fast) var(--ease);
 }
 
@@ -833,14 +904,16 @@ button.state__row:hover,
   content: '▼ ';
 }
 
-.state__debt {
+.state__debt,
+.state__colonies {
   margin: var(--space-3) 0 0;
   padding-top: var(--space-2);
   border-top: 1px solid var(--haze);
   font-size: var(--text-sm);
 }
 
-.state__debtLabel {
+.state__debtLabel,
+.state__coloniesLabel {
   color: var(--dim);
 }
 
@@ -877,9 +950,73 @@ button.state__row:hover,
   font-size: var(--text-xs);
 }
 
+/* FEAT: o cartão paira sobre o palco vazio à esquerda em vez de ficar preso à coluna da lista de
+   eventos, mas só até onde o palco é mesmo vazio (--causal-max): a coluna da esquerda é dela */
+.hud__right .card--causal:has(.panel.causal[data-wide]) {
+  width: fit-content;
+  max-width: var(--causal-max);
+  align-self: flex-end;
+}
+
+/* FIX: quando a cadeia pede mais altura do que sobra, é a lista de eventos que cede primeiro — mas
+   nunca para menos de três linhas; o piso parte de zero para a dobra poder animá-lo nos dois
+   sentidos em vez de saltar na abertura */
+.hud__right .card--events {
+  min-height: 0;
+}
+
+.hud__right .card--events:not([data-collapsed='true']) {
+  min-height: 168px;
+}
+
+.panel.causal[data-wide] {
+  width: min(var(--causal-width, 100%), var(--causal-max));
+  max-width: 100%;
+}
+
 .causal__scroll {
-  max-height: 264px;
+  /* FIX: quem manda na altura é o que a coluna cede (100%), depois 46vh, depois a cadeia inteira;
+     quando a cadeia não cabe o corte é declarado — a borda desvanece do lado que continua */
+  max-height: min(var(--causal-height, 264px), 46vh, 100%);
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dim) rgb(58 42 107 / 0.4);
+  --fade-up: 0px;
+  --fade-down: 0px;
+  --fade-left: 0px;
+  --fade-right: 0px;
+  mask-image:
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--fade-up),
+      #000 calc(100% - var(--fade-down)),
+      transparent 100%
+    ),
+    linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-left),
+      #000 calc(100% - var(--fade-right)),
+      transparent 100%
+    );
+  mask-composite: intersect;
+}
+
+.causal__scroll[data-up='true'] {
+  --fade-up: 28px;
+}
+
+.causal__scroll[data-down='true'] {
+  --fade-down: 28px;
+}
+
+.causal__scroll[data-left='true'] {
+  --fade-left: 28px;
+}
+
+.causal__scroll[data-right='true'] {
+  --fade-right: 28px;
 }
 
 .causal__canvas {
@@ -925,6 +1062,8 @@ button.state__row:hover,
 
 /* FEAT: a frase da travessia é longa e ocupa as duas linhas do nó */
 .causal__node[data-kind='crossing'] .causal__title {
+  /* FIX: com a entrelinha de sempre as duas linhas pedem 39px e o nó só tem 30 — a segunda saía cortada ao meio */
+  line-height: 1.15;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1174,7 +1313,9 @@ button.causal__node:hover {
 }
 
 /* FEAT: no celular os cartões sobem do fundo numa folha, e o palco fica com a tela inteira por trás */
-.hud--sheet {
+.hud.hud--sheet {
+  /* FIX: na folha não há colunas para invadir; o teto do cartão causal volta a ser só a tela */
+  --causal-max: 94vw;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
