@@ -728,6 +728,7 @@ export class SimulationHost {
         origin: { ...c.origin },
         ...(c.allocation ? { allocation: { ...c.allocation } } : {}),
       })),
+      merges: worldline.merges,
       debts: worldline.present.debts,
       paradox: worldline.present.paradox,
       colonies: worldline.present.colonies,

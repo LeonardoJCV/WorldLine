@@ -3,6 +3,7 @@ import type { Colony } from '../../engine/colony.ts'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { Debt, Paradox } from '../../engine/debt.ts'
 import type { EventRecord } from '../../engine/events.ts'
+import type { Merge } from '../../engine/merge.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
@@ -29,6 +30,7 @@ export interface WorldView {
   readonly events: readonly EventRecord[]
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
+  readonly merges: readonly Merge[]
   readonly debts: readonly Debt[]
   // FEAT: a dívida do último ano diferente já relatado, para a tendência não piscar a cada quadro
   readonly previousDebts: readonly Debt[] | null
@@ -335,6 +337,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
             events: upsert(old?.events ?? [], update.events),
             decisions: update.decisions,
             crossings: update.crossings,
+            merges: update.merges,
             debts: update.debts,
             previousDebts: trackDebts(
               debtHistory,

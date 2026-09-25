@@ -11,8 +11,9 @@ import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
 import { hashState } from '../../engine/hash.ts'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
+import { system } from '../../engine/system.ts'
 import { Worldline } from '../../engine/worldline.ts'
-import { WORLDLINE_IDS } from '../../worker/protocol.ts'
+import { toSnapshot, WORLDLINE_IDS, type MergeSpec } from '../../worker/protocol.ts'
 import { parseWorldFile, serializeWorld } from './file.ts'
 import {
   decodeLink,
@@ -23,6 +24,7 @@ import {
   isValidLink,
   isValidMultiverse,
   linkHash,
+  SEAMED_VERSION,
   toMultiverse,
   type MultiverseLink,
   type WorldLink,
@@ -118,6 +120,11 @@ function withExtraByte(text: string): string {
   return btoa(`${binary}\0`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+function withoutBytes(text: string, count: number): string {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
+  return btoa(binary.slice(0, -count)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 describe('seedFromText', () => {
   it('keeps whole numbers as they are', () => {
     expect(seedFromText('482913')).toBe(482913)
@@ -166,8 +173,9 @@ describe('world link', () => {
   it('trusts every version that opens the same world', () => {
     expect(isCompatibleVersion(1)).toBe(true)
     expect(isCompatibleVersion(MODEL_VERSION)).toBe(true)
+    expect(isCompatibleVersion(SEAMED_VERSION)).toBe(true)
     expect(isCompatibleVersion(0)).toBe(false)
-    expect(isCompatibleVersion(MODEL_VERSION + 1)).toBe(false)
+    expect(isCompatibleVersion(SEAMED_VERSION + 1)).toBe(false)
     expect(isCompatibleVersion(7)).toBe(false)
   })
 
@@ -325,9 +333,43 @@ const crossed: MultiverseLink = {
 // FEAT: gravado pelo escritor da versão 1, antes das travessias existirem
 const VERSION_1 = 'AQAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAA'
 
+// FEAT: os bytes que o escritor da versão 2 produzia antes da costura existir, copiados dele
+const SEAMLESS_TREE = 'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAAAAAA'
+const SEAMLESS_CROSSED =
+  'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUyKAUA'
+
+// FEAT: os nomes são posições no link: a raiz é A, o primeiro galho é B, o segundo é C
+const arrived: MergeSpec = { tick: 320, self: 'A', other: 'B', direction: 'in' }
+const flowed: MergeSpec = { tick: 320, self: 'B', other: 'A', direction: 'out' }
+
+const confluence: MultiverseLink = {
+  ...tree,
+  version: SEAMED_VERSION,
+  merges: [arrived],
+  branches: [
+    {
+      parent: 0,
+      fork: 100,
+      decisions: [{ tick: 100, allocation: starved }],
+      crossings: [],
+      merges: [flowed],
+    },
+    { parent: 1, fork: 200, decisions: [], crossings: [] },
+  ],
+}
+
 describe('multiverse link', () => {
   it('round-trips a tree of worldlines', () => {
     expect(decodeMultiverse(encodeMultiverse(tree))).toEqual(tree)
+  })
+
+  it('writes a multiverse without a seam on the very bytes it always wrote', () => {
+    expect(encodeMultiverse(tree)).toBe(SEAMLESS_TREE)
+    expect(encodeMultiverse(crossed)).toBe(SEAMLESS_CROSSED)
+    expect(linkHash(tree)).toBe(`#/m/${SEAMLESS_TREE}`)
+    // FEAT: nenhum link já salvo muda de versão por causa de uma costura que ele não tem
+    expect(decodeMultiverse(SEAMLESS_TREE)?.version).toBe(MODEL_VERSION)
+    expect(decodeMultiverse(SEAMLESS_CROSSED)?.version).toBe(MODEL_VERSION)
   })
 
   it('keeps single worlds on the short #/w/ form and trees on #/m/', () => {
@@ -574,5 +616,168 @@ describe('a link to a history that outlived its world', () => {
     expect(opened.present.home).toBe(sent.present.home)
     expect(hashState(opened.present)).toBe(INHERITANCE_CASE.hash)
     expect(hashState(opened.present)).toBe(hashState(sent.present))
+  })
+})
+
+interface Sewn {
+  readonly survivor: Worldline
+  readonly departed: Worldline
+}
+
+// FEAT: só o ano e os nomes vêm do link; o estado da história que deságua sai do replay dela
+function sew(
+  seed: number,
+  root: readonly Decision[],
+  fork: number,
+  own: readonly Decision[],
+  seam: MergeSpec,
+  away: MergeSpec,
+): Sewn {
+  const home = system(seed).find((body) => body.home)
+  if (!home) throw new Error(`world ${seed} has no home body`)
+  const survivor = new Worldline(seed, root, null, [])
+  survivor.advance(seam.tick)
+  const departed = new Worldline(
+    seed,
+    [...root.filter((decision) => decision.tick < fork), ...own],
+    { parent: survivor, tick: fork },
+    [],
+  )
+  departed.advance(away.tick)
+  const leaving = departed.present
+  survivor.merge({
+    tick: seam.tick,
+    self: seam.self,
+    other: seam.other,
+    direction: seam.direction,
+    natal: home.index,
+    values: toSnapshot(leaving).values,
+    debts: leaving.debts,
+    echoes: leaving.echoes,
+    paradox: leaving.paradox,
+    strain: leaving.strain,
+    colonies: leaving.colonies,
+    home: leaving.home,
+  })
+  departed.merge({
+    tick: away.tick,
+    self: away.self,
+    other: away.other,
+    direction: away.direction,
+    natal: home.index,
+  })
+  departed.advance(1)
+  return { survivor, departed }
+}
+
+describe('a link that carries a confluence', () => {
+  it('rises to version 3 and brings both sides of the seam back', () => {
+    const text = encodeMultiverse(confluence)
+    expect(decodeMultiverse(text)).toEqual(confluence)
+    expect(text).not.toBe(SEAMLESS_TREE)
+    // FEAT: a versão sai do que o link carrega, não do número que veio escrito nele
+    expect(decodeMultiverse(encodeMultiverse({ ...confluence, version: 1 }))?.version).toBe(
+      SEAMED_VERSION,
+    )
+    expect(decodeMultiverse(SEAMLESS_TREE)?.merges).toBeUndefined()
+    expect(decodeMultiverse(SEAMLESS_TREE)?.branches[0]?.merges).toBeUndefined()
+  })
+
+  it('reopens the seam with the same fingerprint on the survivor and on the dead history', () => {
+    const back = decodeMultiverse(encodeMultiverse(confluence))
+    const branch = back?.branches[0]
+    const seam = back?.merges?.[0]
+    const away = branch?.merges?.[0]
+    if (!back || !branch || !seam || !away) throw new Error('the link dropped the confluence')
+    // FEAT: um lado vem dos literais da fixture, o outro só do que voltou do link
+    const sent = sew(
+      sample.seed,
+      sample.decisions,
+      100,
+      [{ tick: 100, allocation: starved }],
+      arrived,
+      flowed,
+    )
+    const opened = sew(back.seed, back.decisions, branch.fork, branch.decisions, seam, away)
+    sent.survivor.advance(60)
+    opened.survivor.advance(60)
+    expect(opened.survivor.present.tick).toBe(sent.survivor.present.tick)
+    expect(hashState(opened.survivor.present)).toBe(hashState(sent.survivor.present))
+    expect(opened.departed.present.status).toBe('merged')
+    expect(opened.departed.present.tick).toBe(sent.departed.present.tick)
+    expect(hashState(opened.departed.present)).toBe(hashState(sent.departed.present))
+
+    // FIX: sem a costura a sobrevivente segue outra história, então o hash acima não passa de graça
+    const unseamed = new Worldline(sample.seed, sample.decisions, null, [])
+    unseamed.advance(arrived.tick + 60)
+    expect(hashState(unseamed.present)).not.toBe(hashState(opened.survivor.present))
+  })
+
+  it('refuses a seam block cut short instead of reading half of it', () => {
+    const text = encodeMultiverse(confluence)
+    // FEAT: treze bytes de costura — contagem e registro de cada worldline; nenhum corte é legível
+    for (let cut = 1; cut <= 13; cut++) {
+      expect(decodeMultiverse(withoutBytes(text, cut))).toBeNull()
+    }
+    expect(decodeMultiverse(withExtraByte(text))).toBeNull()
+  })
+
+  it('refuses a confluence the engine would refuse, without throwing', () => {
+    expect(isValidMultiverse({ ...confluence, merges: [arrived, { ...arrived, tick: 310 }] })).toBe(
+      false,
+    )
+    expect(
+      isValidMultiverse({
+        ...confluence,
+        merges: [
+          { ...flowed, tick: 300 },
+          { ...arrived, tick: 310 },
+        ],
+      }),
+    ).toBe(false)
+    expect(isValidMultiverse({ ...confluence, merges: [{ ...arrived, other: 'A' }] })).toBe(false)
+    expect(
+      isValidMultiverse({ ...confluence, merges: [{ ...arrived, tick: confluence.tick + 1 }] }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...confluence,
+        merges: [{ ...arrived, direction: 'sideways' }] as unknown as readonly MergeSpec[],
+      }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({ ...confluence, merges: 'x' as unknown as readonly MergeSpec[] }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...confluence,
+        merges: [],
+        branches: [{ parent: 0, fork: 100, decisions: [], merges: [{ ...flowed, tick: 50 }] }],
+      }),
+    ).toBe(false)
+    expect(
+      decodeMultiverse(
+        encodeMultiverse({
+          ...confluence,
+          merges: [
+            { ...flowed, tick: 300 },
+            { ...arrived, tick: 310 },
+          ],
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  it('keeps the lone survivor of a confluence on the long form, with the other world gone', () => {
+    const lone: MultiverseLink = {
+      ...sample,
+      version: SEAMED_VERSION,
+      crossings: [],
+      branches: [],
+      // FEAT: a outra história já foi removida do multiverso, e o link diz isso com o nome vazio
+      merges: [{ tick: 320, self: 'A', other: '', direction: 'in' }],
+    }
+    expect(linkHash(lone)).toMatch(/^#\/m\//)
+    expect(decodeMultiverse(encodeMultiverse(lone))).toEqual(lone)
   })
 })

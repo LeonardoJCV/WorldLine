@@ -2,6 +2,7 @@ import type { Colony } from '../engine/colony.ts'
 import type { Crossing, CrossingKind, Dose } from '../engine/crossing.ts'
 import type { Debt, Paradox } from '../engine/debt.ts'
 import { EVENTS, type EventId, type EventRecord } from '../engine/events.ts'
+import type { Merge } from '../engine/merge.ts'
 import {
   VARIABLES,
   type Allocation,
@@ -35,11 +36,20 @@ export interface EventUpdate {
   readonly record: EventRecord
 }
 
+// FEAT: a costura no link é ano e nomes; o estado da outra história se recalcula no replay dela
+export interface MergeSpec {
+  readonly tick: number
+  readonly self: string
+  readonly other: string
+  readonly direction: 'in' | 'out'
+}
+
 export interface BranchSpec {
   readonly parent: number
   readonly fork: number
   readonly decisions: readonly Decision[]
   readonly crossings?: readonly Crossing[]
+  readonly merges?: readonly MergeSpec[]
 }
 
 export interface WorldlineInfo {
@@ -55,6 +65,7 @@ export interface WorldProgress {
   readonly events: readonly EventUpdate[]
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
+  readonly merges: readonly Merge[]
   readonly debts: readonly Debt[]
   readonly paradox: Paradox | null
   readonly colonies: readonly Colony[]
