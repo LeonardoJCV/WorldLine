@@ -29,10 +29,12 @@ export const SYSTEM_CHANNEL = 8192
 export const STRIDE = 16
 
 // FEAT: raio de desenho por tipo, não do motor — um gasoso é maior que um rochoso
+// FIX: 0.9 encostava na estrela e engolia o próprio anel numa órbita interna de ~1.3; 0.55 ainda lê
+// como o maior dos três, mas cabe dentro do vão que a órbita mínima costuma abrir (Tarefa 5)
 const RADIUS_BY_KIND: Readonly<Record<BodyKind, number>> = {
   rocky: 0.4,
   ice: 0.5,
-  gas: 0.9,
+  gas: 0.55,
 }
 
 function angleOf(seed: number, body: Body): number {

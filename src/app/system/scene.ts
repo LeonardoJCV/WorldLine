@@ -1,6 +1,6 @@
 import {
-  BufferGeometry,
   Color,
+  BufferGeometry,
   Float32BufferAttribute,
   Group,
   HemisphereLight,
@@ -8,7 +8,6 @@ import {
   LineLoop,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   PerspectiveCamera,
   PointLight,
   PointsMaterial,
@@ -19,9 +18,16 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
+import type { Snapshot } from '../../worker/protocol.ts'
+import { TIERS, type PlanetDetail, type Tier } from '../graphics/settings.ts'
+import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
+import { terrainTexture } from '../planet/terrainTexture.ts'
+import { PLANET_LIGHT } from '../planet/uniforms.ts'
 import { starField } from '../scene3d/stars.ts'
 import { zoomGoal } from '../surface/camera.ts'
-import type { SystemPlacement } from './model.ts'
+import type { TerrainMap } from '../surface/terrainClient.ts'
+import { bodyPalette, bodyState } from './palette.ts'
+import type { PlacedBody, SystemPlacement } from './model.ts'
 
 const FOV = 40
 const VOID = 0x0a0b1e
@@ -45,6 +51,10 @@ const FIELD_POINT = 1.1
 export interface SystemSceneOptions {
   readonly placement: SystemPlacement
   readonly seed: number
+  readonly tier: Tier
+  // FEAT: o mesmo terreno do mundo natal, a única textura que existe — Tarefa 5 explica o porquê
+  readonly terrain: TerrainMap
+  readonly present: Snapshot
   readonly dpr: number
   // FEAT: sem movimento, a deriva ambiente não anda — a cena fica parada e continua certa
   readonly still: boolean
@@ -62,12 +72,21 @@ export type Escape = 'in' | 'out' | null
 
 export interface SystemScene {
   setPlacement(placement: SystemPlacement): void
+  // FEAT: só o corpo vivo carrega um Snapshot de verdade; os outros não mudam com o relógio da sim
+  setPresent(present: Snapshot): void
   setStill(still: boolean): void
   resize(width: number, height: number): void
   zoom(factor: number): Escape
   // FEAT: onde cada corpo caiu na tela, para os rótulos em HTML seguirem, como Current3D já faz
   project(index: number): Projected
   dispose(release?: boolean): void
+}
+
+interface Entry {
+  readonly planet: PlanetBody
+  readonly picker: Mesh
+  ring: LineLoop
+  detail: PlanetDetail
 }
 
 function ringGeometry(radius: number): BufferGeometry {
@@ -105,17 +124,23 @@ export function createSystemScene(
   scene.add(new PointLight(0xffe8c0, 2.6, 0, 0))
   scene.add(new HemisphereLight(0x7f9cff, 0x1a1030, 0.35))
 
-  const bodyGeometry = new SphereGeometry(1, SEGMENTS, SEGMENTS)
-  const bodyMaterial = new MeshStandardMaterial({ color: 0x9a94ad, roughness: 0.9, metalness: 0 })
+  const spec = TIERS[options.tier]
+  const terrain = terrainTexture(options.terrain)
+  const light = new Vector3(...PLANET_LIGHT).normalize()
+
+  // FEAT: um alvo invisível por corpo, do tamanho do disco — separa o que se raycasta do que se vê
+  const pickerGeometry = new SphereGeometry(1, SEGMENTS, SEGMENTS)
+  const pickerMaterial = new MeshBasicMaterial({ visible: false })
   const orbitMaterial = new LineBasicMaterial({ color: 0x5a5480, transparent: true, opacity: 0.75 })
   const bodyGroup = new Group()
   const orbitGroup = new Group()
   scene.add(bodyGroup, orbitGroup)
 
   let placement = options.placement
+  let present = options.present
   let still = options.still
-  let meshes: Mesh[] = []
-  let rings: LineLoop[] = []
+  const entries = new Map<number, Entry>()
+  const pickerIndex = new Map<Mesh, number>()
   let width = 1
   let height = 1
   let drift = 0
@@ -127,37 +152,71 @@ export function createSystemScene(
   const pointer = new Vector2()
   const ray = new Raycaster()
 
-  function clear(): void {
-    for (const mesh of meshes) bodyGroup.remove(mesh)
-    for (const ring of rings) {
-      orbitGroup.remove(ring)
-      ring.geometry.dispose()
-    }
-    meshes = []
-    rings = []
+  // FIX: 'base'+ amostra o terreno pela posição do vértice, não por uOffset — todo corpo que não é
+  // o vivo repetiria o litoral de Dedes; medido em system-bodies-high.png. Só 'disc' não lê terreno.
+  function detailFor(body: PlacedBody): PlanetDetail {
+    return body.living ? spec.focus : 'disc'
   }
 
-  function build(): void {
-    clear()
+  function removeEntry(index: number): void {
+    const entry = entries.get(index)
+    if (!entry) return
+    bodyGroup.remove(entry.planet.group, entry.picker)
+    orbitGroup.remove(entry.ring)
+    entry.ring.geometry.dispose()
+    entry.planet.dispose()
+    pickerIndex.delete(entry.picker)
+    entries.delete(index)
+  }
+
+  function clear(): void {
+    for (const index of [...entries.keys()]) removeEntry(index)
+  }
+
+  // FEAT: reconcilia por índice de corpo — só refaz geometria/material quando o detalhe muda de fato,
+  // porque colonies (e por tabela, placement) chega de novo a cada quadro de simulação
+  function sync(): void {
+    const seen = new Set<number>()
     for (const body of placement.bodies) {
-      const mesh = new Mesh(bodyGeometry, bodyMaterial)
-      mesh.scale.setScalar(body.radius)
-      bodyGroup.add(mesh)
-      meshes.push(mesh)
-      const ring = new LineLoop(ringGeometry(body.distance), orbitMaterial)
-      orbitGroup.add(ring)
-      rings.push(ring)
+      seen.add(body.index)
+      const detail = detailFor(body)
+      let entry = entries.get(body.index)
+      if (entry && entry.detail !== detail) {
+        removeEntry(body.index)
+        entry = undefined
+      }
+      if (!entry) {
+        const planet = createPlanetBody(bodyPalette(options.seed, body), detail, terrain)
+        bodyGroup.add(planet.group)
+        const picker = new Mesh(pickerGeometry, pickerMaterial)
+        bodyGroup.add(picker)
+        pickerIndex.set(picker, body.index)
+        const ring = new LineLoop(ringGeometry(body.distance), orbitMaterial)
+        orbitGroup.add(ring)
+        entry = { planet, picker, ring, detail }
+        entries.set(body.index, entry)
+      } else {
+        entry.ring.geometry.dispose()
+        entry.ring.geometry = ringGeometry(body.distance)
+      }
+      entry.planet.group.scale.setScalar(body.radius)
+      entry.picker.scale.setScalar(body.radius)
+      entry.planet.update(bodyState(body, present))
     }
+    for (const index of [...entries.keys()]) if (!seen.has(index)) removeEntry(index)
   }
 
   function place(): void {
-    placement.bodies.forEach((body, at) => {
-      const mesh = meshes[at]
-      if (!mesh) return
+    for (const body of placement.bodies) {
+      const entry = entries.get(body.index)
+      if (!entry) continue
       // FEAT: deriva de ambiente, não de simulação — o motor não guarda ângulo nem período algum
       const angle = body.angle + drift / Math.sqrt(Math.max(body.distance, 0.01))
-      mesh.position.set(Math.cos(angle) * body.distance, 0, Math.sin(angle) * body.distance)
-    })
+      const x = Math.cos(angle) * body.distance
+      const z = Math.sin(angle) * body.distance
+      entry.planet.group.position.set(x, 0, z)
+      entry.picker.position.set(x, 0, z)
+    }
   }
 
   function framing(): number {
@@ -185,9 +244,9 @@ export function createSystemScene(
   function pick(): void {
     if (!pointing) return
     ray.setFromCamera(pointer, camera)
-    const hit = ray.intersectObjects(meshes, false)[0]
-    const at = hit ? meshes.indexOf(hit.object as Mesh) : -1
-    report(at < 0 ? null : (placement.bodies[at]?.index ?? null))
+    const hit = ray.intersectObjects([...pickerIndex.keys()], false)[0]
+    const index = hit ? (pickerIndex.get(hit.object as Mesh) ?? null) : null
+    report(index ?? null)
   }
 
   const onPointerMove = (event: PointerEvent) => {
@@ -206,7 +265,7 @@ export function createSystemScene(
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerleave', onPointerLeave)
 
-  build()
+  sync()
   place()
   pose()
 
@@ -221,14 +280,22 @@ export function createSystemScene(
     place()
     pose()
     pick()
+    const tickDt = still ? 0 : dt
+    for (const entry of entries.values()) entry.planet.tick(tickDt, now / 1000, light)
     renderer.render(scene, camera)
   })
 
   return {
     setPlacement(next) {
       placement = next
-      build()
+      sync()
       place()
+    },
+    setPresent(next) {
+      present = next
+      const living = placement.bodies.find((body) => body.living)
+      const entry = living ? entries.get(living.index) : undefined
+      if (living && entry) entry.planet.update(bodyState(living, present))
     },
     setStill(next) {
       still = next
@@ -249,13 +316,16 @@ export function createSystemScene(
       return next.beyond ? 'out' : inward ? 'in' : null
     },
     project(index) {
-      const at = placement.bodies.findIndex((body) => body.index === index)
-      const body = placement.bodies[at]
-      const mesh = at < 0 ? undefined : meshes[at]
-      if (!mesh || !body) return { x: 0, y: 0, visible: false }
+      const entry = entries.get(index)
+      const body = placement.bodies.find((candidate) => candidate.index === index)
+      if (!entry || !body) return { x: 0, y: 0, visible: false }
       // FEAT: a âncora cai um disco abaixo do corpo, para um gasoso não engolir o próprio nome
       scratch
-        .set(mesh.position.x, mesh.position.y - body.radius * DROP, mesh.position.z)
+        .set(
+          entry.planet.group.position.x,
+          entry.planet.group.position.y - body.radius * DROP,
+          entry.planet.group.position.z,
+        )
         .project(camera)
       return {
         x: ((scratch.x + 1) / 2) * width,
@@ -272,13 +342,14 @@ export function createSystemScene(
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
       clear()
-      bodyGeometry.dispose()
-      bodyMaterial.dispose()
+      pickerGeometry.dispose()
+      pickerMaterial.dispose()
       orbitMaterial.dispose()
       starGeometry.dispose()
       starMaterial.dispose()
       field.geometry.dispose()
       fieldMaterial.dispose()
+      terrain.dispose()
       if (release) renderer.forceContextLoss()
       renderer.dispose()
     },

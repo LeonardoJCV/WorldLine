@@ -3,6 +3,8 @@ import { TIERS } from '../graphics/settings.ts'
 import { useGraphics, useTier } from '../graphics/store.ts'
 import { useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
+import { terrainMap } from '../surface/runtime.ts'
+import type { TerrainMap } from '../surface/terrainClient.ts'
 import { systemPlacement } from './model.ts'
 import type { Escape, SystemScene } from './scene.ts'
 import './system.css'
@@ -33,10 +35,13 @@ export function SystemView({
   const stillRef = useRef(still)
   const tier = useTier()
   const seed = useSimulation((s) => s.seed ?? 0)
-  const home = useSimulation((s) => s.present?.home ?? null)
+  const present = useSimulation((s) => s.present)
+  const home = present?.home ?? null
   const colonies = useSimulation((s) => s.colonies)
   const placement = useMemo(() => systemPlacement(seed, home, colonies), [seed, home, colonies])
   const placementRef = useRef(placement)
+  const presentRef = useRef(present)
+  const [loaded, setLoaded] = useState<{ seed: number; map: TerrainMap } | null>(null)
 
   useEffect(() => {
     exitRef.current = onExit
@@ -60,13 +65,37 @@ export function SystemView({
   }, [placement])
 
   useEffect(() => {
+    presentRef.current = present
+    if (present) sceneRef.current?.setPresent(present)
+  }, [present])
+
+  useEffect(() => {
     sizeRef.current = { width, height }
     sceneRef.current?.resize(width, height)
   }, [width, height])
 
+  // FEAT: o único terreno que existe é o do mundo natal — a cena espera ele chegar antes de nascer
+  useEffect(() => {
+    let live = true
+    terrainMap(seed).then(
+      (map) => {
+        if (live) setLoaded({ seed, map })
+      },
+      () => {
+        if (live) exitRef.current()
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [seed])
+
+  const hasPresent = present !== null
+
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const snapshot = presentRef.current
+    if (!canvas || !loaded || loaded.seed !== seed || !snapshot) return
     let disposed = false
     void import('./scene.ts')
       .then(({ createSystemScene }) => {
@@ -74,6 +103,9 @@ export function SystemView({
         const scene = createSystemScene(canvas, {
           placement: placementRef.current,
           seed,
+          tier,
+          terrain: loaded.map,
+          present: snapshot,
           dpr: Math.min(window.devicePixelRatio || 1, TIERS[tier].dpr),
           still: stillRef.current,
           onPick: setHover,
@@ -90,7 +122,8 @@ export function SystemView({
       sceneRef.current?.dispose(!canvas.isConnected)
       sceneRef.current = null
     }
-  }, [seed, tier])
+    // FEAT: a cena só precisa nascer de novo quando o presente sai do nada — não a cada ano simulado
+  }, [seed, tier, loaded, hasPresent])
 
   // FEAT: os rótulos seguem os corpos quadro a quadro, porque a deriva os move o tempo todo
   useEffect(() => {
