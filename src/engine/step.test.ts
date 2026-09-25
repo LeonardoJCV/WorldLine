@@ -683,9 +683,13 @@ describe('step, with a merge', () => {
   })
 
   it('ends the history that flows away, and says so in its own record', () => {
-    const result = step(running(), config, 0, undefined, [], mergeOut())
+    const before = running()
+    const result = step(before, config, 0, undefined, [], mergeOut())
     expect(result.state.status).toBe('merged')
     expect(result.started.map((r) => r.event)).toContain('merged_away')
+    // FEAT: quem deságua não banca o ano — nem o relógio nem nenhuma grandeza andam
+    expect(result.state.tick).toBe(before.tick)
+    for (const variable of VARIABLES) expect(result.state[variable]).toBe(before[variable])
   })
 
   it('records a settlement only when there was mutual debt to settle', () => {
@@ -707,6 +711,16 @@ describe('step, with a merge', () => {
       mergeIn({}, { other: 'B' }),
     )
     expect(without.started.map((r) => r.event)).not.toContain('debt_settled')
+    // FEAT: dívida com um terceiro não é dívida mútua; existir não é ter sido quitada
+    const thirdParty = step(
+      running({ debts: [debt({ owed: 40 })] }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({}, { other: 'B' }),
+    )
+    expect(thirdParty.started.map((r) => r.event)).not.toContain('debt_settled')
   })
 
   it('refuses a merge dated in another year, like it refuses a crossing', () => {
@@ -726,10 +740,38 @@ describe('step, with a merge', () => {
     expect(record?.causes).toContainEqual({ kind: 'merge', tick: running().tick, other: 'C' })
   })
 
-  it('leaves a year without a merge byte-identical to before', () => {
-    // FEAT: a prova de que o parâmetro novo é inerte quando ninguém mescla
-    const plain = step(running(), config, 0)
-    const withUndefined = step(running(), config, 0, undefined, [], undefined)
-    expect(hashState(withUndefined.state)).toBe(hashState(plain.state))
+  it('numbers the records right when a merge year also founds a colony and starts a condition', () => {
+    // FEAT: todas as eras já abertas, para só a confluência e o desassossego disputarem o número
+    const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
+      makeState({
+        eras: Era.agricultural | Era.industrial | Era.demographic | Era.space,
+        energy: 14,
+        technology: 95,
+        economy: 9,
+        population: 4_000_000,
+        food: 8_000_000,
+        stability: 10,
+        debts: [debt({ owed: 40, origin: 'B' })],
+        ...overrides,
+      })
+    const nextRecord = 7
+    const result = step(
+      spacefaring(),
+      config,
+      nextRecord,
+      undefined,
+      [],
+      mergeIn({}, { other: 'B' }),
+    )
+    const mergeCount = result.started.filter(
+      (r) => r.event === 'merge' || r.event === 'debt_settled',
+    ).length
+    expect(mergeCount).toBe(2)
+    expect(result.state.colonies).toHaveLength(1)
+    // FEAT: a colônia nasce depois dos dois acontecimentos da confluência, não em cima deles
+    expect(result.state.colonies[0]?.record).toBe(nextRecord + mergeCount)
+    const unrest = result.state.active.find((entry) => EVENTS[entry.def]?.id === 'civil_unrest')
+    // FEAT: e o desassossego nasce depois da confluência e da colônia, na mesma fila
+    expect(unrest?.record).toBe(nextRecord + mergeCount + 1)
   })
 })
