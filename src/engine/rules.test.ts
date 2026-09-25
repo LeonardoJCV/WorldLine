@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crossingAmounts, crossingCost, type Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
-import { METRICS, worldMetrics } from './events.ts'
+import { EVENTS, METRICS, worldMetrics } from './events.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
 import { Era, VARIABLES } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
@@ -250,7 +250,16 @@ describe('a world emptied by an out-crossing where the land already collapsed', 
     // FEAT: o mesmo 0/0 vive em crowding; a entrada do ano 19 é o estado empurrado a zero.
     // foodSecurity pode ser +Infinity por desenho (ninguém para alimentar); NaN nunca é legítimo
     const entering = { ...probe.present, population: 0 }
-    const metrics = worldMetrics(entering, w.world)
-    for (const metric of METRICS) expect(Number.isNaN(metrics[metric])).toBe(false)
+    const emptyMetrics = worldMetrics(entering, w.world)
+    for (const metric of METRICS) expect(Number.isNaN(emptyMetrics[metric])).toBe(false)
+
+    // FEAT: o mesmo ano, mas sem a saída: gente contra sala nenhuma é a lotação máxima, não zero
+    const crowded = worldMetrics(probe.present, probe.world)
+    for (const metric of METRICS) expect(Number.isNaN(crowded[metric])).toBe(false)
+    const epidemic = EVENTS.find((event) => event.id === 'epidemic')
+    const crowdingTrigger = epidemic?.trigger.find((condition) => condition.metric === 'crowding')
+    if (!crowdingTrigger) throw new Error('epidemic must trigger on crowding')
+    expect(crowdingTrigger.op).toBe('>')
+    expect(crowded.crowding).toBeGreaterThan(crowdingTrigger.value)
   })
 })
