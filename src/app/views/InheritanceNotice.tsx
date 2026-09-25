@@ -4,7 +4,7 @@ import { formatCompact, formatYear } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import {
-  homeBody,
+  currentHome,
   inheritanceHeir,
   inheritanceView,
   lastInheritance,
@@ -20,9 +20,8 @@ interface Seen {
   // FEAT: a última leva de colônias vista, porque no ano da mudança a frota do mundo natal já foi
   readonly colonies: readonly Colony[]
   readonly year: number | null
-  readonly home: number
-  // FIX: `home` só vale se esta tela viu toda mudança desta história; senão é o lar de origem, velho
-  readonly trusted: boolean
+  // FEAT: o lar tal como o snapshot relatou por último — nunca um palpite reconstruído aqui
+  readonly home: number | null
 }
 
 export function InheritanceNotice() {
@@ -35,39 +34,34 @@ export function InheritanceNotice() {
   )
   const events = useSimulation((s) => s.events)
   const colonies = useSimulation((s) => s.colonies)
+  const present = useSimulation((s) => s.present)
   const [moment, setMoment] = useState<InheritanceView | null>(null)
   const key = `${seed}:${focus}:${generation}`
-  const seen = useRef<Seen>({ key, colonies, year: null, home: homeBody(seed), trusted: true })
+  const seen = useRef<Seen>({ key, colonies, year: null, home: present?.home ?? null })
 
   useEffect(() => {
     const before = seen.current
     const record = lastInheritance(events)
     const year = record?.start ?? null
     const kept = colonies.length > 0 ? colonies : before.colonies
+    const home = present?.home ?? null
     // FEAT: uma história que já chega mudada de mundo não se anuncia; ninguém a viu partir
     if (before.key !== key) {
-      // FIX: uma história que já tinha mudado antes de chegarmos não mora mais no lar de origem
-      seen.current = { key, colonies, year, home: homeBody(seed), trusted: year === null }
+      seen.current = { key, colonies, year, home }
       setMoment(null)
       return
     }
     if (record === null || year === before.year) {
-      seen.current = { ...before, colonies: kept }
+      seen.current = { ...before, colonies: kept, home }
       return
     }
     const heir = inheritanceHeir(record, events, before.colonies)
-    seen.current = {
-      key,
-      colonies: kept,
-      year,
-      home: heir === null ? before.home : heir.body,
-      trusted: heir !== null,
-    }
-    // FIX: sem a herdeira na memória, ou sem saber de que mundo se partiu, melhor calar que meia frase
+    seen.current = { key, colonies: kept, year, home }
+    // FIX: sem a herdeira na memória, melhor calar que contar meia frase
     setMoment(
-      heir === null || !before.trusted ? null : inheritanceView(record, heir, seed, before.home),
+      heir === null ? null : inheritanceView(record, heir, seed, currentHome(seed, before.home)),
     )
-  }, [key, seed, events, colonies])
+  }, [key, seed, events, colonies, present])
 
   useEffect(() => {
     if (moment === null) return

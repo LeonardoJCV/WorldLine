@@ -79,7 +79,8 @@
 }
 
 .surface__levels button,
-.surface__exit {
+.surface__exit,
+.surface__system {
   padding: var(--space-2) var(--space-4);
   background: rgba(10, 11, 30, 0.7);
   border: 1px solid var(--haze);
@@ -93,10 +94,13 @@
   border-color: var(--starlight);
 }
 
-.surface__exit {
+/* FEAT: sair do planeta e subir ao sistema são duas saídas irmãs; moram na mesma fila */
+.surface__ways {
   position: absolute;
   top: 12px;
   left: calc(50% + 12px);
+  display: flex;
+  gap: var(--space-2);
 }
 
 .surface__labels {
@@ -306,7 +310,9 @@
     left: var(--gutter);
   }
 
-  .surface__exit {
+  /* FIX: com duas saídas a fila não cabe ao lado dos níveis; desce uma linha e encosta à direita */
+  .surface__ways {
+    top: 52px;
     left: auto;
     right: var(--gutter);
   }

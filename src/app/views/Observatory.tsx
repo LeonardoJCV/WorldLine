@@ -13,6 +13,7 @@ import { Current3D } from '../scene3d/Current3D.tsx'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import { lensStore, useLens, type Lens } from '../surface/lens.ts'
 import { PlanetView } from '../surface/PlanetView.tsx'
+import { SystemView } from '../system/SystemView.tsx'
 import { isCompatibleVersion, type MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
@@ -60,7 +61,11 @@ export function Observatory({
   const stage = useStage()
   const currentLens = useLens()
   const planetOpen = stage === '3d' && currentLens === 'planet'
-  const exitPlanet = useCallback(() => lensStore.getState().setLens('current'), [])
+  // FEAT: as duas lentes 3D cobrem o palco inteiro; o que sai do caminho para uma sai para a outra
+  const systemOpen = stage === '3d' && currentLens === 'system'
+  const lensOpen = planetOpen || systemOpen
+  const exitLens = useCallback(() => lensStore.getState().setLens('current'), [])
+  const openPlanet = useCallback(() => lensStore.getState().setLens('planet'), [])
   const [board, setBoard] = useState<HTMLElement | null>(null)
   const size = useElementSize(board)
   const [focus, setFocus] = useState<Strand | null>(null)
@@ -83,11 +88,10 @@ export function Observatory({
   const stripSize = useElementSize(stripBand)
   const canKeep = useSimulation((s) => s.seed !== null && s.worlds.length > 0)
   // FEAT: o chão é do aviso primeiro, do zoom e do minimapa depois, e só então dos cartões
-  const reserve = phone && size && !planetOpen ? sheetReserve(sheet, size.height) : 0
+  const reserve = phone && size && !lensOpen ? sheetReserve(sheet, size.height) : 0
   const band = phone && noticesSize && noticesSize.height > 0 ? noticesSize.height + NOTICE_GAP : 0
   const floor = reserve + band
-  const controlBand =
-    phone && size && !planetOpen ? (size.width > NARROW ? MAP_BAND : ZOOM_BAND) : 0
+  const controlBand = phone && size && !lensOpen ? (size.width > NARROW ? MAP_BAND : ZOOM_BAND) : 0
   // FEAT: o palco inteiro desenha acima do chão, em 2D e em 3D
   const drawn = size ? Math.max(MIN_STAGE, size.height - floor - controlBand) : 0
   const layout = useMemo(() => (size ? stageLayout(size.width, drawn) : null), [size, drawn])
@@ -164,12 +168,15 @@ export function Observatory({
       className="stage"
       ref={setBoard}
       data-view={stage}
-      data-lens={planetOpen ? 'planet' : 'current'}
+      data-lens={planetOpen ? 'planet' : systemOpen ? 'system' : 'current'}
     >
       {size && stage === '3d' && fullFrame && (
         <>
-          <Current3D width={size.width} height={drawn} paused={planetOpen} />
-          {planetOpen && <PlanetView width={size.width} height={drawn} onExit={exitPlanet} />}
+          <Current3D width={size.width} height={drawn} paused={lensOpen} />
+          {planetOpen && <PlanetView width={size.width} height={drawn} onExit={exitLens} />}
+          {systemOpen && (
+            <SystemView width={size.width} height={drawn} onExit={exitLens} onDive={openPlanet} />
+          )}
         </>
       )}
       {size && layout && stage === '2d' && (
@@ -197,7 +204,7 @@ export function Observatory({
   const controls =
     phone && sheet === 'open' ? null : (
       <div className="stage__floor">
-        {!planetOpen && size !== null && <ZoomControls />}
+        {!lensOpen && size !== null && <ZoomControls />}
         {size && stage === '3d' && fullFrame && <Minimap frame={fullFrame} />}
         {size && layout && stage === '2d' && <Minimap frame={layout.frame} />}
       </div>

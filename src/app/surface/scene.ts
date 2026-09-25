@@ -31,6 +31,7 @@ import {
   levelOf,
   panBy,
   surfacePose,
+  zoomGoal,
   type Level,
 } from './camera.ts'
 import { packLife, type SurfaceModel } from './civilization.ts'
@@ -89,7 +90,7 @@ export interface SurfaceScene {
   onFrame(callback: () => void): () => void
   goTo(dir: Vec3, level: Level): void
   resize(width: number, height: number, dpr: number): void
-  zoom(factor: number): void
+  zoom(factor: number): boolean
   setLevel(level: Level): void
   pan(dx: number, dy: number): void
   setHour(hour: number | null): void
@@ -486,7 +487,9 @@ export function createSurfaceScene(
       night.setFocal(focalPixels(height * renderer.getPixelRatio(), FOV))
     },
     zoom(factor) {
-      goal = Math.min(ALTITUDE.max, Math.max(lod.minAltitude, goal * factor))
+      const next = zoomGoal(goal, factor, lod.minAltitude, ALTITUDE.max)
+      goal = next.goal
+      return !next.beyond
     },
     setLevel(next) {
       goal = next === 'region' ? lod.regionAltitude : LEVEL_ALTITUDE[next]

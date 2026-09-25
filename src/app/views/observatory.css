@@ -476,7 +476,9 @@
 }
 
 /* FEAT: dentro do planeta quem conta a história é a ficha da cidade e a superfície; a lista dos rumos sai do caminho */
-.observatory:has(.stage[data-lens='planet']) .hud__right {
+.observatory:has(.stage[data-lens='planet']) .hud__right,
+/* FEAT: no sistema o nome de cada corpo é tudo o que há, e a coluna cobriria justo o corpo mais externo */
+.observatory:has(.stage[data-lens='system']) .hud__right {
   display: none;
 }
 
@@ -1325,7 +1327,9 @@ button.causal__node:hover {
 
 /* FIX: dentro do planeta a ficha da cidade já é a folha de baixo; duas não cabem num celular */
 /* FIX: só os cartões saem; o aviso continua na camada, porque ele nunca pode ser escondido */
-.observatory:has(.stage[data-lens='planet']) .hud--sheet > .sheet {
+.observatory:has(.stage[data-lens='planet']) .hud--sheet > .sheet,
+/* FIX: no sistema a folha opaca cairia justo sobre o plano das órbitas, que é a lente inteira */
+.observatory:has(.stage[data-lens='system']) .hud--sheet > .sheet {
   display: none;
 }
 

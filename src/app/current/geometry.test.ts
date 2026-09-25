@@ -7,6 +7,7 @@ import { PLANET_BODY } from '../planet/uniforms.ts'
 import {
   COMPANION_SCALE,
   EPISODE_ROWS,
+  ERA_ROW_HEIGHT,
   ERA_ROWS,
   MAX_WIDTH,
   MIN_WIDTH,
@@ -242,6 +243,57 @@ describe('layoutEvents', () => {
       120,
     )
     expect(markers).toEqual([])
+  })
+
+  // FEAT: anos reais do roteiro INHERITANCE_CASE (seed 482913, 'inherited'), lidos de Worldline.records em 3000
+  const inheritance = [
+    record('agricultural_revolution', 250, null),
+    record('demographic_transition', 354, null),
+    record('industrial_revolution', 648, null),
+    record('space_era', 1802, null),
+  ]
+  const LABEL_WIDTH = 150
+
+  it('keeps all four real eras of a spacefaring world on the chain, at realistic widths and time windows', () => {
+    const widths = [320, 375, 414, 430, 768, 820, 1024, 1280, 1440, 1920, 2560]
+    const presents = [1900, 2284, 3000, 5000, 10000]
+    for (const width of widths) {
+      const { frame: wide } = stageLayout(width, 800)
+      for (const present of presents) {
+        const markers = layoutEvents(inheritance, 0, present, present, wide, LABEL_WIDTH)
+        expect(
+          markers.every((marker) => marker.row >= 0),
+          `width=${width} present=${present}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('would still lose a label if a fifth era arrived -- proves the test above can fail', () => {
+    const fifthEra = [...inheritance, record('industrial_revolution', 1850, null)]
+    const markers = layoutEvents(fifthEra, 0, 10000, 10000, frame, LABEL_WIDTH)
+    expect(markers.some((marker) => marker.row === -1)).toBe(true)
+  })
+})
+
+describe('eraLabelY', () => {
+  // FIX: 320px de largura com o palco no piso de MIN_STAGE (120), a tela mais curta que o app desenha
+  it('keeps every era row inside the frame on both edges, on the shortest stage a phone can draw', () => {
+    for (const width of [320, 719, 1024]) {
+      const { frame: short } = stageLayout(width, 120)
+      const top = short.centerY - short.height / 2
+      const bottom = short.centerY + short.height / 2
+      for (let row = 0; row < ERA_ROWS; row++) {
+        const y = eraLabelY(short, row)
+        expect(y, `width=${width} row=${row} (top)`).toBeGreaterThanOrEqual(top)
+        expect(y, `width=${width} row=${row} (bottom)`).toBeLessThanOrEqual(bottom)
+      }
+    }
+  })
+
+  it('keeps rows at their usual spacing on a tall frame where the clamp never engages', () => {
+    expect(eraLabelY(frame, 0)).toBe(frame.centerY - frame.height * 0.26)
+    expect(eraLabelY(frame, 1)).toBe(eraLabelY(frame, 0) - ERA_ROW_HEIGHT)
   })
 })
 
