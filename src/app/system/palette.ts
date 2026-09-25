@@ -14,14 +14,12 @@ import { STRIDE, SYSTEM_CHANNEL, type PlacedBody } from './model.ts'
 // FEAT: primeiro deslocamento livre da paleta — 0..3 já pertencem à colocação da Tarefa 2
 const OFFSET = 4
 
-// FEAT: par seco/úmido por tipo, para o mesmo formato de mistura do mundo natal render cada corpo com jeito próprio
 interface KindPalette {
   readonly arid: readonly [Rgb, Rgb]
   readonly wet: readonly [Rgb, Rgb]
   readonly deep: readonly [Rgb, Rgb]
   readonly shallow: readonly [Rgb, Rgb]
   readonly sky: readonly [Rgb, Rgb]
-  // FEAT: faixa do nível do mar sorteada; null é o gasoso, que não tem mar nenhum
   readonly sea: readonly [number, number] | null
 }
 
@@ -59,7 +57,6 @@ const SMOG = hexToRgb('#8a7a6a')
 const NO_SEA = 0.02
 
 function draw(seed: number, body: PlacedBody, k: number): number {
-  // FEAT: só os deslocamentos 4..15 são da paleta; 0..3 já saíram na colocação
   return uniform(seed, 0, SYSTEM_CHANNEL + body.index * STRIDE + OFFSET + k)
 }
 
@@ -106,6 +103,5 @@ export function bodyState(body: PlacedBody, present: Snapshot): PlanetState {
   // FEAT: piso mais baixo e alcance mais largo que os do mundo natal — a colônia acende cedo, mas fraco perto da capital
   if (body.colony)
     return { ...EMPTY_STATE, lights: populationLights(body.colony.population, 1, 10) }
-  // FEAT: o corpo natal abandonado ainda se lê como morto, não como se nunca tivesse tido dono
   return body.dead ? { ...EMPTY_STATE, extinct: 1 } : EMPTY_STATE
 }

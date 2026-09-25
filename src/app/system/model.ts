@@ -6,8 +6,9 @@ import { uniform } from '../../engine/rng.ts'
 export interface PlacedBody {
   readonly index: number
   readonly kind: BodyKind
-  // FEAT: do motor, em unidades de órbita relativas à estrela
+  // FEAT: distance é a órbita do motor; drawn é o raio em que a lente desenha esta mesma órbita
   readonly distance: number
+  readonly drawn: number
   readonly angle: number
   readonly radius: number
   readonly name: string
@@ -28,13 +29,24 @@ export interface SystemPlacement {
 export const SYSTEM_CHANNEL = 8192
 export const STRIDE = 16
 
-// FEAT: raio de desenho por tipo, não do motor — um gasoso é maior que um rochoso
-// FIX: 0.9 encostava na estrela e engolia o próprio anel numa órbita interna de ~1.3; 0.55 ainda lê
-// como o maior dos três, mas cabe dentro do vão que a órbita mínima costuma abrir (Tarefa 5)
+export const STAR_RADIUS = 0.62
+
 const RADIUS_BY_KIND: Readonly<Record<BodyKind, number>> = {
-  rocky: 0.4,
-  ice: 0.5,
-  gas: 0.55,
+  rocky: 0.36,
+  ice: 0.46,
+  gas: 0.6,
+}
+
+export const CLEARANCE = 0.12
+
+// FIX: estrela e disco não cabem na órbita mínima do motor; o desenho afasta o sistema inteiro
+function liftOf(bodies: readonly Body[]): number {
+  let lift = 0
+  for (const body of bodies) {
+    const needed = STAR_RADIUS + CLEARANCE + RADIUS_BY_KIND[body.kind] - body.distance
+    if (needed > lift) lift = needed
+  }
+  return lift
 }
 
 function angleOf(seed: number, body: Body): number {
@@ -49,14 +61,16 @@ export function systemPlacement(
   const living = currentHome(seed, home)
   const colonyByBody = new Map(colonies.map((colony) => [colony.body, colony] as const))
 
-  const bodies = system(seed).map((body) => {
+  const generated = system(seed)
+  const lift = liftOf(generated)
+  const bodies = generated.map((body) => {
     const isLiving = body.index === living
-    // FEAT: natal e não vivo hoje — corpo do meio numa cadeia não é conhecível, só natal e atual
     const isDead = body.home && !isLiving
     return {
       index: body.index,
       kind: body.kind,
       distance: body.distance,
+      drawn: body.distance + lift,
       angle: angleOf(seed, body),
       radius: RADIUS_BY_KIND[body.kind],
       name: bodyName(seed, body.index),
@@ -67,8 +81,7 @@ export function systemPlacement(
     }
   })
 
-  // FEAT: span é o raio que a câmera precisa enquadrar — órbita mais distante mais o próprio disco
-  const far = Math.max(...bodies.map((body) => body.distance))
+  const far = Math.max(...bodies.map((body) => body.drawn))
   const outerRadius = Math.max(...bodies.map((body) => body.radius))
   const span = far + outerRadius
 

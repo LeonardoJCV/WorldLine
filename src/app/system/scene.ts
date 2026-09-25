@@ -24,12 +24,11 @@ import { starField } from '../scene3d/stars.ts'
 import { zoomGoal } from '../surface/camera.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
 import { bodyPalette, bodyState, bodyYaw } from './palette.ts'
-import type { PlacedBody, SystemPlacement } from './model.ts'
+import { STAR_RADIUS, type PlacedBody, type SystemPlacement } from './model.ts'
 
 const FOV = 40
 const VOID = 0x0a0b1e
 const TILT = 0.62
-const STAR_RADIUS = 0.62
 const MARGIN = 1.4
 const NEAR = 0.1
 const FAR = 900
@@ -39,9 +38,8 @@ const ZOOM = { min: 0.6, max: 1.5 } as const
 const START = 1
 const EASE = 5
 const DRIFT = 0.06
-// FEAT: o quanto de mundo desce uma tela na vertical, para a âncora do rótulo sair do disco
+// FEAT: a âncora do rótulo cai um disco abaixo do corpo, para um gasoso não engolir o próprio nome
 const DROP = 1 / Math.cos(TILT)
-// FEAT: o campo de estrelas foi feito para uma câmera a um raio de planeta, não a vinte órbitas
 const FIELD_SCALE = 3
 const FIELD_POINT = 1.1
 
@@ -49,11 +47,9 @@ export interface SystemSceneOptions {
   readonly placement: SystemPlacement
   readonly seed: number
   readonly tier: Tier
-  // FEAT: o mesmo terreno do mundo natal, a única textura que existe — Tarefa 5 explica o porquê
   readonly terrain: TerrainMap
   readonly present: Snapshot
   readonly dpr: number
-  // FEAT: sem movimento, a deriva ambiente não anda — a cena fica parada e continua certa
   readonly still: boolean
   onPick(index: number | null): void
 }
@@ -64,17 +60,14 @@ export interface Projected {
   readonly visible: boolean
 }
 
-// FEAT: por onde o pedido de zoom saiu da lente — 'in' cai no planeta, 'out' volta à Corrente
 export type Escape = 'in' | 'out' | null
 
 export interface SystemScene {
   setPlacement(placement: SystemPlacement): void
-  // FEAT: só o corpo vivo carrega um Snapshot de verdade; os outros não mudam com o relógio da sim
   setPresent(present: Snapshot): void
   setStill(still: boolean): void
   resize(width: number, height: number): void
   zoom(factor: number): Escape
-  // FEAT: onde cada corpo caiu na tela, para os rótulos em HTML seguirem, como Current3D já faz
   project(index: number): Projected
   dispose(release?: boolean): void
 }
@@ -113,19 +106,15 @@ export function createSystemScene(
   fieldMaterial.size = FIELD_POINT
   scene.add(field)
 
-  // FEAT: a primeira estrela do projeto — um corpo que se vê, e não só uma direção de luz
   const starGeometry = new SphereGeometry(STAR_RADIUS, SEGMENTS, SEGMENTS)
   const starMaterial = new MeshBasicMaterial({ color: 0xffe2a8 })
   scene.add(new Mesh(starGeometry, starMaterial))
-  // FIX: PlanetBody usa ShaderMaterial próprio, que não responde a luz de cena — uma PointLight/
-  // HemisphereLight aqui não iluminaria nada; a luz de cada corpo é a direção até a estrela, abaixo
+  // FIX: PlanetBody tem ShaderMaterial próprio e ignora luz de cena; a luz é a direção até a estrela
 
   const spec = TIERS[options.tier]
   const terrain = terrainTexture(options.terrain)
-  // FEAT: reaproveitado a cada corpo, a cada quadro — evita um Vector3 novo por corpo por quadro
   const sunDirection = new Vector3()
 
-  // FEAT: um alvo invisível por corpo, do tamanho do disco — separa o que se raycasta do que se vê
   const pickerGeometry = new SphereGeometry(1, SEGMENTS, SEGMENTS)
   const pickerMaterial = new MeshBasicMaterial({ visible: false })
   const orbitMaterial = new LineBasicMaterial({ color: 0x5a5480, transparent: true, opacity: 0.75 })
@@ -141,6 +130,7 @@ export function createSystemScene(
   let width = 1
   let height = 1
   let drift = 0
+  let clock = 0
   let goal: number = START
   let reach: number = START
   let hovered: number | null = null
@@ -149,8 +139,6 @@ export function createSystemScene(
   const pointer = new Vector2()
   const ray = new Raycaster()
 
-  // FIX: 'base'+ amostra o terreno pela posição do vértice, não por uOffset — sem girar o corpo,
-  // todo corpo que não é o vivo mostraria o mesmo litoral de Dedes; o giro por corpo resolve isso
   function detailFor(body: PlacedBody): PlanetDetail {
     return body.living ? spec.focus : spec.others
   }
@@ -170,9 +158,7 @@ export function createSystemScene(
     for (const index of [...entries.keys()]) removeEntry(index)
   }
 
-  // FEAT: reconcilia por índice de corpo — só cria/destrói quando o detalhe muda de fato, porque
-  // colonies (e por tabela, placement) chega de novo a cada quadro de simulação; a distância da
-  // órbita é fixa por semente+índice, então o anel de um corpo já criado nunca precisa de outro
+  // FEAT: reconcilia por índice — placement chega a cada quadro, e a órbita é fixa por semente+índice
   function sync(): void {
     const seen = new Set<number>()
     for (const body of placement.bodies) {
@@ -185,13 +171,12 @@ export function createSystemScene(
       }
       if (!entry) {
         const planet = createPlanetBody(bodyPalette(options.seed, body), detail, terrain)
-        // FEAT: gira o corpo que não é o vivo para mostrar outro pedaço do mesmo mapa de terreno
         if (!body.living) planet.group.rotation.y = bodyYaw(options.seed, body)
         bodyGroup.add(planet.group)
         const picker = new Mesh(pickerGeometry, pickerMaterial)
         bodyGroup.add(picker)
         pickerIndex.set(picker, body.index)
-        const ring = new LineLoop(ringGeometry(body.distance), orbitMaterial)
+        const ring = new LineLoop(ringGeometry(body.drawn), orbitMaterial)
         orbitGroup.add(ring)
         entry = { planet, picker, ring, detail }
         entries.set(body.index, entry)
@@ -208,9 +193,9 @@ export function createSystemScene(
       const entry = entries.get(body.index)
       if (!entry) continue
       // FEAT: deriva de ambiente, não de simulação — o motor não guarda ângulo nem período algum
-      const angle = body.angle + drift / Math.sqrt(Math.max(body.distance, 0.01))
-      const x = Math.cos(angle) * body.distance
-      const z = Math.sin(angle) * body.distance
+      const angle = body.angle + drift / Math.sqrt(Math.max(body.drawn, 0.01))
+      const x = Math.cos(angle) * body.drawn
+      const z = Math.sin(angle) * body.drawn
       entry.planet.group.position.set(x, 0, z)
       entry.picker.position.set(x, 0, z)
     }
@@ -278,10 +263,11 @@ export function createSystemScene(
     pose()
     pick()
     const tickDt = still ? 0 : dt
-    // FEAT: a estrela fica na origem, então a luz de cada corpo é só a direção até ela
+    // FIX: o relógio do shader também congela; sem isso a nuvem seguia andando sob movimento reduzido
+    clock += tickDt
     for (const entry of entries.values()) {
       sunDirection.copy(entry.planet.group.position).negate().normalize()
-      entry.planet.tick(tickDt, now / 1000, sunDirection)
+      entry.planet.tick(tickDt, clock, sunDirection)
     }
     renderer.render(scene, camera)
   })
@@ -311,7 +297,6 @@ export function createSystemScene(
     },
     zoom(factor) {
       const next = zoomGoal(goal, factor, ZOOM.min, ZOOM.max)
-      // FEAT: a mesma disciplina do teto, agora também no chão — só sai quem insiste já no limite
       const inward = goal === ZOOM.min && goal * factor < ZOOM.min
       goal = next.goal
       return next.beyond ? 'out' : inward ? 'in' : null
@@ -320,7 +305,6 @@ export function createSystemScene(
       const entry = entries.get(index)
       const body = placement.bodies.find((candidate) => candidate.index === index)
       if (!entry || !body) return { x: 0, y: 0, visible: false }
-      // FEAT: a âncora cai um disco abaixo do corpo, para um gasoso não engolir o próprio nome
       scratch
         .set(
           entry.planet.group.position.x,

@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { colonisable, system } from '../../engine/system.ts'
+import { EVENTS } from '../../engine/events.ts'
+import { colonisable, system, type BodyKind } from '../../engine/system.ts'
 import { Channel } from '../../engine/rng.ts'
 import { bodyName } from '../views/colonies.ts'
-import { STRIDE, SYSTEM_CHANNEL, systemPlacement } from './model.ts'
+import { CLEARANCE, STAR_RADIUS, STRIDE, SYSTEM_CHANNEL, systemPlacement } from './model.ts'
+
+// FEAT: a varredura vai do zero para cima, com as duas sementes das capturas dentro dela
+const SWEEP = 20_000
+
+function radiusOfKind(kind: BodyKind): number {
+  for (let seed = 0; seed < 200; seed++) {
+    const body = systemPlacement(seed, null, []).bodies.find((b) => b.kind === kind)
+    if (body) return body.radius
+  }
+  throw new Error(`no ${kind} body in the first two hundred seeds`)
+}
 
 describe('systemPlacement', () => {
   it('places every body the engine generated, and only those', () => {
@@ -88,7 +100,64 @@ describe('systemPlacement', () => {
     const used = new Set<number>()
     for (let i = 0; i < 6; i++)
       for (let k = 0; k < STRIDE; k++) used.add(SYSTEM_CHANNEL + i * STRIDE + k)
+
+    // FEAT: os canais que o motor SORTEIA, não as quatro bases de Channel — a colisão mora nas somas
+    const engine = new Set<number>([Channel.harvest])
+    for (let k = 0; k <= 4; k++) engine.add(Channel.genesis + k)
+    for (let i = 0; i < EVENTS.length; i++) engine.add(Channel.event + i)
+    const most = Math.max(...[0, 1, 2, 3, 7, 4242, 482913, 999999].map((s) => system(s).length))
+    expect(most).toBe(6)
+    for (let k = 0; k <= 2 + (most - 1) * 3 + 2; k++) engine.add(Channel.space + k)
+    expect(engine.has(275)).toBe(true)
+
+    for (const channel of engine) expect(used.has(channel)).toBe(false)
     for (let k = 0; k <= 8; k++) expect(used.has(4096 + k)).toBe(false)
-    for (const channel of Object.values(Channel)) expect(used.has(channel as number)).toBe(false)
+  })
+
+  it('never draws a body inside the star, on any seed', () => {
+    let worst = Infinity
+    let worstSeed = -1
+    for (let seed = 0; seed < SWEEP; seed++) {
+      for (const body of systemPlacement(seed, null, []).bodies) {
+        const gap = body.drawn - body.radius - STAR_RADIUS
+        if (gap < worst) {
+          worst = gap
+          worstSeed = seed
+        }
+      }
+    }
+    // FEAT: a folga é construída, não sorteada — o pior caso da varredura é o piso, não um acidente
+    expect(worst, `worst clearance at seed ${worstSeed}`).toBeGreaterThan(0)
+    expect(worst).toBeGreaterThanOrEqual(CLEARANCE - 1e-9)
+  })
+
+  it('clears the star on the seeds the captures use', () => {
+    for (const seed of [482913, 4242]) {
+      for (const body of systemPlacement(seed, null, []).bodies) {
+        expect(
+          body.drawn - body.radius - STAR_RADIUS,
+          `seed ${seed} body ${body.index}`,
+        ).toBeGreaterThanOrEqual(CLEARANCE - 1e-9)
+      }
+    }
+  })
+
+  it('keeps every orbit gap the engine drew, only farther out', () => {
+    for (const seed of [482913, 4242, 1, 7]) {
+      const bodies = systemPlacement(seed, null, []).bodies
+      const lift = (bodies[0]?.drawn ?? 0) - (bodies[0]?.distance ?? 0)
+      expect(lift).toBeGreaterThanOrEqual(0)
+      // FEAT: o afastamento é o mesmo para todos, então nenhuma distância relativa se mexe
+      for (const body of bodies) expect(body.drawn - body.distance).toBeCloseTo(lift, 12)
+    }
+  })
+
+  it('draws a gas giant bigger than an ice body, and an ice body bigger than a rocky one', () => {
+    const gas = radiusOfKind('gas')
+    const ice = radiusOfKind('ice')
+    const rocky = radiusOfKind('rocky')
+    // FEAT: um quinto de diferença, senão o tipo do corpo deixa de se ler no tamanho
+    expect(gas).toBeGreaterThan(ice * 1.2)
+    expect(ice).toBeGreaterThan(rocky * 1.2)
   })
 })
