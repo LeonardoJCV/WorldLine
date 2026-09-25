@@ -59,6 +59,11 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
+// FEAT: mesma curva log/piso/alcance para o mundo natal e qualquer colônia — só o par piso/alcance muda de escala
+export function populationLights(population: number, floor = 5, span = 3): number {
+  return unit((Math.log10(Math.max(population, 1)) - floor) / span)
+}
+
 export function planetPalette(seed: number): PlanetPalette {
   const draw = (k: number) => uniform(seed, 0, VISUAL_CHANNEL + k)
   const sea = draw(4)
@@ -83,7 +88,7 @@ export function planetState(snapshot: Snapshot): PlanetState {
   const clean = 0.85 * smoothstep(40, 90, values.technology)
   return {
     vegetation: extinct ? 0 : unit(values.environment / 100),
-    lights: extinct ? 0 : unit((Math.log10(Math.max(values.population, 1)) - 5) / 3),
+    lights: extinct ? 0 : populationLights(values.population),
     haze: unit((values.energy / 12) * (1 - clean) + (1 - values.environment / 100) * 0.3),
     ring: (snapshot.eras & Era.industrial) !== 0 ? 1 : 0,
     satellites:

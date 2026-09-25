@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { system } from '../src/engine/system.ts'
 import { useGraphics } from './stage.ts'
+import { SIBLING_CASE, siblingInheritanceLink } from './support.ts'
 
 const SEED = 482913
 const BODIES = system(SEED).length
@@ -190,4 +191,49 @@ test('keeps the phone sheet off the orbit plane', async ({ page }) => {
   })
   expect(audit.length).toBe(BODIES)
   expect(audit.every(Boolean)).toBe(true)
+})
+
+test('dives to the planet with the visible way down, no gesture needed', async ({ page }) => {
+  // FEAT: sem pinça, o toque só desce por este botão — a mesma disciplina do botão que sobe
+  await openPlanet(page)
+  await page.getByRole('button', { name: 'View the system' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'system')
+  await page.getByRole('button', { name: 'Descend to the planet' }).click()
+  await expect(stage(page)).toHaveAttribute('data-lens', 'planet')
+})
+
+test('reads the natal body alive and the colony with people before the inheritance', async ({
+  page,
+}) => {
+  // FEAT: semente 4242 (support.ts), ano 2500 — as duas colônias já fundadas, o natal ainda de pé
+  await page.goto(siblingInheritanceLink(2500))
+  const enter = page.getByRole('button', { name: 'View planet' })
+  await expect(enter).toBeVisible({ timeout: 30_000 })
+  await enter.click()
+  await page.getByRole('button', { name: 'View the system' }).click()
+  const labels = page.locator('.system__body')
+  await expect(labels.first()).toBeVisible()
+  await expect(labels.nth(1)).toHaveText(/ — where the history began$/)
+  await expect(labels.nth(0)).toHaveText(/ — \S+ settled$/)
+})
+
+test('reads the natal body as ended and the heir as home after the inheritance', async ({
+  page,
+}) => {
+  test.slow()
+  // FEAT: cinco anos depois do prazo, a herança já rodou (colonies.spec.ts explica o +5)
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  const enter = page.getByRole('button', { name: 'View planet' })
+  await expect(enter).toBeVisible({ timeout: 60_000 })
+  await enter.click()
+  await page.getByRole('button', { name: 'View the system' }).click()
+  const labels = page.locator('.system__body')
+  await expect(labels.first()).toBeVisible()
+  await expect(labels.nth(1)).toHaveText(/ — the world that ended$/)
+  await expect(labels.nth(0)).toHaveText(/ — home$/)
+  // FEAT: morto e vazio só se separam pelas palavras — a asserção é sobre o texto, não sobre a cor
+  await expect(labels.nth(2)).toHaveText(/ — no one there$/)
+  const dead = await labels.nth(1).textContent()
+  const empty = await labels.nth(2).textContent()
+  expect(dead).not.toBe(empty)
 })

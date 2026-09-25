@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { BodyKind } from '../../engine/system.ts'
+import type { Colony } from '../../engine/colony.ts'
+import { colonisable, system, type BodyKind } from '../../engine/system.ts'
 import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
 import { Worldline } from '../../engine/worldline.ts'
 import { toSnapshot, type Snapshot } from '../../worker/protocol.ts'
-import { planetPalette } from '../planet/uniforms.ts'
-import { systemPlacement, type PlacedBody } from './model.ts'
+import { planetPalette, planetState } from '../planet/uniforms.ts'
+import { bodyLabelKey, systemPlacement, type PlacedBody } from './model.ts'
 import { bodyPalette, bodyState, bodyYaw } from './palette.ts'
 
 // FEAT: um Snapshot de verdade, do mundo que chegou ao espaço, em vez de um literal inventado
@@ -13,6 +14,19 @@ function snapshotFixture(year = INHERITANCE_CASE.ended - 1): Snapshot {
   const line = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
   line.advance(3000)
   return toSnapshot(line.stateAt(year))
+}
+
+// FEAT: o índice do primeiro corpo colonizável da semente — o herdeiro possível
+const heirIndex = system(482913).find((b) => colonisable(b))?.index ?? -1
+
+function colonyOn(body: number, population: number): Colony {
+  return { body, founded: 1803, population, support: 0.9, record: 0 }
+}
+
+function bodyAt(home: number | null, colonies: readonly Colony[], index: number): PlacedBody {
+  const body = systemPlacement(482913, home, colonies).bodies[index]
+  if (!body) throw new Error(`seed 482913 has no body ${index}`)
+  return body
 }
 
 // FEAT: a primeira semente da lista que tem um corpo do tipo pedido, para o teste não depender de sorte
@@ -92,5 +106,45 @@ describe('bodyState', () => {
         expect(value).toBeGreaterThanOrEqual(0)
       }
     }
+  })
+
+  it('lights a body in proportion to the colony on it', () => {
+    const dim = bodyState(bodyAt(null, [colonyOn(heirIndex, 1_000)], heirIndex), snapshotFixture())
+    const bright = bodyState(
+      bodyAt(null, [colonyOn(heirIndex, 500_000)], heirIndex),
+      snapshotFixture(),
+    )
+    expect(dim.lights).toBeGreaterThan(0)
+    expect(bright.lights).toBeGreaterThan(dim.lights)
+  })
+
+  it('lights a hundred thousand settlers well below a hundred million citizens', () => {
+    // FEAT: a mesma forma logarítmica do mundo natal, senão uma colônia recém-fundada brilha como capital
+    const colony = bodyState(
+      bodyAt(null, [colonyOn(heirIndex, 100_000)], heirIndex),
+      snapshotFixture(),
+    )
+    const world = planetState(snapshotFixture())
+    expect(colony.lights).toBeLessThan(world.lights)
+  })
+
+  it('leaves the dead home world dark and marked as ended', () => {
+    const natal = systemPlacement(482913, heirIndex, []).bodies.find((b) => b.dead)
+    if (!natal) throw new Error('the natal body should be dead once the history moved')
+    const state = bodyState(natal, snapshotFixture())
+    expect(state.lights).toBe(0)
+    expect(state.extinct).toBe(1)
+  })
+})
+
+describe('bodyLabelKey', () => {
+  it('tells a dead world, an empty one and a living one apart in words', () => {
+    // FEAT: apagado não basta — um corpo vazio também é apagado; quem separa é o texto do rótulo
+    const moved = systemPlacement(482913, heirIndex, [])
+    const dead = moved.bodies.find((b) => b.dead)
+    const living = moved.bodies.find((b) => b.living)
+    const empty = moved.bodies.find((b) => !b.dead && !b.living && b.colony === null)
+    const keys = [dead, living, empty].map((b) => b && bodyLabelKey(b))
+    expect(new Set(keys).size).toBe(3)
   })
 })

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { TIERS } from '../graphics/settings.ts'
 import { useGraphics, useTier } from '../graphics/store.ts'
-import { useT } from '../i18n/index.ts'
+import { formatCompact } from '../i18n/format.ts'
+import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import { terrainMap } from '../surface/runtime.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
-import { systemPlacement } from './model.ts'
+import { bodyLabelKey, systemPlacement, type PlacedBody } from './model.ts'
 import type { Escape, SystemScene } from './scene.ts'
 import './system.css'
 
@@ -24,6 +25,7 @@ export function SystemView({
   readonly onDive: () => void
 }) {
   const t = useT()
+  const locale = useLocale()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<SystemScene | null>(null)
   const sizeRef = useRef({ width, height })
@@ -163,6 +165,13 @@ export function SystemView({
     else elsRef.current.delete(index)
   }
 
+  // FEAT: o texto do rótulo é a distinção sem cor — morto e vazio só se separam pelas palavras
+  const label = (body: PlacedBody): string => {
+    const params: Record<string, string> = { name: body.name }
+    if (body.colony) params.people = formatCompact(body.colony.population, locale)
+    return t(bodyLabelKey(body), params)
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
     const scene = sceneRef.current
     const moves: Record<string, () => void> = {
@@ -204,14 +213,20 @@ export function SystemView({
             className="system__body"
             data-hover={hover === body.index ? 'true' : 'false'}
           >
-            {body.name}
+            {label(body)}
           </span>
         ))}
       </div>
       <h2 className="system__title">{t('system.title')}</h2>
-      <button type="button" className="system__exit" onClick={() => exitRef.current()}>
-        {t('system.exit')}
-      </button>
+      <div className="system__ways">
+        <button type="button" className="system__exit" onClick={() => exitRef.current()}>
+          {t('system.exit')}
+        </button>
+        {/* FEAT: sem pinça funcionando aqui, o toque só desce ao planeta por este botão */}
+        <button type="button" className="system__dive" onClick={() => diveRef.current()}>
+          {t('system.dive')}
+        </button>
+      </div>
     </div>
   )
 }

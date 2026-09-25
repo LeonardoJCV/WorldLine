@@ -75,7 +75,8 @@ describe('systemPlacement', () => {
   it('spans far enough to hold the outermost body', () => {
     const placed = systemPlacement(482913, null, [])
     const far = Math.max(...placed.bodies.map((b) => b.distance))
-    expect(placed.span).toBeGreaterThanOrEqual(far)
+    // FIX: todo raio é estritamente positivo — sem a soma do disco, span cairia em far e a asserção falharia
+    expect(placed.span).toBeGreaterThan(far)
   })
 
   it('names each body as the state panel names it', () => {

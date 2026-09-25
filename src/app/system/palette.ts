@@ -5,6 +5,7 @@ import { hexToRgb, mixRgb, type Rgb } from '../theme/color.ts'
 import {
   planetPalette,
   planetState,
+  populationLights,
   type PlanetPalette,
   type PlanetState,
 } from '../planet/uniforms.ts'
@@ -87,10 +88,6 @@ export function bodyYaw(seed: number, body: PlacedBody): number {
   return draw(seed, body, 10) * Math.PI * 2
 }
 
-function unit(value: number): number {
-  return Math.min(Math.max(value, 0), 1)
-}
-
 const EMPTY_STATE: PlanetState = {
   vegetation: 0,
   lights: 0,
@@ -106,11 +103,9 @@ const EMPTY_STATE: PlanetState = {
 
 export function bodyState(body: PlacedBody, present: Snapshot): PlanetState {
   if (body.living) return planetState(present)
-  // FEAT: a colônia é o único dado que se conhece de um corpo que não é o lar — só a luz dela aparece
-  if (body.colony) {
-    const lights = unit((Math.log10(Math.max(body.colony.population, 1)) - 5) / 3)
-    return { ...EMPTY_STATE, lights }
-  }
+  // FEAT: piso e alcance mais baixos que os do mundo natal — a colônia acende cedo, mas fraco perto da capital
+  if (body.colony)
+    return { ...EMPTY_STATE, lights: populationLights(body.colony.population, 1, 10) }
   // FEAT: o corpo natal abandonado ainda se lê como morto, não como se nunca tivesse tido dono
   return body.dead ? { ...EMPTY_STATE, extinct: 1 } : EMPTY_STATE
 }

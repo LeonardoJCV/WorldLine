@@ -74,3 +74,12 @@ export function systemPlacement(
 
   return { bodies, home: living, span }
 }
+
+// FEAT: a chave de i18n que descreve o corpo — a distinção sem cor mora nas palavras, não no brilho
+export function bodyLabelKey(
+  body: PlacedBody,
+): 'system.home' | 'system.dead' | 'system.colony' | 'system.natal' | 'system.empty' {
+  if (body.living) return body.natal ? 'system.natal' : 'system.home'
+  if (body.dead) return 'system.dead'
+  return body.colony ? 'system.colony' : 'system.empty'
+}

@@ -68,10 +68,8 @@
   text-transform: uppercase;
 }
 
-.system__exit {
-  position: absolute;
-  top: 12px;
-  left: calc(50% + 12px);
+.system__exit,
+.system__dive {
   padding: var(--space-2) var(--space-4);
   background: rgba(10, 11, 30, 0.7);
   border: 1px solid var(--haze);
@@ -80,8 +78,17 @@
   cursor: pointer;
 }
 
+/* FEAT: sair do sistema e descer ao planeta são duas saídas irmãs; moram na mesma fila */
+.system__ways {
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 12px);
+  display: flex;
+  gap: var(--space-2);
+}
+
 @media (max-width: 900px) {
-  .system__exit {
+  .system__ways {
     left: auto;
     right: var(--gutter);
   }
