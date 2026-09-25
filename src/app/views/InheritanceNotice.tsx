@@ -21,6 +21,8 @@ interface Seen {
   readonly colonies: readonly Colony[]
   readonly year: number | null
   readonly home: number
+  // FIX: `home` só vale se esta tela viu toda mudança desta história; senão é o lar de origem, velho
+  readonly trusted: boolean
 }
 
 export function InheritanceNotice() {
@@ -35,7 +37,7 @@ export function InheritanceNotice() {
   const colonies = useSimulation((s) => s.colonies)
   const [moment, setMoment] = useState<InheritanceView | null>(null)
   const key = `${seed}:${focus}:${generation}`
-  const seen = useRef<Seen>({ key, colonies, year: null, home: homeBody(seed) })
+  const seen = useRef<Seen>({ key, colonies, year: null, home: homeBody(seed), trusted: true })
 
   useEffect(() => {
     const before = seen.current
@@ -44,7 +46,8 @@ export function InheritanceNotice() {
     const kept = colonies.length > 0 ? colonies : before.colonies
     // FEAT: uma história que já chega mudada de mundo não se anuncia; ninguém a viu partir
     if (before.key !== key) {
-      seen.current = { key, colonies, year, home: homeBody(seed) }
+      // FIX: uma história que já tinha mudado antes de chegarmos não mora mais no lar de origem
+      seen.current = { key, colonies, year, home: homeBody(seed), trusted: year === null }
       setMoment(null)
       return
     }
@@ -58,9 +61,12 @@ export function InheritanceNotice() {
       colonies: kept,
       year,
       home: heir === null ? before.home : heir.body,
+      trusted: heir !== null,
     }
-    // FIX: sem a colônia herdeira na memória não há de onde nem para onde; melhor calar que meia frase
-    setMoment(heir === null ? null : inheritanceView(record, heir, seed, before.home))
+    // FIX: sem a herdeira na memória, ou sem saber de que mundo se partiu, melhor calar que meia frase
+    setMoment(
+      heir === null || !before.trusted ? null : inheritanceView(record, heir, seed, before.home),
+    )
   }, [key, seed, events, colonies])
 
   useEffect(() => {

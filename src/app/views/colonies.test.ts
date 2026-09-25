@@ -94,13 +94,6 @@ describe('colonyView', () => {
     expect(colonyView([below], 482913)?.leader?.self).toBe(false)
     expect(colonyView([above], 482913)?.leader?.self).toBe(true)
   })
-
-  it('reflects the engine threshold in anySelf without recomputing the rule', () => {
-    const short = colony({ body: 1, support: COLONY_SELF, population: COLONY_SEED_POP - 1 })
-    const enough = colony({ body: 2, support: COLONY_SELF, population: COLONY_SEED_POP })
-    expect(colonyView([short], 482913)?.anySelf).toBe(false)
-    expect(colonyView([short, enough], 482913)?.anySelf).toBe(true)
-  })
 })
 
 describe('homeBody', () => {

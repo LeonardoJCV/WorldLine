@@ -69,7 +69,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'debt.hint.mixed': 'O próprio trabalho quita essa dívida.',
   'colonies.title': 'Colônias',
   'colonies.one': 'Uma em {body}',
-  'colonies.many': '{count}, a maior em {body}',
+  'colonies.many': '{count}, a mais adiantada em {body}',
   'colonies.self': 'autossuficiente',
   'colonies.supported': 'ainda sustentada pelo mundo natal',
   'inheritance.year': 'Ano {year}',

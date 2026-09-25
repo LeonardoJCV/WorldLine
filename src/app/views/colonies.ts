@@ -11,7 +11,6 @@ export interface ColonyView {
     readonly support: number
     readonly self: boolean
   } | null
-  readonly anySelf: boolean
 }
 
 // FEAT: reserva de salt fora da faixa que cityNames() percorre em colisão, para um corpo nunca
@@ -115,6 +114,5 @@ export function colonyView(colonies: readonly Colony[], seed: number): ColonyVie
       support: leader.support,
       self: selfSufficient(leader),
     },
-    anySelf: colonies.some(selfSufficient),
   }
 }

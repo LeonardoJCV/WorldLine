@@ -50,7 +50,7 @@ test('shows how far a history has settled once it reaches the space era', async 
   await page.getByRole('button', { name: 'Pause' }).click()
 
   await expect(colonies).toContainText('Colonies')
-  await expect(colonies).toContainText(/One on \S+|\d+, the largest on \S+/)
+  await expect(colonies).toContainText(/One on \S+|\d+, the most advanced on \S+/)
   await expect(colonies).toContainText(/self-sufficient|still supported from home/)
 })
 

@@ -71,7 +71,7 @@ export const en = {
   'debt.hint.mixed': 'Its own work pays this down.',
   'colonies.title': 'Colonies',
   'colonies.one': 'One on {body}',
-  'colonies.many': '{count}, the largest on {body}',
+  'colonies.many': '{count}, the most advanced on {body}',
   'colonies.self': 'self-sufficient',
   'colonies.supported': 'still supported from home',
   'inheritance.year': 'Year {year}',

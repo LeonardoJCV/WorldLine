@@ -169,8 +169,8 @@ test('a folded card keeps its title, gives back the room and is still folded aft
   const unfold = page.getByRole('button', { name: 'Expand Events' })
   await expect(unfold).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('.panel.events')).toHaveCount(0)
-  const short = (await card.boundingBox())?.height ?? 0
-  expect(short).toBeLessThan(tall / 2)
+  // FIX: a dobra devolve o espaço animando; o conteúdo sai do DOM antes de a altura chegar ao fim
+  await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeLessThan(tall / 2)
 
   // FEAT: encolhido, o conteúdo saiu do DOM, e por isso não recebe foco no Tab
   await unfold.focus()

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
@@ -24,6 +24,18 @@ export function CausalPanel() {
   // por todo o tempo em que ele fica selecionado — só troca quando `selected` troca
   const rootRow = tree?.nodes.find((node) => node.depth === 0)?.row
 
+  // FIX: a cadeia nem sempre cabe na coluna; a borda do lado que continua desvanece, para um nó
+  // cortado ao meio ler como "há mais" e não como falha de desenho
+  const markEdges = useCallback(() => {
+    const element = scrollRef.current
+    if (!element) return
+    const { scrollTop, scrollLeft, clientHeight, clientWidth, scrollHeight, scrollWidth } = element
+    element.dataset.up = String(scrollTop > 1)
+    element.dataset.down = String(scrollTop + clientHeight < scrollHeight - 1)
+    element.dataset.left = String(scrollLeft > 1)
+    element.dataset.right = String(scrollLeft + clientWidth < scrollWidth - 1)
+  }, [])
+
   // FIX: sem centralizar a raiz na vertical, uma árvore com dois ramos (como a herança, que sobe
   // tanto pelo colapso quanto pela colônia) deixa o ramo mais baixo fora da faixa visível
   useEffect(() => {
@@ -33,7 +45,11 @@ export function CausalPanel() {
     if (rootRow !== undefined) {
       element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
     }
-  }, [selected, rootRow])
+    markEdges()
+    const observer = new ResizeObserver(markEdges)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [selected, rootRow, markEdges])
 
   const root = selected === null ? undefined : events[selected]
   if (!tree || !root) {
@@ -86,9 +102,7 @@ export function CausalPanel() {
     }
   }
 
-  // FIX: o cartão cresce até caber a cadeia inteira (largura e altura próprias, não as da coluna
-  // de eventos acima) — sem isto, uma cadeia de duas ou mais colunas ou muitas causas paralelas
-  // ficava atrás de uma rolagem sem aviso; o teto em vh evita empurrar os cartões abaixo dele
+  // FEAT: a medida da cadeia é o tamanho que o cartão pede; quanto ele ganha de fato é do CSS
   const cardStyle = {
     '--causal-width': `${width}px`,
     '--causal-height': `${height}px`,
@@ -106,7 +120,7 @@ export function CausalPanel() {
       <h2 className="panel__title" id="causal-title">
         {t('causal.title')}
       </h2>
-      <div className="causal__scroll" ref={scrollRef}>
+      <div className="causal__scroll" ref={scrollRef} onScroll={markEdges}>
         <div
           className="causal__canvas"
           role="group"
