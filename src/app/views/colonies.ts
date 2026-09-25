@@ -7,14 +7,12 @@ export interface ColonyView {
   readonly count: number
   readonly leader: {
     readonly body: string
-    readonly population: number
-    readonly support: number
     readonly self: boolean
   } | null
 }
 
-// FEAT: reserva de salt fora da faixa que cityNames() percorre em colisão, para um corpo nunca
-// ler igual a uma cidade do mesmo seed por coincidência
+// FEAT: salt fora da faixa que cityNames() percorre em colisão, para o nome de um corpo não mudar
+// quando uma cidade nova entra na disputa; o alfabeto é o mesmo, então a coincidência ainda cabe
 const BODY_SALT = 4096
 
 function bodyNames(seed: number, count: number): readonly string[] {
@@ -110,8 +108,6 @@ export function colonyView(colonies: readonly Colony[], seed: number): ColonyVie
     count: colonies.length,
     leader: {
       body: bodyName(seed, leader.body),
-      population: leader.population,
-      support: leader.support,
       self: selfSufficient(leader),
     },
   }

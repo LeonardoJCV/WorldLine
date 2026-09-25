@@ -279,30 +279,39 @@ test('state colonies', async ({ page }) => {
   await panel.screenshot({ path: 'screens/state-colonies.png' })
 })
 
-test('inheritance notice', async ({ page }) => {
-  test.slow()
-  await useGraphics(page, '2d')
-  await page.setViewportSize({ width: 1440, height: 900 })
-  // FEAT: o roteiro dourado da herança (golden.ts), aberto treze anos antes da queda do mundo natal
-  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-  const link = encodeMultiverse({
-    version: MODEL_VERSION,
-    seed: INHERITANCE_CASE.seed,
-    tick: INHERITANCE_CASE.ended - 13,
-    decisions: plan.decisions,
-    crossings: plan.crossings,
-    branches: [],
+for (const viewport of VIEWPORTS) {
+  test(`inheritance notice ${viewport.name}`, async ({ page }) => {
+    test.slow()
+    await useGraphics(page, '2d')
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    // FEAT: o roteiro dourado da herança (golden.ts), aberto treze anos antes da queda do mundo natal
+    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const link = encodeMultiverse({
+      version: MODEL_VERSION,
+      seed: INHERITANCE_CASE.seed,
+      tick: INHERITANCE_CASE.ended - 13,
+      decisions: plan.decisions,
+      crossings: plan.crossings,
+      branches: [],
+    })
+    await page.goto(`/#/m/${link}`)
+    await expect(page.getByRole('button', { name: '×16' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: '×16' }).click()
+    await page.getByRole('button', { name: 'Play' }).click()
+    const notice = page.locator('.inheritance')
+    await expect(notice).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Pause' }).click()
+    // FEAT: o anúncio é a frase mais larga da tela; num celular ela não pode empurrar a página
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBe(0)
+    await expect(notice).toBeInViewport()
+    await page.waitForTimeout(300)
+    const name = viewport.name === 'desktop' ? 'inheritance-notice' : 'inheritance-notice-mobile'
+    await page.screenshot({ path: `screens/${name}.png` })
   })
-  await page.goto(`/#/m/${link}`)
-  await expect(page.locator('.state__colonies')).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('button', { name: '×16' }).click()
-  await page.getByRole('button', { name: 'Play' }).click()
-  const notice = page.locator('.inheritance')
-  await expect(notice).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('button', { name: 'Pause' }).click()
-  await page.waitForTimeout(300)
-  await page.screenshot({ path: 'screens/inheritance-notice.png' })
-})
+}
 
 test('inheritance causal', async ({ page }) => {
   test.slow()

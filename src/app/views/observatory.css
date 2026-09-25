@@ -1062,6 +1062,8 @@ button.state__row:hover,
 
 /* FEAT: a frase da travessia é longa e ocupa as duas linhas do nó */
 .causal__node[data-kind='crossing'] .causal__title {
+  /* FIX: com a entrelinha de sempre as duas linhas pedem 39px e o nó só tem 30 — a segunda saía cortada ao meio */
+  line-height: 1.15;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

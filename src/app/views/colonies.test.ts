@@ -72,6 +72,14 @@ describe('colonyView', () => {
     expect(view?.leader?.body).toBe(bodyName(482913, 1))
   })
 
+  // FEAT: a frase diz "a mais adiantada", não "a maior"; só um caso onde as duas discordam prende isso
+  it('prefers support over size, so the leader is the most advanced and not the largest', () => {
+    const crowded = colony({ body: 1, support: 0.2, population: 900_000 })
+    const advanced = colony({ body: 2, support: 0.8, population: 4_000 })
+    const view = colonyView([crowded, advanced], 482913)
+    expect(view?.leader?.body).toBe(bodyName(482913, 2))
+  })
+
   it('breaks a support tie by population, deterministically', () => {
     const smaller = colony({ body: 1, support: 0.5, population: 10_000 })
     const bigger = colony({ body: 2, support: 0.5, population: 20_000 })

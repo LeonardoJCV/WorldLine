@@ -120,13 +120,17 @@ export function CausalPanel() {
       <h2 className="panel__title" id="causal-title">
         {t('causal.title')}
       </h2>
-      <div className="causal__scroll" ref={scrollRef} onScroll={markEdges}>
-        <div
-          className="causal__canvas"
-          role="group"
-          aria-label={t('causal.label', { event: t(`event.${root.event}`) })}
-          style={{ width, height }}
-        >
+      {/* FIX: a cadeia cortada só se alcançava clicando num nó, e os nós de condição não são botões;
+          focável, ela rola pelas setas como qualquer outra região de rolagem */}
+      <div
+        className="causal__scroll"
+        ref={scrollRef}
+        onScroll={markEdges}
+        tabIndex={0}
+        role="group"
+        aria-label={t('causal.label', { event: t(`event.${root.event}`) })}
+      >
+        <div className="causal__canvas" style={{ width, height }}>
           <svg className="causal__links" width={width} height={height} aria-hidden="true">
             {tree.nodes.map((node) => {
               const parent = node.parent === null ? undefined : byKey.get(node.parent)
