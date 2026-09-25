@@ -2,7 +2,7 @@ import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import type { MicroKind } from './micro.ts'
 
-export type Lens = 'current' | 'planet'
+export type Lens = 'current' | 'planet' | 'system'
 
 export interface LensTarget {
   readonly dir: readonly [number, number, number]
@@ -23,7 +23,7 @@ export const lensStore = createStore<LensState>()((set) => ({
   lens: 'current',
   target: null,
   setLens(lens) {
-    // FIX: voltar à Corrente descarta um alvo que o planeta não chegou a abrir
+    // FIX: só o planeta abre alvo; Corrente e sistema o descartam, como a Corrente já fazia
     set(lens === 'planet' ? { lens } : { lens, target: null })
   },
   openAt(target) {

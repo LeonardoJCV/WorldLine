@@ -17,7 +17,8 @@ export function useLinkSync(): void {
     const state = simulation.getState()
     const link = currentLink(state)
     if (link === null || state.playing) return
-    const hash = `${linkHash(link)}${lens === 'planet' && stage === '3d' ? '/planet' : ''}`
+    const suffix = stage === '3d' && lens !== 'current' ? `/${lens}` : ''
+    const hash = `${linkHash(link)}${suffix}`
     if (window.location.hash !== hash || window.location.search !== '') {
       history.replaceState(null, '', `${window.location.pathname}${hash}`)
     }

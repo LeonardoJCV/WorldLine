@@ -31,4 +31,18 @@ describe('lensStore', () => {
     lensStore.getState().setLens('planet')
     expect(lensStore.getState().target).toEqual(target)
   })
+
+  it('drops the target when the lens moves out to the system', () => {
+    lensStore.getState().openAt(target)
+    lensStore.getState().setLens('system')
+    expect(lensStore.getState().lens).toBe('system')
+    expect(lensStore.getState().target).toBeNull()
+  })
+
+  it('does not revive a target when returning from the system to the planet', () => {
+    lensStore.getState().setLens('system')
+    lensStore.getState().setLens('planet')
+    expect(lensStore.getState().lens).toBe('planet')
+    expect(lensStore.getState().target).toBeNull()
+  })
 })

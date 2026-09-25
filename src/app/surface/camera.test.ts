@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { ALTITUDE, LEVEL_ALTITUDE, dirOf, levelOf, panBy, surfacePose, tiltFor } from './camera.ts'
+import {
+  ALTITUDE,
+  LEVEL_ALTITUDE,
+  dirOf,
+  levelOf,
+  panBy,
+  surfacePose,
+  tiltFor,
+  zoomGoal,
+} from './camera.ts'
 
 describe('levels', () => {
   it('names the zoom level from the altitude', () => {
@@ -29,6 +38,28 @@ describe('surfacePose', () => {
     const height = pose.position[0] * n[0] + pose.position[1] * n[1] + pose.position[2] * n[2]
     expect(height).toBeGreaterThan(ground)
     expect(Math.hypot(...pose.target)).toBeCloseTo(ground, 6)
+  })
+})
+
+describe('zoomGoal', () => {
+  it('zooms in and out inside the band', () => {
+    expect(zoomGoal(1, 1.25, 0.004, 2.4).goal).toBeCloseTo(1.25)
+    expect(zoomGoal(1, 1.25, 0.004, 2.4).beyond).toBe(false)
+    expect(zoomGoal(1, 0.8, 0.004, 2.4).goal).toBeCloseTo(0.8)
+  })
+
+  it('clamps at the floor without calling it a way out', () => {
+    expect(zoomGoal(0.004, 0.8, 0.004, 2.4)).toEqual({ goal: 0.004, beyond: false })
+  })
+
+  it('clamps at the ceiling the first time, and only then reports the way out', () => {
+    // FEAT: chegar ao teto não é sair; sair é pedir para fora já estando nele
+    expect(zoomGoal(2.0, 1.25, 0.004, 2.4)).toEqual({ goal: 2.4, beyond: false })
+    expect(zoomGoal(2.4, 1.25, 0.004, 2.4)).toEqual({ goal: 2.4, beyond: true })
+  })
+
+  it('never reports a way out while zooming in', () => {
+    expect(zoomGoal(2.4, 0.8, 0.004, 2.4).beyond).toBe(false)
   })
 })
 

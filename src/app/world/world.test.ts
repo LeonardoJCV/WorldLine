@@ -224,6 +224,23 @@ describe('parseRoute', () => {
       lens: 'planet',
     })
   })
+
+  it('opens the system lens from the link suffix, on both route shapes', () => {
+    expect(parseRoute(`${linkHash(tree)}/system`, '')).toEqual({
+      screen: 'observatory',
+      link: tree,
+      lens: 'system',
+    })
+    expect(parseRoute('#/w/AQAHXmEAAAAA/system', '')).toEqual({
+      screen: 'observatory',
+      link: { version: 1, seed: 482913, tick: 0, decisions: [], crossings: [], branches: [] },
+      lens: 'system',
+    })
+  })
+
+  it('falls back to genesis on an unknown suffix', () => {
+    expect(parseRoute('#/w/AQAHXmEAAAAA/moon', '')).toEqual({ screen: 'genesis' })
+  })
 })
 
 describe('world file', () => {

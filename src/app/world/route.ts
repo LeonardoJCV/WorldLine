@@ -7,18 +7,21 @@ export type Route =
   | { readonly screen: 'genesis' }
   | { readonly screen: 'observatory'; readonly link: MultiverseLink; readonly lens: Lens }
 
+function lensFromSuffix(suffix: string | undefined): Lens {
+  return suffix === '/system' ? 'system' : suffix === '/planet' ? 'planet' : 'current'
+}
+
 export function parseRoute(hash: string, search: string): Route {
-  const tree = /^#\/m\/([A-Za-z0-9_-]+)(\/planet)?$/.exec(hash)
+  const tree = /^#\/m\/([A-Za-z0-9_-]+)(\/planet|\/system)?$/.exec(hash)
   const fromTree = tree ? decodeMultiverse(tree[1] ?? '') : null
-  if (fromTree)
-    return { screen: 'observatory', link: fromTree, lens: tree?.[2] ? 'planet' : 'current' }
-  const single = /^#\/w\/([A-Za-z0-9_-]+)(\/planet)?$/.exec(hash)
+  if (fromTree) return { screen: 'observatory', link: fromTree, lens: lensFromSuffix(tree?.[2]) }
+  const single = /^#\/w\/([A-Za-z0-9_-]+)(\/planet|\/system)?$/.exec(hash)
   const fromSingle = single ? decodeLink(single[1] ?? '') : null
   if (fromSingle) {
     return {
       screen: 'observatory',
       link: toMultiverse(fromSingle),
-      lens: single?.[2] ? 'planet' : 'current',
+      lens: lensFromSuffix(single?.[2]),
     }
   }
   const text = new URLSearchParams(search).get('seed')

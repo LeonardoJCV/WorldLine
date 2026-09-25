@@ -80,6 +80,18 @@ export function surfacePose(
   }
 }
 
+export function zoomGoal(
+  goal: number,
+  factor: number,
+  min: number,
+  max: number,
+): { goal: number; beyond: boolean } {
+  const raw = goal * factor
+  // FEAT: chegar ao teto não é sair; sair é pedir para fora já estando nele
+  const beyond = goal === max && raw > max
+  return { goal: Math.min(max, Math.max(min, raw)), beyond }
+}
+
 export function panBy(
   lat: number,
   lon: number,
