@@ -9,7 +9,7 @@ import {
   type CrossingKind,
   type Dose,
 } from './crossing.ts'
-import { GOLDEN_CASES, GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
+import { GOLDEN_CASES, GOLDEN_SCRIPTS, INHERITANCE_CASE, MERGE_CASE, mergeSeam } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
 import { Era, VARIABLES, hasEra, type Allocation, type Decision } from './state.ts'
@@ -129,6 +129,94 @@ describe('the inheritance fingerprint', () => {
       expect(w.present.home).toBeNull()
       expect(w.hashAt(year)).toBe(hash)
     }
+  })
+
+  it('leaves all sixteen fingerprints alone, because no reference script merges', () => {
+    for (const { seed, script, year, hash } of GOLDEN_CASES) {
+      const plan = GOLDEN_SCRIPTS[script]
+      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      w.advance(year)
+      expect(w.present.lastMerge).toBeNull()
+      expect(w.present.status).not.toBe('merged')
+      expect(w.hashAt(year)).toBe(hash)
+    }
+  })
+})
+
+describe('the merge fingerprint', () => {
+  // FEAT: as duas histórias do caso, cada uma no seu roteiro, paradas no ano da costura
+  function histories() {
+    const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
+    const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
+    const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
+    const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+    receives.advance(MERGE_CASE.tick)
+    departs.advance(MERGE_CASE.tick)
+    return { receives, departs, seam: mergeSeam(departs.present) }
+  }
+
+  // FEAT: a que recebe, já costurada, levada até o ano pedido
+  function seamed(year: number): Worldline {
+    const { receives, seam } = histories()
+    receives.merge(seam.receives)
+    receives.advance(year - MERGE_CASE.tick)
+    return receives
+  }
+
+  it('reproduces the history that another one flowed into', () => {
+    const { receives, seam } = histories()
+    receives.merge(seam.receives)
+    expect(receives.advance(MERGE_CASE.year - MERGE_CASE.tick)).toBe(
+      MERGE_CASE.year - MERGE_CASE.tick,
+    )
+    expect(receives.present.tick).toBe(MERGE_CASE.year)
+    expect(receives.present.status).toBe('running')
+    expect(receives.present.lastMerge).toEqual({ tick: MERGE_CASE.tick, other: MERGE_CASE.guest })
+    expect(receives.hashAt(MERGE_CASE.year)).toBe(MERGE_CASE.hash)
+  })
+
+  it('ends the history that flowed away in the year of the seam, without living it', () => {
+    const { departs, seam } = histories()
+    const before = departs.present
+    departs.merge(seam.departs)
+    expect(departs.advance(1)).toBe(0)
+    expect(departs.present.tick).toBe(MERGE_CASE.tick)
+    expect(departs.present.status).toBe('merged')
+    expect(departs.ended).toBe(true)
+    for (const variable of VARIABLES) expect(departs.present[variable]).toBe(before[variable])
+  })
+
+  it('pins the seam and not the script, because the script alone hashes to something else', () => {
+    // FEAT: sem a costura o mesmo roteiro no mesmo ano dá outro fingerprint — é o que prova que o
+    // valor fixado carrega a confluência, e não apenas as duas viradas de `merged`
+    const plan = GOLDEN_SCRIPTS[MERGE_CASE.script]
+    const alone = new Worldline(MERGE_CASE.seed, plan.decisions, null, plan.crossings)
+    alone.advance(MERGE_CASE.year)
+    expect(alone.present.lastMerge).toBeNull()
+    expect(alone.hashAt(MERGE_CASE.year)).not.toBe(MERGE_CASE.hash)
+  })
+
+  it('replays a seamed history from a checkpoint exactly as it ran straight', () => {
+    const whole = seamed(MERGE_CASE.year)
+    for (const year of [MERGE_CASE.tick, MERGE_CASE.tick + 1, 1000, 1024, MERGE_CASE.year]) {
+      expect(whole.hashAt(year)).toBe(hashState(seamed(year).present))
+    }
+  })
+
+  it('hands the same seam to a fork taken after it', () => {
+    const receives = seamed(MERGE_CASE.year)
+    const child = receives.fork(MERGE_CASE.year)
+    expect(child.merges).toHaveLength(1)
+    expect(child.present.lastMerge?.tick).toBe(MERGE_CASE.tick)
+    expect(child.hashAt(MERGE_CASE.year)).toBe(MERGE_CASE.hash)
+  })
+
+  it('leaves a fork taken before it with no seam at all', () => {
+    const receives = seamed(MERGE_CASE.year)
+    const child = receives.fork(MERGE_CASE.tick)
+    expect(child.merges).toEqual([])
+    expect(child.present.lastMerge).toBeNull()
+    expect(child.hashAt(MERGE_CASE.tick)).toBe(receives.hashAt(MERGE_CASE.tick))
   })
 })
 

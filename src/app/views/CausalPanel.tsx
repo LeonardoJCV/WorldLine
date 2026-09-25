@@ -99,6 +99,11 @@ export function CausalPanel() {
           }),
           '',
         ]
+      case 'merge':
+        return [
+          t('causal.merge', { other: node.cause.other, year: formatYear(node.cause.tick) }),
+          '',
+        ]
     }
   }
 

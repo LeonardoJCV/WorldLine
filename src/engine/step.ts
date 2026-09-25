@@ -8,6 +8,7 @@ import {
   leapParadox,
   repay,
   resolveParadox,
+  totalOwed,
   type Paradox,
 } from './debt.ts'
 import { addEcho, assimilate } from './echo.ts'
@@ -20,6 +21,7 @@ import {
   type EventId,
   type EventRecord,
 } from './events.ts'
+import { mergeStates, type Merge } from './merge.ts'
 import { PARADOX_GRACE } from './params.ts'
 import { Channel, uniform } from './rng.ts'
 import { derive, integrate } from './rules.ts'
@@ -133,6 +135,7 @@ export function step(
   nextRecord: number,
   decision?: Decision,
   crossings: readonly Crossing[] = [],
+  merge?: Merge,
 ): StepResult {
   if (s.status !== 'running') throw new Error(`worldline ended at year ${s.tick}`)
   if (decision && decision.tick !== s.tick) {
@@ -141,6 +144,19 @@ export function step(
   for (const crossing of crossings) {
     if (crossing.tick !== s.tick) {
       throw new RangeError(`crossing for year ${crossing.tick} applied at year ${s.tick}`)
+    }
+  }
+  if (merge && merge.tick !== s.tick) {
+    throw new RangeError(`merge for year ${merge.tick} applied at year ${s.tick}`)
+  }
+
+  // FEAT: quem deságua não vive o ano — para nele, como uma extinção para, sem integrar
+  if (merge?.direction === 'out') {
+    const stamp = { tick: merge.tick, other: merge.other }
+    return {
+      state: { ...s, status: 'merged', lastMerge: stamp },
+      started: [moment('merged_away', s.tick, [{ kind: 'merge', ...stamp }])],
+      ended: [],
     }
   }
 
@@ -152,9 +168,23 @@ export function step(
       }
     : s
   const crossed = applyCrossings(decided, crossings)
-  const assimilated = assimilate(crossed)
-  const owing = applyDebts({ ...crossed, ...assimilated }, crossings)
-  const departure = colonise(owing, world, nextRecord)
+
+  // FEAT: a costura entra onde a travessia entra, para o ano correr já sobre a história unida
+  const mergeStarted: EventRecord[] = []
+  let seamed = crossed
+  if (merge) {
+    const stamp = { tick: merge.tick, other: merge.other }
+    const owedBefore = totalOwed(crossed.debts) + totalOwed(merge.debts ?? [])
+    seamed = { ...mergeStates(crossed, merge), lastMerge: stamp }
+    mergeStarted.push(moment('merge', s.tick, [{ kind: 'merge', ...stamp }]))
+    if (totalOwed(seamed.debts) < owedBefore) {
+      mergeStarted.push(moment('debt_settled', s.tick, [{ kind: 'merge', ...stamp }]))
+    }
+  }
+
+  const assimilated = assimilate(seamed)
+  const owing = applyDebts({ ...seamed, ...assimilated }, crossings)
+  const departure = colonise(owing, world, nextRecord + mergeStarted.length)
   const peopled = departure.state
 
   // Efeitos de eventos novos só entram no ano seguinte
@@ -174,7 +204,7 @@ export function step(
     strain: resolution.strain,
   }
 
-  const first = nextRecord + departure.started.length
+  const first = nextRecord + mergeStarted.length + departure.started.length
   const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, first)
   const integrated = integrate(settled, derived, mods, departure.migrated)
   const ending: WorldState = {
@@ -184,7 +214,7 @@ export function step(
     lastEnded: outcome.lastEnded,
     status: outcome.extinct ? 'extinct' : outcome.collapsed ? 'collapsed' : 'running',
   }
-  const started = [...departure.started, ...outcome.started]
+  const started = [...mergeStarted, ...departure.started, ...outcome.started]
 
   // FEAT: o herdeiro é lido no instante em que o mundo natal acaba, porque a autossuficiência
   // pode ter sido perdida no caminho; sem ele a realidade termina exatamente como sempre terminou

@@ -28,6 +28,7 @@ export function makeState(overrides: Partial<WorldState> = {}): WorldState {
     status: 'running',
     colonies: [],
     home: null,
+    lastMerge: null,
     ...overrides,
   }
 }

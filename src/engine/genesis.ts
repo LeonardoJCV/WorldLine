@@ -43,6 +43,7 @@ export function genesis(seed: number): { readonly world: WorldConfig; readonly s
       status: 'running',
       colonies: [],
       home: null,
+      lastMerge: null,
     },
   }
 }

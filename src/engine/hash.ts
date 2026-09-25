@@ -3,7 +3,7 @@ import { DEBT_KINDS, PARADOX_KINDS } from './debt.ts'
 import { ECHO_TARGETS } from './echo.ts'
 import { NEVER, SECTORS, VARIABLES, type WorldState } from './state.ts'
 
-const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2 } as const
+const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2, merged: 3 } as const
 // FIX: os eventos antigos sempre entram, mesmo em NEVER; os novos só depois de terem disparado uma vez
 const LEGACY_EVENT_COUNT = 11
 
@@ -81,5 +81,7 @@ export function hashState(s: WorldState): string {
   // FEAT: o número do acontecimento que fundou a colônia é escrituração, não física, e fica fora;
   // o lar só entra quando a história já mudou de corpo, no mesmo padrão condicional
   if (s.home !== null) h = feed(h, s.home)
+  // FEAT: o nome da outra história é recibo, não física, e fica fora, como Debt.origin
+  if (s.lastMerge) h = feed(h, s.lastMerge.tick)
   return h.toString(16).padStart(8, '0')
 }

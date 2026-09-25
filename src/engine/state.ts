@@ -33,7 +33,7 @@ export interface ActiveEvent {
   readonly start: number
 }
 
-export type Status = 'running' | 'extinct' | 'collapsed'
+export type Status = 'running' | 'extinct' | 'collapsed' | 'merged'
 
 export interface WorldConfig {
   readonly seed: number
@@ -66,6 +66,8 @@ export interface WorldState {
   readonly colonies: readonly Colony[]
   // FEAT: o corpo que a história chama de lar; null enquanto ela nunca saiu do planeta natal
   readonly home: number | null
+  // FEAT: quem essa história absorveu; null até o step() escrever o primeiro merge, na Tarefa 5
+  readonly lastMerge: { readonly tick: number; readonly other: string } | null
 }
 
 export function isValidAllocation(allocation: Allocation): boolean {

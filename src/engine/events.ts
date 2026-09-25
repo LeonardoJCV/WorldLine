@@ -34,6 +34,9 @@ export const EVENT_IDS = [
   'colony_founded',
   'colony_lost',
   'inheritance',
+  'merge',
+  'merged_away',
+  'debt_settled',
 ] as const
 export type EventId = (typeof EVENT_IDS)[number]
 
@@ -95,6 +98,7 @@ export type Cause =
   | { readonly kind: 'event'; readonly record: number }
   | { readonly kind: 'decision'; readonly tick: number; readonly sectors: readonly Sector[] }
   | { readonly kind: 'crossing'; readonly tick: number; readonly crossing: CrossingKind }
+  | { readonly kind: 'merge'; readonly tick: number; readonly other: string }
 
 export interface EventRecord {
   readonly event: EventId
@@ -306,6 +310,31 @@ export const EVENTS: readonly EventDef[] = [
     trigger: [{ metric: 'population', op: '<', value: 0 }],
     cooldown: 0,
     influences: ['population', 'environment', 'stability', 'technology'],
+  },
+  // FEAT: os três a seguir nascem da confluência, escritos direto pelo step(); o gatilho nunca vale
+  {
+    id: 'merge',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: ['population'],
+  },
+  {
+    id: 'merged_away',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: ['population'],
+  },
+  {
+    id: 'debt_settled',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: ['debtRatio'],
   },
 ]
 

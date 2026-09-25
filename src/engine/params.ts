@@ -136,3 +136,5 @@ export const INHERIT_ENERGY = 1
 export const INHERIT_ECONOMY = 1
 // FEAT: o abalo na estabilidade no ano em que a história perde o planeta em que nasceu
 export const INHERIT_SHOCK = 25
+// FEAT: 60% do abalo de perder o planeta; a medição aceita a faixa toda, então ela não escolhe
+export const MERGE_SHOCK = 15
