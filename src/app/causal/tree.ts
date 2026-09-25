@@ -3,6 +3,7 @@ import type { Cause, EventRecord } from '../../engine/events.ts'
 type ConditionCause = Extract<Cause, { kind: 'condition' }>
 type DecisionCause = Extract<Cause, { kind: 'decision' }>
 type CrossingCause = Extract<Cause, { kind: 'crossing' }>
+type MergeCause = Extract<Cause, { kind: 'merge' }>
 
 interface NodeBase {
   readonly key: string
@@ -16,6 +17,8 @@ export type CausalNode =
   | (NodeBase & { readonly kind: 'condition'; readonly cause: ConditionCause })
   | (NodeBase & { readonly kind: 'decision'; readonly cause: DecisionCause })
   | (NodeBase & { readonly kind: 'crossing'; readonly cause: CrossingCause })
+  // FEAT: nomeia a outra história sem apontar nela, igual a crossing
+  | (NodeBase & { readonly kind: 'merge'; readonly cause: MergeCause })
 
 export interface CausalTree {
   readonly nodes: readonly CausalNode[]
@@ -61,7 +64,9 @@ export function buildCausalTree(
           ? { ...base, kind: 'condition', cause }
           : cause.kind === 'decision'
             ? { ...base, kind: 'decision', cause }
-            : { ...base, kind: 'crossing', cause },
+            : cause.kind === 'crossing'
+              ? { ...base, kind: 'crossing', cause }
+              : { ...base, kind: 'merge', cause },
       )
       rows.push(row)
     })
