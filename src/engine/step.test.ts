@@ -5,6 +5,7 @@ import type { Debt, Paradox } from './debt.ts'
 import { EVENTS, worldMetrics } from './events.ts'
 import { genesis } from './genesis.ts'
 import { hashState } from './hash.ts'
+import type { Merge } from './merge.ts'
 import {
   COLONY_CAPACITY,
   COLONY_SEED_POP,
@@ -20,7 +21,7 @@ import {
   PARAMS,
 } from './params.ts'
 import { step } from './step.ts'
-import { Era, VARIABLES, type Allocation, type WorldState } from './state.ts'
+import { Era, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
 import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
 
@@ -646,5 +647,89 @@ describe('inheritance', () => {
     expect(again.started.filter((record) => record.event === 'inheritance')).toHaveLength(1)
     expect(again.state.status).toBe('running')
     expect(again.state.home).toBe(poorer.index)
+  })
+})
+
+describe('step, with a merge', () => {
+  const config = TEST_WORLD
+  const running = (overrides: Partial<WorldState> = {}): WorldState => makeState(overrides)
+
+  function debt(overrides: Partial<Debt> = {}): Debt {
+    return { kind: 'resource', owed: 10, since: 0, origin: 'C', ...overrides }
+  }
+
+  function mergeIn(values: Partial<Record<Variable, number>>, rest: Partial<Merge> = {}): Merge {
+    const full = {} as Record<Variable, number>
+    for (const variable of VARIABLES) full[variable] = values[variable] ?? 0
+    return { tick: 0, self: 'A', other: 'B', direction: 'in', natal: 0, values: full, ...rest }
+  }
+
+  function mergeOut(rest: Partial<Merge> = {}): Merge {
+    return { tick: 0, self: 'A', other: 'B', direction: 'out', natal: 0, ...rest }
+  }
+
+  it('seams the other history in and keeps running', () => {
+    const result = step(
+      running({ population: 3_000_000 }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({ population: 1_000_000 }),
+    )
+    expect(result.state.status).toBe('running')
+    expect(result.state.lastMerge?.tick).toBe(running().tick)
+    expect(result.started.map((r) => r.event)).toContain('merge')
+  })
+
+  it('ends the history that flows away, and says so in its own record', () => {
+    const result = step(running(), config, 0, undefined, [], mergeOut())
+    expect(result.state.status).toBe('merged')
+    expect(result.started.map((r) => r.event)).toContain('merged_away')
+  })
+
+  it('records a settlement only when there was mutual debt to settle', () => {
+    const withMutual = step(
+      running({ debts: [debt({ owed: 40, origin: 'B' })] }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({}, { other: 'B' }),
+    )
+    expect(withMutual.started.map((r) => r.event)).toContain('debt_settled')
+    const without = step(
+      running({ debts: [] }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({}, { other: 'B' }),
+    )
+    expect(without.started.map((r) => r.event)).not.toContain('debt_settled')
+  })
+
+  it('refuses a merge dated in another year, like it refuses a crossing', () => {
+    expect(() =>
+      step(running({ tick: 1000 }), config, 0, undefined, [], mergeIn({}, { tick: 999 })),
+    ).toThrow(RangeError)
+  })
+
+  it('never runs a year on a history that already flowed away', () => {
+    const merged = step(running(), config, 0, undefined, [], mergeOut()).state
+    expect(() => step(merged, config, 0)).toThrow()
+  })
+
+  it('points the causal chain at the other history by name', () => {
+    const result = step(running(), config, 0, undefined, [], mergeIn({}, { other: 'C' }))
+    const record = result.started.find((r) => r.event === 'merge')
+    expect(record?.causes).toContainEqual({ kind: 'merge', tick: running().tick, other: 'C' })
+  })
+
+  it('leaves a year without a merge byte-identical to before', () => {
+    // FEAT: a prova de que o parâmetro novo é inerte quando ninguém mescla
+    const plain = step(running(), config, 0)
+    const withUndefined = step(running(), config, 0, undefined, [], undefined)
+    expect(hashState(withUndefined.state)).toBe(hashState(plain.state))
   })
 })
