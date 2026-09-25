@@ -3,13 +3,11 @@ import {
   BufferGeometry,
   Float32BufferAttribute,
   Group,
-  HemisphereLight,
   LineBasicMaterial,
   LineLoop,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
-  PointLight,
   PointsMaterial,
   Raycaster,
   Scene,
@@ -22,11 +20,10 @@ import type { Snapshot } from '../../worker/protocol.ts'
 import { TIERS, type PlanetDetail, type Tier } from '../graphics/settings.ts'
 import { createPlanetBody, type PlanetBody } from '../planet/body.ts'
 import { terrainTexture } from '../planet/terrainTexture.ts'
-import { PLANET_LIGHT } from '../planet/uniforms.ts'
 import { starField } from '../scene3d/stars.ts'
 import { zoomGoal } from '../surface/camera.ts'
 import type { TerrainMap } from '../surface/terrainClient.ts'
-import { bodyPalette, bodyState } from './palette.ts'
+import { bodyPalette, bodyState, bodyYaw } from './palette.ts'
 import type { PlacedBody, SystemPlacement } from './model.ts'
 
 const FOV = 40
@@ -85,7 +82,7 @@ export interface SystemScene {
 interface Entry {
   readonly planet: PlanetBody
   readonly picker: Mesh
-  ring: LineLoop
+  readonly ring: LineLoop
   detail: PlanetDetail
 }
 
@@ -120,13 +117,13 @@ export function createSystemScene(
   const starGeometry = new SphereGeometry(STAR_RADIUS, SEGMENTS, SEGMENTS)
   const starMaterial = new MeshBasicMaterial({ color: 0xffe2a8 })
   scene.add(new Mesh(starGeometry, starMaterial))
-  // FIX: sem queda com a distância o corpo mais externo ainda se lê; a distância quem conta é a órbita
-  scene.add(new PointLight(0xffe8c0, 2.6, 0, 0))
-  scene.add(new HemisphereLight(0x7f9cff, 0x1a1030, 0.35))
+  // FIX: PlanetBody usa ShaderMaterial próprio, que não responde a luz de cena — uma PointLight/
+  // HemisphereLight aqui não iluminaria nada; a luz de cada corpo é a direção até a estrela, abaixo
 
   const spec = TIERS[options.tier]
   const terrain = terrainTexture(options.terrain)
-  const light = new Vector3(...PLANET_LIGHT).normalize()
+  // FEAT: reaproveitado a cada corpo, a cada quadro — evita um Vector3 novo por corpo por quadro
+  const sunDirection = new Vector3()
 
   // FEAT: um alvo invisível por corpo, do tamanho do disco — separa o que se raycasta do que se vê
   const pickerGeometry = new SphereGeometry(1, SEGMENTS, SEGMENTS)
@@ -152,10 +149,10 @@ export function createSystemScene(
   const pointer = new Vector2()
   const ray = new Raycaster()
 
-  // FIX: 'base'+ amostra o terreno pela posição do vértice, não por uOffset — todo corpo que não é
-  // o vivo repetiria o litoral de Dedes; medido em system-bodies-high.png. Só 'disc' não lê terreno.
+  // FIX: 'base'+ amostra o terreno pela posição do vértice, não por uOffset — sem girar o corpo,
+  // todo corpo que não é o vivo mostraria o mesmo litoral de Dedes; o giro por corpo resolve isso
   function detailFor(body: PlacedBody): PlanetDetail {
-    return body.living ? spec.focus : 'disc'
+    return body.living ? spec.focus : spec.others
   }
 
   function removeEntry(index: number): void {
@@ -173,8 +170,9 @@ export function createSystemScene(
     for (const index of [...entries.keys()]) removeEntry(index)
   }
 
-  // FEAT: reconcilia por índice de corpo — só refaz geometria/material quando o detalhe muda de fato,
-  // porque colonies (e por tabela, placement) chega de novo a cada quadro de simulação
+  // FEAT: reconcilia por índice de corpo — só cria/destrói quando o detalhe muda de fato, porque
+  // colonies (e por tabela, placement) chega de novo a cada quadro de simulação; a distância da
+  // órbita é fixa por semente+índice, então o anel de um corpo já criado nunca precisa de outro
   function sync(): void {
     const seen = new Set<number>()
     for (const body of placement.bodies) {
@@ -187,6 +185,8 @@ export function createSystemScene(
       }
       if (!entry) {
         const planet = createPlanetBody(bodyPalette(options.seed, body), detail, terrain)
+        // FEAT: gira o corpo que não é o vivo para mostrar outro pedaço do mesmo mapa de terreno
+        if (!body.living) planet.group.rotation.y = bodyYaw(options.seed, body)
         bodyGroup.add(planet.group)
         const picker = new Mesh(pickerGeometry, pickerMaterial)
         bodyGroup.add(picker)
@@ -195,9 +195,6 @@ export function createSystemScene(
         orbitGroup.add(ring)
         entry = { planet, picker, ring, detail }
         entries.set(body.index, entry)
-      } else {
-        entry.ring.geometry.dispose()
-        entry.ring.geometry = ringGeometry(body.distance)
       }
       entry.planet.group.scale.setScalar(body.radius)
       entry.picker.scale.setScalar(body.radius)
@@ -281,7 +278,11 @@ export function createSystemScene(
     pose()
     pick()
     const tickDt = still ? 0 : dt
-    for (const entry of entries.values()) entry.planet.tick(tickDt, now / 1000, light)
+    // FEAT: a estrela fica na origem, então a luz de cada corpo é só a direção até ela
+    for (const entry of entries.values()) {
+      sunDirection.copy(entry.planet.group.position).negate().normalize()
+      entry.planet.tick(tickDt, now / 1000, sunDirection)
+    }
     renderer.render(scene, camera)
   })
 

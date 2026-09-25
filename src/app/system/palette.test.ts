@@ -5,7 +5,7 @@ import { Worldline } from '../../engine/worldline.ts'
 import { toSnapshot, type Snapshot } from '../../worker/protocol.ts'
 import { planetPalette } from '../planet/uniforms.ts'
 import { systemPlacement, type PlacedBody } from './model.ts'
-import { bodyPalette, bodyState } from './palette.ts'
+import { bodyPalette, bodyState, bodyYaw } from './palette.ts'
 
 // FEAT: um Snapshot de verdade, do mundo que chegou ao espaço, em vez de um literal inventado
 function snapshotFixture(year = INHERITANCE_CASE.ended - 1): Snapshot {
@@ -53,6 +53,24 @@ describe('bodyPalette', () => {
     const b = bodyPalette(rocky.seed, rocky.body)
     expect(a.seaLevel).not.toBeCloseTo(b.seaLevel)
     expect(a).not.toEqual(b)
+  })
+})
+
+describe('bodyYaw', () => {
+  it('is deterministic and stays inside one turn', () => {
+    const placed = systemPlacement(482913, null, [])
+    for (const body of placed.bodies) {
+      const yaw = bodyYaw(482913, body)
+      expect(bodyYaw(482913, body)).toBe(yaw)
+      expect(yaw).toBeGreaterThanOrEqual(0)
+      expect(yaw).toBeLessThan(Math.PI * 2)
+    }
+  })
+
+  it('turns each body a different amount, so none faces the camera the same way', () => {
+    const placed = systemPlacement(482913, null, [])
+    const seen = placed.bodies.map((b) => bodyYaw(482913, b))
+    expect(new Set(seen).size).toBe(seen.length)
   })
 })
 

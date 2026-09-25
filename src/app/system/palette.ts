@@ -82,6 +82,11 @@ export function bodyPalette(seed: number, body: PlacedBody): PlanetPalette {
   }
 }
 
+// FEAT: gira o corpo antes do primeiro quadro — mesma textura, outro pedaço de litoral virado à câmera
+export function bodyYaw(seed: number, body: PlacedBody): number {
+  return draw(seed, body, 10) * Math.PI * 2
+}
+
 function unit(value: number): number {
   return Math.min(Math.max(value, 0), 1)
 }
