@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { selfSufficient, type Colony } from './colony.ts'
-import type { Debt } from './debt.ts'
+import { repay, type Debt } from './debt.ts'
+import { worldDerived } from './events.ts'
 import { mergeColonies, mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
-import { NEVER, VARIABLES, type Variable, type WorldState } from './state.ts'
-import { makeState } from './testing.ts'
+import { NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
+import { TEST_WORLD, makeState } from './testing.ts'
 
 function world(overrides: Partial<WorldState> = {}): WorldState {
   return makeState(overrides)
@@ -22,6 +23,19 @@ function debt(overrides: Partial<Debt> = {}): Debt {
 
 function colony(overrides: Partial<Colony> = {}): Colony {
   return { body: 3, founded: 0, population: 1000, support: 0, record: 0, ...overrides }
+}
+
+const HOST_DOCTRINE: Allocation = {
+  agriculture: 20,
+  industry: 40,
+  research: 30,
+  conservation: 10,
+}
+const GUEST_DOCTRINE: Allocation = {
+  agriculture: 60,
+  industry: 10,
+  research: 20,
+  conservation: 10,
 }
 
 describe('mergeWeights', () => {
@@ -134,6 +148,60 @@ describe('settleDebts', () => {
     const settled = settleDebts(own, theirs, ['A', 'B'])
     expect(settled.map((d) => d.origin)).toEqual(['C'])
     expect(settled[0]?.owed).toBe(70)
+  })
+
+  it('keeps the doctrine allocation of the history that survives, the only one being run', () => {
+    const own = [
+      debt({ kind: 'doctrine', owed: 10, since: 700, origin: 'C', allocation: HOST_DOCTRINE }),
+    ]
+    const theirs = [
+      debt({ kind: 'doctrine', owed: 4, since: 900, origin: 'C', allocation: GUEST_DOCTRINE }),
+    ]
+    const settled = settleDebts(own, theirs, ['A', 'B'])
+    expect(settled).toHaveLength(1)
+    expect(settled[0]?.owed).toBe(14)
+    expect(settled[0]?.since).toBe(700)
+    expect(settled[0]?.allocation).toEqual(HOST_DOCTRINE)
+  })
+
+  it('takes the arriving allocation only when the survivor owed that doctrine to nobody', () => {
+    const theirs = [
+      debt({ kind: 'doctrine', owed: 4, since: 900, origin: 'C', allocation: GUEST_DOCTRINE }),
+    ]
+    const settled = settleDebts([debt({ kind: 'knowledge', owed: 5, origin: 'C' })], theirs, [
+      'A',
+      'B',
+    ])
+    expect(settled).toHaveLength(2)
+    expect(settled.find((d) => d.kind === 'doctrine')?.allocation).toEqual(GUEST_DOCTRINE)
+  })
+
+  it('leaves a doctrine the survivor was repaying still repayable after the seam', () => {
+    const host = world({
+      allocation: HOST_DOCTRINE,
+      debts: [
+        debt({ kind: 'doctrine', owed: 10, since: 700, origin: 'C', allocation: HOST_DOCTRINE }),
+      ],
+    })
+    const merged = mergeStates(
+      host,
+      incoming(
+        { population: 1_000_000 },
+        {
+          debts: [
+            debt({
+              kind: 'doctrine',
+              owed: 4,
+              since: 900,
+              origin: 'C',
+              allocation: GUEST_DOCTRINE,
+            }),
+          ],
+        },
+      ),
+    )
+    const repaid = repay(merged.debts, merged, worldDerived(merged, TEST_WORLD), 1000)
+    expect(repaid[0]?.owed).toBeLessThan(14)
   })
 })
 

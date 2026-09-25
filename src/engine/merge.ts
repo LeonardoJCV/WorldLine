@@ -29,14 +29,25 @@ export function mergeWeights(a: number, b: number): { readonly a: number; readon
   return { a: a / total, b: b / total }
 }
 
+// FEAT: sem a alocação a entrada só soma o que se deve, e a doutrina da anfitriã segue valendo
+function withoutAllocation(debt: Debt): Debt {
+  return { kind: debt.kind, owed: debt.owed, since: debt.since, origin: debt.origin }
+}
+
 // FEAT: dívida cuja origem é uma das duas que se mesclam virou interna, e interna não é dívida
 export function settleDebts(
   own: readonly Debt[],
   incoming: readonly Debt[],
   between: readonly [string, string],
 ): readonly Debt[] {
-  const external = [...own, ...incoming].filter((debt) => !between.includes(debt.origin))
-  return external.reduce<readonly Debt[]>((debts, debt) => addDebt(debts, debt), [])
+  const external = (debts: readonly Debt[]): readonly Debt[] =>
+    debts.filter((debt) => !between.includes(debt.origin))
+  const host = external(own).reduce<readonly Debt[]>((debts, debt) => addDebt(debts, debt), [])
+  // FIX: a história unida roda uma alocação só, a da anfitriã, então uma doutrina que ela quitava segue quitável
+  return external(incoming).reduce<readonly Debt[]>((debts, debt) => {
+    const there = debts.some((own) => own.kind === debt.kind && own.origin === debt.origin)
+    return addDebt(debts, there ? withoutAllocation(debt) : debt)
+  }, host)
 }
 
 // FEAT: o prazo mais próximo é o que mata primeiro, então é ele que sobrevive à costura
