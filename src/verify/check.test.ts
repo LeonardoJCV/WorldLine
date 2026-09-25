@@ -73,7 +73,7 @@ describe('runMergeCheck', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('proves the two histories became one before the year that is pinned', () => {
+  it('keeps the years of the case consistent, the seam before the year that is pinned', () => {
     expect(MERGE_CASE.tick).toBeLessThan(MERGE_CASE.year)
     expect(MERGE_CASE.script).not.toBe(MERGE_CASE.other)
   })

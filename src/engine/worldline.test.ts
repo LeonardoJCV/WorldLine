@@ -450,11 +450,13 @@ describe('a year that carries a confluence', () => {
     expect(child.hashAt(200)).toBe(line.hashAt(200))
   })
 
-  it('leaves a world without confluences identical to a world built with an empty list', () => {
+  it('leaves a world alone until the year its confluence is dated, and not after', () => {
     const plain = new Worldline(SEED)
-    plain.advance(1200)
-    const empty = new Worldline(SEED, [], null, [], [])
-    empty.advance(1200)
-    expect(plain.hashAt(1200)).toBe(empty.hashAt(1200))
+    plain.advance(1301)
+    const seamed = new Worldline(SEED, [], null, [], [arriving(1300)])
+    seamed.advance(1301)
+    expect(seamed.hashAt(1200)).toBe(plain.hashAt(1200))
+    expect(seamed.hashAt(1299)).toBe(plain.hashAt(1299))
+    expect(seamed.hashAt(1301)).not.toBe(plain.hashAt(1301))
   })
 })
