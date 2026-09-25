@@ -150,3 +150,44 @@ test('holds the system still when motion is turned down', async ({ page }) => {
   // FEAT: sem movimento a deriva ambiente não anda — o corpo fica onde a semente o pôs
   expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(1)
 })
+
+test('leaves the system with the wheel only after the span runs out', async ({ page }) => {
+  await openPlanet(page)
+  await page.getByRole('button', { name: 'View the system' }).click()
+  const sky = page.getByRole('img', { name: `The bodies of ${SEED}` })
+  const box = await sky.boundingBox()
+  if (!box) throw new Error('the system canvas is not visible')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.wheel(0, 120)
+  await page.waitForTimeout(300)
+  // FEAT: 1 -> 1.15 -> 1.32 -> teto; só a quarta volta pede para fora já estando nele
+  await expect(stage(page)).toHaveAttribute('data-lens', 'system')
+  for (let i = 0; i < 2; i++) await page.mouse.wheel(0, 120)
+  await page.waitForTimeout(300)
+  await expect(stage(page)).toHaveAttribute('data-lens', 'system')
+  await page.mouse.wheel(0, 120)
+  await expect(stage(page)).toHaveAttribute('data-lens', 'current')
+})
+
+test('keeps the phone sheet off the orbit plane', async ({ page }) => {
+  // FIX: em 'auto' o movimento reduzido já cai no 2D; só um nível explícito chega à lente
+  await useGraphics(page, 'high')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openPlanet(page)
+  await page.getByRole('button', { name: 'View the system' }).click()
+  await expect(page.locator('.system__body').first()).toBeVisible()
+  await expect(page.locator('.sheet')).toBeHidden()
+  const audit = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('.system__body')]
+    return labels.map((node) => {
+      const box = node.getBoundingClientRect()
+      const found = document.elementFromPoint(
+        (box.left + box.right) / 2,
+        (box.top + box.bottom) / 2,
+      )
+      return found === null || found.closest('.hud') === null
+    })
+  })
+  expect(audit.length).toBe(BODIES)
+  expect(audit.every(Boolean)).toBe(true)
+})
