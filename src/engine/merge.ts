@@ -1,5 +1,5 @@
 import type { Colony } from './colony.ts'
-import type { Debt, Paradox } from './debt.ts'
+import { addDebt, type Debt, type Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
 import { clamp } from './math.ts'
 import { MERGE_SHOCK } from './params.ts'
@@ -29,6 +29,23 @@ export function mergeWeights(a: number, b: number): { readonly a: number; readon
   return { a: a / total, b: b / total }
 }
 
+// FEAT: dívida cuja origem é uma das duas que se mesclam virou interna, e interna não é dívida
+export function settleDebts(
+  own: readonly Debt[],
+  incoming: readonly Debt[],
+  between: readonly [string, string],
+): readonly Debt[] {
+  const external = [...own, ...incoming].filter((debt) => !between.includes(debt.origin))
+  return external.reduce<readonly Debt[]>((debts, debt) => addDebt(debts, debt), [])
+}
+
+// FEAT: o prazo mais próximo é o que mata primeiro, então é ele que sobrevive à costura
+function nearerParadox(a: Paradox | null, b: Paradox | null): Paradox | null {
+  if (!a) return b
+  if (!b) return a
+  return a.deadline <= b.deadline ? a : b
+}
+
 export function mergeStates(s: WorldState, incoming: Merge): WorldState {
   const value = (variable: Variable): number => incoming.values?.[variable] ?? 0
   const weights = mergeWeights(s.population, value('population'))
@@ -44,5 +61,9 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
     economy: blend('economy'),
     environment: blend('environment'),
     stability: clamp(blend('stability') - MERGE_SHOCK, 0, 100),
+    debts: settleDebts(s.debts, incoming.debts ?? [], [incoming.self, incoming.other]),
+    echoes: [...s.echoes, ...(incoming.echoes ?? [])],
+    paradox: nearerParadox(s.paradox, incoming.paradox ?? null),
+    strain: Math.max(s.strain, incoming.strain ?? 0),
   }
 }
