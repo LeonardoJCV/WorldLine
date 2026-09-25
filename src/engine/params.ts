@@ -136,3 +136,5 @@ export const INHERIT_ENERGY = 1
 export const INHERIT_ECONOMY = 1
 // FEAT: o abalo na estabilidade no ano em que a história perde o planeta em que nasceu
 export const INHERIT_SHOCK = 25
+// FEAT: o abalo na estabilidade de costurar duas histórias; provisório, a T6 calibra
+export const MERGE_SHOCK = 15
