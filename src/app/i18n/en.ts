@@ -82,6 +82,9 @@ export const en = {
   'inheritance.year': 'Year {year}',
   'inheritance.moved': 'The history moved to {body}. {people} survived the end of {home}.',
   'inheritance.kept': 'What the world knew was not lost.',
+  'confluence.year': 'Year {year}',
+  'confluence.joined': '{other} flowed into {survivor}. {people} live on together.',
+  'confluence.kept': 'Two histories, one from here on.',
   'paradox.debt': 'This history no longer holds: it depends on more than it ever produced.',
   'paradox.leap': 'This history no longer holds: it received what its age could not yet hold.',
   'paradox.circular':
@@ -335,6 +338,7 @@ export const en = {
   'merge.ends': 'Both histories end here. {survivor} continues.',
   'merge.confirm': 'Merge',
   'merge.done': '{other} flowed into {survivor}.',
+  'merge.turns': 'The seam is written; it takes effect as the year turns.',
   'merge.none': 'No other living history to merge with',
   'merge.ended': 'This history has ended; nothing can flow into it',
   'merge.once': '{id} already took a confluence in {year}, and a history takes one a year',

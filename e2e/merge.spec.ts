@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { VARIABLES, type Variable } from '../src/engine/state.ts'
 import { STRANDS } from '../src/app/current/normalize.ts'
 import { useGraphics } from './stage.ts'
-import { branchFromStart, worldAtYear } from './support.ts'
+import { branchFromStart, installParadox, runToParadox, worldAtYear } from './support.ts'
 
 test.beforeEach(async ({ page }) => {
   await useGraphics(page, '2d')
@@ -381,4 +381,231 @@ test('sews the two histories by keyboard alone, reading the cost before acceptin
   await observe.focus()
   await observe.press('Enter')
   await expect(page.locator('.panel.merge')).toHaveCount(0)
+})
+
+// FEAT: só conta a mutação que a região viva anunciaria, como a suíte do paradoxo já conta
+async function watchAnnouncements(page: Page) {
+  await page.evaluate(() => {
+    const region = document.querySelector('.notices')
+    if (!region) throw new Error('the notices region is missing')
+    const counter = { announced: 0 }
+    Object.assign(window, { confluenceWatch: counter })
+    new MutationObserver((records) => {
+      counter.announced += records.length
+    }).observe(region, { childList: true, characterData: true, subtree: true })
+  })
+}
+
+async function announced(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const watch = (window as unknown as { confluenceWatch?: { announced: number } }).confluenceWatch
+    return watch ? watch.announced : -1
+  })
+}
+
+const notice = (page: Page) => page.locator('.confluence')
+
+test('announces that two histories became one, in a live region, once and in the seam year', async ({
+  page,
+}) => {
+  test.slow()
+  await pairAtYearFive(page)
+  await pickHistory(page, 'A')
+  await expect(confirm(page)).toBeEnabled()
+  await confirm(page).click()
+
+  // FIX: o motor costura DENTRO do ano seguinte, então o que se promete aqui é o ano que vira
+  await expect(page.locator('.merge__turns')).toHaveText(
+    'The seam is written; it takes effect as the year turns.',
+  )
+  await expect(notice(page)).toHaveCount(0)
+  await expect(page.getByTestId('year')).toHaveText('0005')
+
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(notice(page)).toBeVisible()
+  // FEAT: cumprida a promessa, quem fala da união é o anúncio, e a promessa sai da tela
+  await expect(page.locator('.merge__turns')).toHaveCount(0)
+
+  // FEAT: e não se repete a cada ano: a região viva não muda mais depois de ter falado
+  await watchAnnouncements(page)
+  const spoken = await page.locator('.notices').innerHTML()
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole('button', { name: 'Advance one year' }).click()
+    await expect(page.getByTestId('year')).toHaveText(`000${6 + i + 1}`)
+  }
+  await expect(notice(page)).toBeVisible()
+  expect(await announced(page)).toBe(0)
+  expect(await page.locator('.notices').innerHTML()).toBe(spoken)
+
+  // FEAT: o ano que o anúncio diz é o da costura, não o do relógio, que já andou três anos
+  await expect(page.locator('.confluence__when')).toHaveText('✧Year 0005')
+  await expect(page.locator('.confluence__joined')).toHaveText(
+    /^A flowed into B\. [\d.]+[KMBT]? live on together\.$/,
+  )
+  await expect(page.locator('.confluence__kept')).toHaveText('Two histories, one from here on.')
+
+  // FEAT: o anúncio é lido por região viva, a mesma em que o paradoxo e a herança falam
+  const live = await page.evaluate(() => {
+    const section = document.querySelector('.confluence')
+    return section?.closest('[role="status"], [aria-live]')?.getAttribute('role') ?? null
+  })
+  expect(live).toBe('status')
+})
+
+// FEAT: desaguar não é fracassar, e a tira tem de dizer isso sem depender de cor nenhuma
+test('says in words where a history went, never that it ended', async ({ page }) => {
+  test.slow()
+  await pairAtYearFive(page)
+  await pickHistory(page, 'A')
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toHaveText('A flowed into B.')
+
+  const gone = page.getByRole('button', { name: 'Focus on worldline A' })
+  await expect(gone).toContainText('Flowed into B in 0005')
+  await expect(gone).not.toContainText('Extinct')
+  await expect(gone).not.toContainText('Collapsed')
+  await expect(gone).not.toContainText('Distance')
+})
+
+// FIX: a filha de quem desaguou não fica parada com o pai, e distância a um ano que o pai nunca
+// viveu não existe — a tira cala essa linha em vez de comparar dois anos diferentes
+test('shows no distance on a history whose origin flowed away', async ({ page }) => {
+  test.slow()
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  await branchFromStart(page)
+  await modeTab(page).click()
+  await pickHistory(page, 'B')
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toHaveText('B flowed into C.')
+
+  const child = page.getByRole('button', { name: 'Focus on worldline C' })
+  await expect(child).toContainText('Distance')
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(page.getByTestId('year')).toHaveText('0006')
+  await expect(child).toContainText('From B, year 0000')
+  await expect(child).not.toContainText('Distance')
+})
+
+// FIX: o Plano 18 achou o alívio falso com a herança; medido aqui, a confluência anula a dívida com
+// quem desaguou e o paradoxo anunciava "the debt was cleared" sem ninguém ter quitado nada
+test('keeps the paradox silent in the year a confluence swallowed the debt', async ({ page }) => {
+  test.slow()
+  test.setTimeout(180_000)
+  await installParadox(page)
+  await runToParadox(page)
+  await expect(page.locator('.paradox[data-state="warning"]')).toBeVisible()
+
+  await modeTab(page).click()
+  await pickHistory(page, 'A')
+  await expect(confirm(page)).toBeEnabled()
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toContainText('A flowed into F.')
+
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(notice(page)).toBeVisible()
+  // FEAT: quem manda no ano da costura é a confluência; o alívio do paradoxo não foi merecido
+  await expect(page.locator('.paradox[data-state="relief"]')).toHaveCount(0)
+  await expect(page.locator('.paradox')).toHaveCount(0)
+})
+
+// FIX: o hospedeiro recusa remover história que uma costura nomeia, e a recusa dele é inglês cru
+test('refuses in words to remove a history that a confluence names', async ({ page }) => {
+  test.slow()
+  await worldAtYear(page, 5)
+  // FEAT: três irmãs de A, para remover uma não levar a outra junto, e uma que nunca se costura
+  await branchFromStart(page)
+  for (const born of ['C', 'D']) {
+    await page.getByRole('button', { name: 'Focus on worldline A' }).click()
+    await branchFromStart(page)
+    await expect(page.getByRole('button', { name: `Focus on worldline ${born}` })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  }
+  await page.getByRole('button', { name: 'Focus on worldline C' }).click()
+  await modeTab(page).click()
+  await pickHistory(page, 'B')
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toHaveText('B flowed into C.')
+
+  const alert = page.locator('.worlds__confirm')
+  // FEAT: medido no hospedeiro: a costura nomeia as DUAS, e nenhuma das duas se remove mais
+  for (const sewn of [
+    { id: 'B', other: 'C' },
+    { id: 'C', other: 'B' },
+  ]) {
+    await page.getByRole('button', { name: `Remove worldline ${sewn.id}` }).click()
+    await expect(alert).toHaveText(
+      `${sewn.id} flowed together with ${sewn.other}; a confluence cannot be undone.Cancel`,
+    )
+    await expect(alert.getByRole('button', { name: 'Remove' })).toHaveCount(0)
+    await alert.getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByRole('button', { name: `Focus on worldline ${sewn.id}` })).toBeVisible()
+  }
+  // FEAT: nada de erro cru do worker na faixa de avisos
+  await expect(page.locator('.notices')).toHaveText('')
+
+  // FEAT: e a que nenhuma costura nomeia continua removível, com a pergunta de sempre
+  await page.getByRole('button', { name: 'Remove worldline D' }).click()
+  await expect(alert).toContainText('Remove D and every worldline that branched from it?')
+  await expect(alert.getByRole('button', { name: 'Remove' })).toBeVisible()
+})
+
+// FEAT: o anúncio é a frase mais larga da tela; num celular ela não pode empurrar a página
+test('announces the confluence on a phone without pushing anything sideways', async ({ page }) => {
+  test.slow()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await pairAtYearFive(page)
+  await pickHistory(page, 'A')
+  await confirm(page).click()
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(notice(page)).toBeVisible()
+
+  const narrow = await page.evaluate(() => {
+    const section = document.querySelector('.confluence')
+    if (!section) return null
+    const parent = section.parentElement
+    return {
+      page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      overflow: section.scrollWidth - section.clientWidth,
+      wider: parent === null ? 1 : section.getBoundingClientRect().width - parent.clientWidth,
+    }
+  })
+  if (!narrow) throw new Error('the confluence notice did not render')
+  expect(narrow.page).toBe(0)
+  expect(narrow.overflow).toBeLessThanOrEqual(0)
+  expect(narrow.wider).toBeLessThanOrEqual(0)
+  await expect(notice(page)).toBeInViewport()
+})
+
+// FIX: reaberta de um endereço, uma história já unida não anuncia nada — ninguém viu as duas virarem
+// uma, e um anúncio de um ano antigo seria a tela contando o que não aconteceu agora
+test('never announces a confluence the observer did not watch happen', async ({ page }) => {
+  test.slow()
+  await pairAtYearFive(page)
+  await page.getByRole('button', { name: 'Focus on worldline A' }).click()
+  await pickHistory(page, 'B')
+  await expect(confirm(page)).toBeEnabled()
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toHaveText('B flowed into A.')
+  for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(page.getByTestId('year')).toHaveText('0007')
+  await expect(notice(page)).toBeVisible()
+  await expect(page).toHaveURL(/#\/m\//)
+
+  const link = page.url()
+  await page.goto('about:blank')
+  await page.goto(link)
+
+  await expect(page.getByTestId('year')).toHaveText('0007')
+  // FEAT: a sobrevivente é a que o foco pega ao abrir, e é nela que o anúncio se calaria mal
+  await expect(page.getByRole('button', { name: 'Focus on worldline A' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: 'Focus on worldline B' })).toContainText(
+    'Flowed into A in 0005',
+  )
+  await expect(notice(page)).toHaveCount(0)
 })

@@ -348,6 +348,61 @@
   }
 }
 
+/* FEAT: duas histórias virando uma ocupa a faixa inteira, como a que trocou de mundo ocupa */
+.notices > .confluence {
+  justify-self: stretch;
+}
+
+.confluence {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-6);
+  border: 1px solid var(--v-economy);
+  border-inline-start-width: 5px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(rgb(201 174 255 / 0.12), rgb(201 174 255 / 0.12)), rgb(10 11 30 / 0.86);
+  color: var(--starlight);
+  animation: inheritance-arrive var(--motion-slow) var(--ease);
+}
+
+.confluence__when {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  color: var(--v-economy);
+  font-size: var(--text-sm);
+  font-stretch: 87%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.confluence__mark {
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.confluence__joined {
+  font-size: clamp(1.25rem, 2.6vw, 1.75rem);
+  font-weight: 700;
+  font-stretch: 112%;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* FEAT: a frase que fecha a confluência lê-se como a da herança, e é ela que diz que não houve fim */
+.confluence__kept {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confluence {
+    animation: none;
+  }
+}
+
 /* FEAT: no celular a barra é só o ano e o que se toca enquanto se observa; o resto é uma linha atrás do ⋯ */
 @media (max-width: 900px) {
   .topbar {
@@ -1296,7 +1351,7 @@ button.causal__node:hover {
 .merge__row,
 .merge__ends,
 .merge__footer,
-.merge__status {
+.merge__after {
   flex: none;
 }
 
@@ -1406,11 +1461,28 @@ button.causal__node:hover {
   font-weight: 600;
 }
 
-.merge__status {
+/* FEAT: o que a costura já é e o que ela ainda vai ser leem-se juntos, na mesma região viva */
+.merge__after {
+  display: grid;
+  gap: var(--space-1);
   max-width: 48ch;
-  margin: var(--space-3) 0 0;
+  margin-top: var(--space-3);
+}
+
+.merge__after:empty {
+  display: none;
+}
+
+.merge__status,
+.merge__turns {
+  margin: 0;
   color: var(--dim);
   font-size: var(--text-sm);
+}
+
+.merge__status {
+  color: var(--starlight);
+  font-weight: 600;
 }
 
 /* FEAT: o zoom mora em cima da ponta esquerda do minimapa, porque os dois mandam na mesma janela de tempo */

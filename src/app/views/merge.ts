@@ -1,6 +1,8 @@
 import { totalOwed } from '../../engine/debt.ts'
+import type { Cause, EventRecord } from '../../engine/events.ts'
+import type { Merge } from '../../engine/merge.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
-import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
+import type { Snapshot, WorldlineId, WorldlineInfo } from '../../worker/protocol.ts'
 import type { MessageKey } from '../i18n/en.ts'
 import { formatYear } from '../i18n/format.ts'
 import type { Params } from '../i18n/index.ts'
@@ -120,4 +122,65 @@ export interface HomeChange {
 export function homeChange(now: number, incoming: number, seamed: number): HomeChange | null {
   if (now === incoming) return null
   return { body: seamed, left: seamed === now ? incoming : now }
+}
+
+type MergeCause = Extract<Cause, { readonly kind: 'merge' }>
+
+// FEAT: a costura entra dentro do ano, e o registro que o motor grava nesse ano é o único sinal de
+// que ela deixou de estar pendente — nada antes dele significa duas histórias já unidas
+export function lastConfluence(events: readonly EventRecord[]): EventRecord | null {
+  let last: EventRecord | null = null
+  for (const record of events) {
+    if (record.event !== 'merge') continue
+    if (last === null || record.start > last.start) last = record
+  }
+  return last
+}
+
+export interface ConfluenceView {
+  readonly year: number
+  readonly other: string
+  readonly survivor: WorldlineId
+  readonly people: number
+}
+
+// FEAT: o nome da outra história sai da causa que o motor gravou junto com o registro, não de um
+// palpite da tela sobre quem estava costurável naquele ano
+export function confluenceView(
+  record: EventRecord,
+  survivor: WorldlineId,
+  people: number,
+): ConfluenceView | null {
+  const cause = record.causes.find((entry): entry is MergeCause => entry.kind === 'merge')
+  if (cause === undefined) return null
+  return { year: record.start, other: cause.other, survivor, people }
+}
+
+export interface SeamedWorld {
+  readonly info: WorldlineInfo
+  readonly merges: readonly Merge[]
+}
+
+export interface SeamedRemoval {
+  readonly gone: string
+  readonly keeper: WorldlineId
+}
+
+// FEAT: a mesma recusa do hospedeiro, para a tira dizê-la nas duas línguas em vez de deixar o erro
+// cru aparecer: uma costura nomeia as duas histórias, e remover a nomeada a deixaria órfã
+export function seamedRemoval(
+  worlds: readonly SeamedWorld[],
+  id: WorldlineId,
+): SeamedRemoval | null {
+  const doomed = new Set<string>([id])
+  for (const world of worlds) {
+    const { parent } = world.info
+    if (parent !== null && doomed.has(parent)) doomed.add(world.info.id)
+  }
+  for (const world of worlds) {
+    if (doomed.has(world.info.id)) continue
+    const seam = world.merges.find((merge) => doomed.has(merge.other))
+    if (seam) return { gone: seam.other, keeper: world.info.id }
+  }
+  return null
 }

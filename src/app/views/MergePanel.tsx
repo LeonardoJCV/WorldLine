@@ -10,6 +10,8 @@ import { homeChange, mergeBlock, mergePartners, seamView } from './merge.ts'
 interface Done {
   readonly survivor: WorldlineId
   readonly other: WorldlineId
+  // FEAT: o ano em que a costura foi escrita, para a promessa sair da tela quando ele virar
+  readonly year: number
 }
 
 const CONFIRMATION = 6000
@@ -40,6 +42,9 @@ export function MergePanel() {
     const timer = setTimeout(() => setDone(null), CONFIRMATION)
     return () => clearTimeout(timer)
   }, [done])
+
+  // FIX: virado o ano, quem fala da união é o anúncio; dizer aqui que ela ainda espera seria falso
+  const written = done !== null && now <= done.year ? done : null
 
   // FIX: a prévia só vale para o ano em que a costura acontece, que é o presente do hospedeiro
   const seamed = preview !== null && preview.seamed.tick === now ? preview : null
@@ -83,7 +88,7 @@ export function MergePanel() {
     merge(other).then(
       () => {
         setPending(false)
-        setDone({ survivor: focus, other })
+        setDone({ survivor: focus, other, year: now })
       },
       () => setPending(false),
     )
@@ -178,9 +183,17 @@ export function MergePanel() {
           </button>
         </div>
       </div>
-      <p className="merge__status" role="status">
-        {done === null ? '' : t('merge.done', { survivor: done.survivor, other: done.other })}
-      </p>
+      <div className="merge__after" role="status">
+        {written !== null && (
+          <>
+            <p className="merge__status">
+              {t('merge.done', { survivor: written.survivor, other: written.other })}
+            </p>
+            {/* FEAT: o motor aplica a costura dentro do ano seguinte, e até lá nada na tela muda */}
+            <p className="merge__turns">{t('merge.turns')}</p>
+          </>
+        )}
+      </div>
     </section>
   )
 }

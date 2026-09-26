@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { totalOwed, type Debt } from '../../engine/debt.ts'
+import type { EventRecord } from '../../engine/events.ts'
+import type { Merge } from '../../engine/merge.ts'
 import type { Status, Variable } from '../../engine/state.ts'
 import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
-import { homeChange, mergeBlock, mergePartners, seamView, type MergeBlockInput } from './merge.ts'
+import {
+  confluenceView,
+  homeChange,
+  lastConfluence,
+  mergeBlock,
+  mergePartners,
+  seamView,
+  seamedRemoval,
+  type MergeBlockInput,
+  type SeamedWorld,
+} from './merge.ts'
 
 function snapshot(
   values: Partial<Record<Variable, number>> = {},
@@ -255,5 +267,84 @@ describe('homeChange', () => {
   it('reads the surviving home from the seam, not from which side asked for it', () => {
     expect(homeChange(0, 3, 0)).toEqual({ body: 0, left: 3 })
     expect(homeChange(0, 3, 3)).toEqual({ body: 3, left: 0 })
+  })
+})
+
+function record(event: EventRecord['event'], start: number, other: string | null): EventRecord {
+  return {
+    event,
+    start,
+    end: null,
+    causes: other === null ? [] : [{ kind: 'merge', tick: start, other }],
+  }
+}
+
+describe('lastConfluence', () => {
+  it('finds nothing in a history that never took one', () => {
+    expect(lastConfluence([])).toBeNull()
+    expect(lastConfluence([record('famine', 100, null)])).toBeNull()
+  })
+
+  // FIX: o deságue é o registro da OUTRA ponta; anunciar por ele diria que esta história se uniu
+  it('ignores the record of a history that flowed away', () => {
+    expect(lastConfluence([record('merged_away', 100, 'B')])).toBeNull()
+  })
+
+  it('keeps the latest of several confluences', () => {
+    const events = [record('merge', 100, 'B'), record('merge', 400, 'C'), record('merge', 200, 'D')]
+    expect(lastConfluence(events)?.start).toBe(400)
+  })
+})
+
+describe('confluenceView', () => {
+  it('reads the year, the other history and the people from the record and the state', () => {
+    expect(confluenceView(record('merge', 1450, 'C'), 'A', 2_500_000)).toEqual({
+      year: 1450,
+      other: 'C',
+      survivor: 'A',
+      people: 2_500_000,
+    })
+  })
+
+  // FIX: sem a causa não há nome para dizer, e meia frase é pior que silêncio
+  it('says nothing about a record that names no other history', () => {
+    expect(confluenceView(record('merge', 1450, null), 'A', 10)).toBeNull()
+  })
+})
+
+describe('seamedRemoval', () => {
+  const seam = (other: string): Merge => ({
+    tick: 2000,
+    self: 'A',
+    other,
+    direction: 'in',
+    natal: 3,
+  })
+  const line = (
+    id: WorldlineId,
+    parent: WorldlineId | null,
+    merges: readonly Merge[] = [],
+  ): SeamedWorld => ({ info: { id, parent, fork: 0, generation: parent === null ? 0 : 1 }, merges })
+
+  it('lets go of a history no confluence ever named', () => {
+    expect(seamedRemoval([line('A', null), line('B', 'A')], 'B')).toBeNull()
+  })
+
+  it('names the history that carries the one being removed', () => {
+    expect(seamedRemoval([line('A', null, [seam('B')]), line('B', 'A')], 'B')).toEqual({
+      gone: 'B',
+      keeper: 'A',
+    })
+  })
+
+  // FIX: remover leva as filhas junto, e uma filha pode ser a que outra história absorveu
+  it('refuses when the confluence named a descendant of the one being removed', () => {
+    const worlds = [line('A', null, [seam('C')]), line('B', 'A'), line('C', 'B')]
+    expect(seamedRemoval(worlds, 'B')).toEqual({ gone: 'C', keeper: 'A' })
+  })
+
+  // FEAT: a costura que a própria condenada carrega morre com ela, e não impede nada
+  it('ignores a seam written inside the history that is going away', () => {
+    expect(seamedRemoval([line('A', null), line('B', 'A', [seam('A')])], 'B')).toBeNull()
   })
 })

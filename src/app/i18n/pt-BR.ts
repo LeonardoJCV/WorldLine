@@ -80,6 +80,9 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'inheritance.year': 'Ano {year}',
   'inheritance.moved': 'A história se mudou para {body}. {people} sobreviveram ao fim de {home}.',
   'inheritance.kept': 'O que o mundo sabia não se perdeu.',
+  'confluence.year': 'Ano {year}',
+  'confluence.joined': '{other} desaguou em {survivor}. {people} seguem vivendo juntas.',
+  'confluence.kept': 'Duas histórias, uma daqui em diante.',
   'paradox.debt': 'Esta história não se sustenta mais: depende de mais do que jamais produziu.',
   'paradox.leap':
     'Esta história não se sustenta mais: recebeu o que sua época ainda não podia conter.',
@@ -336,6 +339,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'merge.ends': 'As duas histórias terminam aqui. {survivor} continua.',
   'merge.confirm': 'Confluir',
   'merge.done': '{other} desaguou em {survivor}.',
+  'merge.turns': 'A costura está escrita; ela passa a valer quando o ano virar.',
   'merge.none': 'Nenhuma outra história viva para confluir',
   'merge.ended': 'Esta história terminou; nada mais deságua nela',
   'merge.once': '{id} já recebeu uma confluência em {year}, e uma história recebe uma por ano',

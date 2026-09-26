@@ -208,6 +208,41 @@ test('merge panel', async ({ page }) => {
   await page.screenshot({ path: 'screens/merge-panel.png' })
 })
 
+// FEAT: aceita a costura e deixa o ano virar, que é quando o motor une as duas de verdade
+async function sewAndTurn(page: Page, width: number, height: number) {
+  await enterMerge(page, width, height)
+  await page.locator('button.merge__confirm').scrollIntoViewIfNeeded()
+  await page.locator('button.merge__confirm').click()
+  await expect(page.locator('.merge__status')).toContainText('flowed into')
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(page.locator('.confluence')).toBeVisible()
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBe(0)
+  await page.waitForTimeout(300)
+}
+
+test('confluence notice', async ({ page }) => {
+  await sewAndTurn(page, 1440, 900)
+  await expect(page.locator('.confluence')).toBeInViewport()
+  await page.screenshot({ path: 'screens/confluence-notice.png' })
+})
+
+test('merge mobile', async ({ page }) => {
+  await sewAndTurn(page, 390, 844)
+  await expect(page.locator('.confluence')).toBeInViewport()
+  await page.screenshot({ path: 'screens/merge-mobile.png' })
+})
+
+test('merge strip', async ({ page }) => {
+  await sewAndTurn(page, 1440, 900)
+  const strip = page.locator('.worlds')
+  await strip.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(300)
+  await strip.screenshot({ path: 'screens/merge-strip.png' })
+})
+
 test('cross panel', async ({ page }) => {
   await enterCross(page, 1440, 900)
   await page.screenshot({ path: 'screens/cross-panel.png' })
