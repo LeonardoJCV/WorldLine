@@ -9,8 +9,16 @@ import {
   type CrossingKind,
   type Dose,
 } from '../engine/crossing.ts'
-import { bearsDebt, circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
+import { bearsDebt, circularParadox, debtRatio, totalOwed, type Debt } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
+import { worldMetrics } from '../engine/events.ts'
+import {
+  mergeStates,
+  mergeWeights,
+  settleDebts,
+  validateMerge,
+  type Merge,
+} from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
   VARIABLES,
@@ -20,6 +28,7 @@ import {
   type Variable,
   type WorldState,
 } from '../engine/state.ts'
+import { system } from '../engine/system.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
   MAX_WORLDLINES,
@@ -29,6 +38,7 @@ import {
   type EndReason,
   type EventUpdate,
   type FromWorker,
+  type MergeSpec,
   type Snapshot,
   type Speed,
   type ToWorker,
@@ -85,6 +95,7 @@ export class SimulationHost {
             message.root,
             message.branches,
             message.crossings ?? [],
+            message.merges ?? [],
           )
           break
         case 'play':
@@ -120,6 +131,12 @@ export class SimulationHost {
             message.kind,
             message.dose,
           )
+          break
+        case 'merge':
+          this.#merge(message.requestId, message.survivor, message.other)
+          break
+        case 'mergePreview':
+          this.#mergePreview(message.requestId, message.survivor, message.other)
           break
         case 'remove':
           this.#remove(message.world)
@@ -192,11 +209,14 @@ export class SimulationHost {
     }
     const inherited = parent.worldline.decisions.filter((decision) => decision.tick < fork)
     const crossed = parent.worldline.crossings.filter((crossing) => crossing.tick < fork)
+    // FIX: uma costura antes da bifurcação é passado da filha; sem ela a filha não seria a mãe nesse ano
+    const seamed = parent.worldline.merges.filter((seam) => seam.tick < fork)
     const line = new Worldline(
       seed,
       [...inherited, ...own],
       { parent: parent.worldline, tick: fork },
       [...crossed, ...ownCrossings],
+      seamed,
     )
     line.advance(target)
     return line
@@ -221,30 +241,129 @@ export class SimulationHost {
     return this.#now - before
   }
 
+  // FEAT: cada bloco do link traz as costuras da própria história; aqui elas voltam a ser uma fila só
+  #queue(
+    tick: number,
+    merges: readonly MergeSpec[],
+    branches: readonly BranchSpec[],
+    born: readonly number[],
+  ): readonly MergeSpec[] {
+    const blocks = [
+      { since: 0, seams: merges },
+      ...branches.map((branch, index) => ({ since: born[index] ?? 0, seams: branch.merges ?? [] })),
+    ]
+    const queue: MergeSpec[] = []
+    for (const block of blocks) {
+      for (const seam of block.seams) {
+        if (!Number.isInteger(seam.tick) || seam.tick < 0 || seam.tick > tick) {
+          throw new RangeError(`a confluence in year ${seam.tick} is outside the shared history`)
+        }
+        // FIX: uma filha adiada não viveu os anos entre o fork e o nascimento dela, e a outra ponta
+        // da costura já passou desse ano; as duas têm de se encontrar no mesmo, então isso não existe
+        if (seam.tick < block.since) {
+          throw new RangeError(
+            `worldline ${seam.self} only exists from year ${block.since}, so it never had a confluence in year ${seam.tick}`,
+          )
+        }
+        queue.push(seam)
+      }
+    }
+    return queue
+  }
+
+  // FEAT: uma filha pode sair de um ano ANTERIOR ao da própria mãe, porque antes do fork da mãe a
+  // história dela é a da avó; então a filha nasce no ano da mãe, e a mãe nunca nasce depois da filha
+  #born(branches: readonly BranchSpec[]): readonly number[] {
+    const born: number[] = []
+    for (const spec of branches) {
+      if (spec.parent === 0) {
+        born.push(spec.fork)
+        continue
+      }
+      const mother = born[spec.parent - 1]
+      if (mother === undefined) throw new RangeError('unknown parent worldline')
+      born.push(Math.max(spec.fork, mother))
+    }
+    return born
+  }
+
+  // FEAT: leva ao ano pedido quem ainda corre; quem terminou fica no ano em que parou
+  #reach(slots: readonly (Entry | undefined)[], year: number): void {
+    for (const slot of slots) {
+      const line = slot?.worldline
+      if (line && !line.ended && line.present.tick < year) line.advance(year - line.present.tick)
+    }
+  }
+
+  #named(slots: readonly (Entry | undefined)[], name: string, role: string): Entry {
+    const entry = slots.find((slot) => slot?.info.id === name)
+    if (!entry) throw new RangeError(`unknown ${role} worldline ${name}`)
+    return entry
+  }
+
   // FIX: só troca o estado após validar todo o multiverso
+  // FEAT: bifurcar e costurar se intercalam, então a reconstrução caminha ano a ano: uma filha que
+  // sai depois de uma costura tem de crescer de uma mãe já costurada, senão nasce discordando dela
   #open(
     seed: number,
     tick: number,
     root: readonly Decision[],
     branches: readonly BranchSpec[],
     crossings: readonly Crossing[],
+    merges: readonly MergeSpec[],
   ): void {
     this.#stop()
     if (branches.length >= MAX_WORLDLINES) throw new RangeError('worldline limit reached')
-    const origin = new Worldline(seed, root, null, crossings)
-    origin.advance(tick)
-    let generation = this.#generation
-    const entries: Entry[] = [this.#make(++generation, 'A', null, 0, origin)]
-    for (const spec of branches) {
-      const parent = entries[spec.parent]
-      if (!parent) throw new RangeError('unknown parent worldline')
-      const line = this.#grow(seed, parent, spec.fork, spec.decisions, tick, spec.crossings ?? [])
-      const id = this.#freeId(entries)
-      entries.push(this.#make(++generation, id, parent.info.id, spec.fork, line))
+    const base = this.#generation
+    const slots: (Entry | undefined)[] = [
+      this.#make(base + 1, 'A', null, 0, new Worldline(seed, root, null, crossings)),
+      ...branches.map(() => undefined),
+    ]
+    const born = this.#born(branches)
+    const queue = this.#queue(tick, merges, branches, born)
+    // FEAT: o recibo do lado que deságua é o que prova que aquela história não volta viva
+    const away = new Set(
+      queue
+        .filter((seam) => seam.direction === 'out')
+        .map((seam) => `${seam.tick}:${seam.self}:${seam.other}`),
+    )
+    const years = [...new Set([...born, ...queue.map((seam) => seam.tick)])].sort((a, b) => a - b)
+    for (const year of years) {
+      // FIX: um fork além do ano do link não adianta o multiverso; quem o recusa é `#grow`
+      this.#reach(slots, Math.min(year, tick))
+      branches.forEach((spec, index) => {
+        if (born[index] !== year) return
+        const parent = slots[spec.parent]
+        if (!parent) throw new RangeError('unknown parent worldline')
+        const id = WORLDLINE_IDS[index + 1]
+        if (!id) throw new RangeError('worldline limit reached')
+        const own = spec.crossings ?? []
+        // FIX: uma filha adiada nasce no ano da mãe, e tem de alcançá-lo, ou a costura dela naquele
+        // mesmo ano cairia numa história parada no ano do fork, que é anterior ao de todo mundo
+        const line = this.#grow(seed, parent, spec.fork, spec.decisions, year, own)
+        slots[index + 1] = this.#make(base + 2 + index, id, parent.info.id, spec.fork, line)
+      })
+      for (const seam of queue) {
+        if (seam.tick !== year || seam.direction !== 'in') continue
+        if (!away.delete(`${year}:${seam.other}:${seam.self}`)) {
+          throw new RangeError(`worldline ${seam.other} has no record of flowing into ${seam.self}`)
+        }
+        const survivor = this.#named(slots, seam.self, 'surviving')
+        this.#seam(survivor, this.#named(slots, seam.other, 'departing'), year, seed)
+      }
+    }
+    if (away.size > 0) {
+      throw new RangeError('a confluence flows into a history that never received it')
+    }
+    this.#reach(slots, tick)
+    const entries: Entry[] = []
+    for (const slot of slots) {
+      if (!slot) throw new RangeError('fork outside the parent history')
+      entries.push(slot)
     }
     this.#seed = seed
     this.#entries = entries
-    this.#generation = generation
+    this.#generation = base + entries.length
     this.#now = this.#latest()
     this.#report()
   }
@@ -327,8 +446,15 @@ export class SimulationHost {
   #living(entry: Entry, role: string): void {
     if (entry.worldline.ended) {
       const status = entry.worldline.present.status
+      // FIX: uma história que desaguou em outra não está no horizonte; diz o que houve com ela
       const state =
-        status === 'extinct' ? 'extinct' : status === 'collapsed' ? 'collapsed' : 'past the horizon'
+        status === 'extinct'
+          ? 'extinct'
+          : status === 'collapsed'
+            ? 'collapsed'
+            : status === 'merged'
+              ? 'already merged into another history'
+              : 'past the horizon'
       throw new RangeError(`the ${role} worldline ${entry.info.id} is ${state}`)
     }
   }
@@ -500,12 +626,155 @@ export class SimulationHost {
     this.#send({ type: 'branched', requestId, world: id })
   }
 
+  // FEAT: o corpo natal vem da semente, que é do hospedeiro; a engine nunca resolve o outro lado
+  #natal(seed: number): number {
+    const home = system(seed).find((body) => body.home)
+    if (!home) throw new Error(`world ${seed} has no home body`)
+    return home.index
+  }
+
+  // FEAT: confere as duas pontas antes de gravar qualquer uma, porque meia costura não tem volta
+  #ensureSeamable(entry: Entry, seam: Merge, role: string): void {
+    const line = entry.worldline
+    this.#living(entry, role)
+    // FEAT: precaução, não comportamento provado — toda worldline viva está no ano de `#now` hoje
+    if (seam.tick !== line.present.tick) {
+      throw new RangeError(
+        `confluence for year ${seam.tick} applied to the ${role} worldline ${entry.info.id} at year ${line.present.tick}`,
+      )
+    }
+    const last = line.merges.at(-1)
+    if (last && last.tick >= seam.tick) {
+      throw new RangeError(
+        `worldline ${entry.info.id} already carries a confluence in year ${seam.tick}`,
+      )
+    }
+    validateMerge(seam)
+  }
+
+  // FEAT: o mesmo par 'in'/'out' alimenta a costura real e a prévia, para as duas nunca discordarem
+  // FEAT: o conteúdo do recibo sai do presente da outra história, e é a única montagem que existe
+  #seamPair(
+    survivor: Entry,
+    other: Entry,
+    tick: number,
+    seed: number,
+  ): { readonly arrival: Merge; readonly departure: Merge } {
+    const leaving = other.worldline.present
+    const natal = this.#natal(seed)
+    const arrival: Merge = {
+      tick,
+      self: survivor.info.id,
+      other: other.info.id,
+      direction: 'in',
+      natal,
+      values: toSnapshot(leaving).values,
+      debts: leaving.debts,
+      echoes: leaving.echoes,
+      paradox: leaving.paradox,
+      strain: leaving.strain,
+      colonies: leaving.colonies,
+      home: leaving.home,
+    }
+    const departure: Merge = {
+      tick,
+      self: other.info.id,
+      other: survivor.info.id,
+      direction: 'out',
+      natal,
+    }
+    return { arrival, departure }
+  }
+
+  // FEAT: duas histórias viram uma: a sobrevivente recebe os números da outra, e a outra deságua
+  #seam(survivor: Entry, other: Entry, tick: number, seed: number): void {
+    const { arrival, departure } = this.#seamPair(survivor, other, tick, seed)
+    this.#ensureSeamable(survivor, arrival, 'surviving')
+    this.#ensureSeamable(other, departure, 'departing')
+    survivor.worldline.merge(arrival)
+    other.worldline.merge(departure)
+    // FEAT: o deságue é imediato e não vive o ano da costura, como uma extinção para onde parou
+    other.worldline.advance(1)
+  }
+
+  #merge(requestId: number, survivorId: WorldlineId, otherId: WorldlineId): void {
+    const survivor = this.#entry(survivorId)
+    const other = this.#entry(otherId)
+    if (survivorId === otherId) {
+      throw new RangeError('the surviving and the departing worldline are the same')
+    }
+    this.#seam(survivor, other, this.#now, this.#seed)
+    this.#report()
+    this.#send({ type: 'merged', requestId, world: survivorId })
+  }
+
+  // FEAT: a tela nunca calcula uma costura; aqui ela roda especulativamente, sobre uma cópia, e
+  // nunca pela Worldline — nada se grava, e por isso nenhum 'progress' novo sai desta consulta
+  // FIX: a prévia recusa exatamente o que a costura real recusaria, com a mesma `#ensureSeamable`
+  #mergePreview(requestId: number, survivorId: WorldlineId, otherId: WorldlineId): void {
+    const survivor = this.#entry(survivorId)
+    const other = this.#entry(otherId)
+    if (survivorId === otherId) {
+      throw new RangeError('the surviving and the departing worldline are the same')
+    }
+    const { arrival, departure } = this.#seamPair(survivor, other, this.#now, this.#seed)
+    this.#ensureSeamable(survivor, arrival, 'surviving')
+    this.#ensureSeamable(other, departure, 'departing')
+    const present = survivor.worldline.present
+    const seamed = mergeStates(present, arrival)
+    // FIX: o abalo é lido aqui, onde a constante do motor mora de direito — a tela nunca a vê
+    const weights = mergeWeights(present.population, arrival.values?.population ?? 0)
+    const predicted = present.stability * weights.a + (arrival.values?.stability ?? 0) * weights.b
+    const shock = predicted - seamed.stability
+    // FIX: o celeiro soma e a colheita não, então o custo maior da costura é a comida por pessoa —
+    // o motor a lê nos dois estados com a mesma função que os acontecimentos consultam
+    const world = survivor.worldline.world
+    const food = {
+      now: worldMetrics(present, world).foodSecurity,
+      next: worldMetrics(seamed, world).foodSecurity,
+    }
+    // FIX: a dívida interna se anula pela regra do motor, chamada aqui: um livro-razão vazio do lado
+    // da anfitriã deixa `settleDebts` render exatamente o que da outra sobrevive à costura
+    const between: readonly [string, string] = [arrival.self, arrival.other]
+    const debtIn = totalOwed(settleDebts([], arrival.debts ?? [], between))
+    const debtSettled =
+      totalOwed(present.debts) + totalOwed(arrival.debts ?? []) - totalOwed(seamed.debts)
+    this.#send({
+      type: 'mergePreview',
+      requestId,
+      seamed: this.#snapshot(survivor, seamed),
+      shock,
+      food,
+      debtIn,
+      debtSettled,
+    })
+  }
+
+  // FEAT: uma história que outra absorveu é passado dela agora, e passado não se apaga
+  #seamedTo(
+    doomed: ReadonlySet<string>,
+  ): { readonly gone: string; readonly keeper: string } | null {
+    for (const entry of this.#entries) {
+      if (doomed.has(entry.info.id)) continue
+      const seam = entry.worldline.merges.find((merge) => doomed.has(merge.other))
+      if (seam) return { gone: seam.other, keeper: entry.info.id }
+    }
+    return null
+  }
+
   #remove(id: WorldlineId): void {
     this.#entry(id)
     if (id === 'A') throw new RangeError('the original worldline cannot be removed')
-    const doomed = new Set<WorldlineId>([id])
+    const doomed = new Set<string>([id])
     for (const entry of this.#entries) {
       if (entry.info.parent !== null && doomed.has(entry.info.parent)) doomed.add(entry.info.id)
+    }
+    // FIX: sem a história nomeada a costura fica órfã, e a letra dela seria reusada por outra
+    const seamed = this.#seamedTo(doomed)
+    if (seamed) {
+      throw new RangeError(
+        `worldline ${seamed.gone} flowed together with worldline ${seamed.keeper}; a confluence cannot be undone`,
+      )
     }
     this.#entries = this.#entries.filter((entry) => !doomed.has(entry.info.id))
     this.#now = this.#latest()
@@ -651,6 +920,7 @@ export class SimulationHost {
         origin: { ...c.origin },
         ...(c.allocation ? { allocation: { ...c.allocation } } : {}),
       })),
+      merges: worldline.merges,
       debts: worldline.present.debts,
       paradox: worldline.present.paradox,
       colonies: worldline.present.colonies,
@@ -662,11 +932,14 @@ export class SimulationHost {
     let ended: EndReason | null = null
     if (this.#allEnded()) {
       // FEAT: colapso é motivo próprio de fim — não é o mesmo destino que a extinção
+      // FEAT: e a confluência explica por que sobraram menos histórias, antes de como a última caiu
       ended = this.#entries.some((entry) => entry.worldline.present.status === 'running')
         ? 'horizon'
-        : this.#entries.some((entry) => entry.worldline.present.status === 'collapsed')
-          ? 'collapse'
-          : 'extinction'
+        : this.#entries.some((entry) => entry.worldline.present.status === 'merged')
+          ? 'merge'
+          : this.#entries.some((entry) => entry.worldline.present.status === 'collapsed')
+            ? 'collapse'
+            : 'extinction'
     }
     this.#send({
       type: 'progress',

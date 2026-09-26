@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { HORIZON } from '../../engine/params.ts'
+import type { FromWorker, SeamPreview, Snapshot, ToWorker } from '../../worker/protocol.ts'
 import { currentLink } from '../world/current.ts'
-import { SimulationClient } from './client.ts'
+import { SimulationClient, type Port } from './client.ts'
 import { createSimulationStore } from './store.ts'
 import { connectInProcess, flush } from './testing.ts'
 
@@ -9,6 +10,75 @@ function setup() {
   const { port, clock } = connectInProcess()
   const store = createSimulationStore(new SimulationClient(port))
   return { store, clock }
+}
+
+// FEAT: um posto que grava tudo que sai, e ainda repassa ao hospedeiro de verdade por trás
+function recordingPort(): { readonly port: Port; readonly sent: ToWorker[] } {
+  const { port } = connectInProcess()
+  const sent: ToWorker[] = []
+  return {
+    sent,
+    port: {
+      send: (message) => {
+        sent.push(message)
+        port.send(message)
+      },
+      listen: (next, failure) => port.listen(next, failure),
+    },
+  }
+}
+
+// FEAT: um posto de mentira, para controlar a ORDEM em que as respostas chegam de volta
+function fakePort(): {
+  readonly port: Port
+  readonly sent: ToWorker[]
+  readonly deliver: (message: FromWorker) => void
+} {
+  const sent: ToWorker[] = []
+  let handler: ((message: FromWorker) => void) | null = null
+  return {
+    sent,
+    deliver: (message) => handler?.(message),
+    port: {
+      send: (message) => sent.push(message),
+      listen: (next) => {
+        handler = next
+      },
+    },
+  }
+}
+
+function fakeSnapshot(shock: number): Snapshot {
+  return {
+    tick: 2000,
+    values: {
+      population: shock,
+      food: 1,
+      energy: 1,
+      technology: 1,
+      economy: 1,
+      environment: 1,
+      stability: 1,
+    },
+    previous: null,
+    eras: 0,
+    active: [],
+    allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 },
+    status: 'running',
+    home: null,
+    debts: [],
+  }
+}
+
+// FEAT: a prévia inteira, para os testes de despacho olharem só o abalo que a distingue
+function fakePreview(shock: number, tick = 2000): SeamPreview {
+  return {
+    seamed: { ...fakeSnapshot(shock), tick },
+    shock,
+    food: { now: 1.2, next: 0.8 },
+    debtIn: 0,
+    debtSettled: 0,
+  }
 }
 
 describe('simulation store', () => {
@@ -528,5 +598,207 @@ describe('simulation store', () => {
     expect(reopened.getState().worlds.map((world) => world.crossings)).toEqual(
       store.getState().worlds.map((world) => world.crossings),
     )
+  })
+
+  // FIX: a sobrevivente é sempre quem está em foco; trocar os dois argumentos pediria a costura ao contrário
+  it('asks the host to preview the focus as survivor and the given world as departing', async () => {
+    const { port, sent } = recordingPort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    await flush()
+    await flush()
+    expect(store.getState().focus).toBe('B')
+    store.getState().setFocus('A')
+
+    store.getState().previewMerge('B')
+    await flush()
+
+    const message = sent.find((m) => m.type === 'mergePreview')
+    expect(message).toMatchObject({ type: 'mergePreview', survivor: 'A', other: 'B' })
+    expect(store.getState().mergePreview?.seamed.status).toBe('running')
+    expect(typeof store.getState().mergePreview?.shock).toBe('number')
+  })
+
+  // FIX: 'now' já é o guard que setCursor usa; a prévia precisa do mesmo, e também de 'other'
+  it('keeps only the most recently requested preview when replies land out of order', async () => {
+    const { port, sent, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+
+    store.getState().previewMerge('B')
+    store.getState().previewMerge('C')
+
+    const requests = sent.filter((m) => m.type === 'mergePreview')
+    expect(requests).toMatchObject([
+      { other: 'B', requestId: requests[0]?.requestId },
+      { other: 'C', requestId: requests[1]?.requestId },
+    ])
+    const [first, second] = requests
+    if (!first || !second) throw new Error('expected two requests')
+
+    // FEAT: a resposta do pedido mais ANTIGO chega DEPOIS — se vencer, a tela mostraria o par errado
+    deliver({ type: 'mergePreview', requestId: second.requestId, ...fakePreview(2) })
+    deliver({ type: 'mergePreview', requestId: first.requestId, ...fakePreview(1) })
+    await flush()
+    await flush()
+
+    expect(store.getState().mergePreview?.shock).toBe(2)
+  })
+
+  it('drops a preview reply once the focus has moved on from the request that asked it', async () => {
+    const { port, sent, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+
+    store.getState().previewMerge('B')
+    const [request] = sent.filter((m) => m.type === 'mergePreview')
+    if (!request) throw new Error('expected a request')
+    store.setState({ focus: 'C' })
+
+    deliver({ type: 'mergePreview', requestId: request.requestId, ...fakePreview(9) })
+    await flush()
+
+    expect(store.getState().mergePreview).toBeNull()
+  })
+
+  // FEAT: a prévia é o instante da costura, e o motor aplica esse instante DENTRO do ano seguinte:
+  // quem confirma vê a união só quando o ano vira, já com o ano vivido por cima dela
+  it('leaves the seam pending on the survivor and applies it in the year that follows', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    await flush()
+    await flush()
+    store.getState().setFocus('A')
+    store.getState().previewMerge('B')
+    await flush()
+    const preview = store.getState().mergePreview
+    if (!preview) throw new Error('no preview')
+    const before = store.getState().present?.values
+    const other = store.getState().worlds.find((world) => world.info.id === 'B')?.present.values
+    if (!before || !other) throw new Error('no pair')
+    // FIX: comida sempre soma na costura, e é por ela que se vê que a prévia leu as duas pontas
+    expect(preview.seamed.values.food).toBeCloseTo(before.food + other.food)
+
+    await store.getState().merge('B')
+    await flush()
+
+    expect(store.getState().present?.values).toEqual(before)
+    expect(store.getState().worlds.find((world) => world.info.id === 'A')?.present.status).toBe(
+      'running',
+    )
+    expect(store.getState().worlds.find((world) => world.info.id === 'B')?.present.status).toBe(
+      'merged',
+    )
+
+    store.getState().step(1)
+    await flush()
+
+    // FEAT: 1,8x separa a união (1,92x) de um ano de crescimento sozinho (1,006x)
+    expect(store.getState().present?.values.population).toBeGreaterThan(
+      1.8 * Math.max(before.population, other.population),
+    )
+    expect(store.getState().present?.home).toBe(preview.seamed.home)
+  })
+
+  it('drops the preview and the choice once the seam it promised is sewn', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    await flush()
+    await flush()
+    store.getState().setFocus('A')
+    store.getState().setMode('merge')
+    store.getState().setMergeOther('B')
+    store.getState().previewMerge('B')
+    await flush()
+    expect(store.getState().mergePreview).not.toBeNull()
+
+    await store.getState().merge('B')
+    await flush()
+
+    expect(store.getState().mergeOther).toBeNull()
+    expect(store.getState().mergePreview).toBeNull()
+  })
+
+  // FIX: com os anos correndo nenhuma prévia nova se pede (o painel só pede com o tempo parado),
+  // então sem esta limpeza a costura do ano passado ficaria guardada como se fosse a de agora
+  it('forgets the preview as soon as the year turns', async () => {
+    const { port, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.setState({ mergePreview: fakePreview(7), now: 2000 })
+
+    deliver({ type: 'progress', now: 2000, credit: 0, playing: false, ended: null, worlds: [] })
+    await flush()
+    // FEAT: o mesmo ano relatado outra vez não apaga nada
+    expect(store.getState().mergePreview).not.toBeNull()
+
+    deliver({ type: 'progress', now: 2001, credit: 0, playing: true, ended: null, worlds: [] })
+    await flush()
+    expect(store.getState().mergePreview).toBeNull()
+  })
+
+  // FIX: a prévia guardada é sempre do par em tela; trocar de parceira sem apagá-la mostraria a costura errada
+  it('forgets the preview of the previous pair as soon as another is chosen', async () => {
+    const { port, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.setState({ mergePreview: fakePreview(7) })
+
+    store.getState().setMergeOther('C')
+
+    expect(store.getState().mergeOther).toBe('C')
+    expect(store.getState().mergePreview).toBeNull()
+    deliver({ type: 'progress', now: 0, credit: 0, playing: false, ended: null, worlds: [] })
+    await flush()
+  })
+
+  it('forgets a chosen partner that left the multiverse, and one that leaving the mode drops', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    store.getState().setCursor(100)
+    await flush()
+    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    await flush()
+    await flush()
+    store.getState().setFocus('A')
+    store.getState().setMode('merge')
+    store.getState().setMergeOther('B')
+    store.getState().remove('B')
+    await flush()
+    expect(store.getState().mergeOther).toBeNull()
+
+    store.getState().setMergeOther('A')
+    store.getState().setMode('observe')
+    expect(store.getState().mergeOther).toBeNull()
+  })
+
+  // FEAT: duas recusas do hospedeiro que o painel tem de saber antecipar, cada uma com o seu texto:
+  // a costura do ano já gasta, e a história que já desaguou
+  it('refuses a second seam in the same year, and one with a history that already flowed away', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    await flush()
+    await flush()
+    store.getState().setFocus('A')
+    await store.getState().merge('B')
+    await flush()
+
+    await expect(store.getState().merge('B')).rejects.toThrow(/already carries a confluence/)
+    expect(store.getState().error).toMatch(/already carries a confluence/)
+
+    store.getState().step(1)
+    await flush()
+    await expect(store.getState().merge('B')).rejects.toThrow(/already merged/)
+    expect(store.getState().error).toMatch(/already merged/)
   })
 })

@@ -19,11 +19,13 @@ import { useLinkSync } from '../world/useLinkSync.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
 import { BottomSheet, usePhone } from './BottomSheet.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
+import { ConfluenceNotice } from './ConfluenceNotice.tsx'
 import { CrossPanel } from './CrossPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
 import { sheetReserve } from './hud.ts'
 import { useSheet } from './hudStore.ts'
 import { InheritanceNotice } from './InheritanceNotice.tsx'
+import { MergePanel } from './MergePanel.tsx'
 import { PanelCard } from './PanelCard.tsx'
 import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
@@ -110,6 +112,8 @@ export function Observatory({
     <div className="notices" role="status" ref={setNoticeBand}>
       {/* FEAT: a mudança de mundo é o que há de maior para anunciar; fala antes do paradoxo */}
       <InheritanceNotice />
+      {/* FEAT: duas histórias virando uma fala antes do paradoxo, como a mudança de mundo fala */}
+      <ConfluenceNotice />
       <ParadoxNotice />
       {linkVersion !== null && !isCompatibleVersion(linkVersion) && (
         <p>{t('link.version', { version: linkVersion })}</p>
@@ -133,6 +137,11 @@ export function Observatory({
         {mode === 'cross' && (
           <PanelCard id="cross" title={t('cross.title', { id: worldFocus })}>
             <CrossPanel key={remount} />
+          </PanelCard>
+        )}
+        {mode === 'merge' && (
+          <PanelCard id="merge" title={t('mode.merge')}>
+            <MergePanel />
           </PanelCard>
         )}
       </div>

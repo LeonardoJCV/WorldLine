@@ -7,7 +7,12 @@ import {
 } from '../../engine/crossing.ts'
 import { HORIZON, MAX_SEED } from '../../engine/params.ts'
 import { SECTORS, isValidAllocation, type Allocation, type Decision } from '../../engine/state.ts'
-import { MAX_WORLDLINES, WORLDLINE_IDS, type BranchSpec } from '../../worker/protocol.ts'
+import {
+  MAX_WORLDLINES,
+  WORLDLINE_IDS,
+  type BranchSpec,
+  type MergeSpec,
+} from '../../worker/protocol.ts'
 
 export interface WorldLink {
   readonly version: number
@@ -19,6 +24,7 @@ export interface WorldLink {
 
 export interface MultiverseLink extends WorldLink {
   readonly branches: readonly BranchSpec[]
+  readonly merges?: readonly MergeSpec[]
 }
 
 const HEADER = 9
@@ -26,9 +32,13 @@ const DECISION = 6
 const CROSSING = 10
 // FEAT: a parcela vai em dupla precisão, para o mundo reaberto repetir a história byte a byte
 const AMOUNT = 8
+const MERGE = 5
 const MAX_COST = 255
 const MAX_CROSSINGS = 255
+const MAX_MERGES = 255
 const CROSSED_VERSION = 2
+// FEAT: a costura só existe a partir daqui, e um mundo sem costura nunca chega nesta versão
+export const SEAMED_VERSION = 3
 
 function validDecisions(decisions: unknown, from: number): boolean {
   if (!Array.isArray(decisions)) return false
@@ -76,8 +86,42 @@ function validCrossings(crossings: unknown, from: number): boolean {
   return true
 }
 
+// FIX: a engine recusa uma costura fora de ordem com RangeError; aqui isso vira um link inválido
+function validMerges(
+  merges: unknown,
+  from: number,
+  until: number,
+  own: string,
+  carried: readonly string[],
+): boolean {
+  if (merges === undefined) return true
+  if (!Array.isArray(merges) || merges.length > MAX_MERGES) return false
+  // FEAT: a costura acontece no presente da worldline, então nunca depois do ano que o link guarda
+  const last = Math.min(until, HORIZON - 1)
+  let previous = from - 1
+  let away = false
+  for (const value of merges as unknown[]) {
+    if (typeof value !== 'object' || value === null) return false
+    const { tick, self, other, direction } = value as Partial<MergeSpec>
+    // FIX: o bloco já diz de quem é a costura, então um `self` que discorde dele é link corrompido
+    if (self !== own || typeof other !== 'string' || self === other) return false
+    // FIX: sem a outra história no link a costura não é remontável, e o hospedeiro estouraria com o
+    // mundo já aberto; um link que ninguém consegue reabrir é inválido, e a recusa é aqui na porta
+    if (!carried.includes(other)) return false
+    if (direction !== 'in' && direction !== 'out') return false
+    if (!Number.isInteger(tick) || (tick ?? -1) <= previous || (tick ?? last + 1) > last) {
+      return false
+    }
+    // FEAT: uma história que já desaguou noutra não costura mais nada, nem no link
+    if (away) return false
+    away = direction === 'out'
+    previous = tick ?? previous
+  }
+  return true
+}
+
 // FEAT: um mundo sem travessia sai igual na v1 e na v2, então um link antigo não merece aviso
-const COMPATIBLE_VERSIONS: readonly number[] = [1, CROSSED_VERSION]
+const COMPATIBLE_VERSIONS: readonly number[] = [1, CROSSED_VERSION, SEAMED_VERSION]
 
 export function isCompatibleVersion(version: number): boolean {
   return COMPATIBLE_VERSIONS.includes(version)
@@ -98,12 +142,16 @@ export function toMultiverse(link: WorldLink): MultiverseLink {
 export function isValidMultiverse(link: MultiverseLink): boolean {
   if (!isValidLink(link) || !Array.isArray(link.branches)) return false
   if (link.branches.length > MAX_WORLDLINES - 1) return false
+  // FEAT: as histórias que o link carrega, que são as únicas que uma costura dele pode nomear
+  const carried = WORLDLINE_IDS.slice(0, 1 + link.branches.length)
+  if (!validMerges(link.merges, 0, link.tick, carried[0] ?? '', carried)) return false
   return link.branches.every((branch, i) => {
     if (typeof branch !== 'object' || branch === null) return false
-    const { parent, fork, decisions, crossings } = branch
+    const { parent, fork, decisions, crossings, merges } = branch
     if (!Number.isInteger(parent) || parent < 0 || parent > i) return false
     if (!Number.isInteger(fork) || fork < 0 || fork > link.tick) return false
     if (!validCrossings(crossings, fork)) return false
+    if (!validMerges(merges, fork, link.tick, carried[i + 1] ?? '', carried)) return false
     return validDecisions(decisions, fork)
   })
 }
@@ -272,7 +320,51 @@ function readCrossings(view: DataView, at: number): { crossings: Crossing[]; nex
   return { crossings, next: cursor }
 }
 
+function mergeSize(merges: readonly MergeSpec[] = []): number {
+  return 1 + merges.length * MERGE
+}
+
+function writeMerges(view: DataView, at: number, merges: readonly MergeSpec[] = []): number {
+  view.setUint8(at, merges.length)
+  let cursor = at + 1
+  for (const merge of merges) {
+    view.setUint16(cursor, merge.tick)
+    view.setUint8(cursor + 2, worldIndex(merge.self))
+    view.setUint8(cursor + 3, worldIndex(merge.other))
+    view.setUint8(cursor + 4, merge.direction === 'out' ? 1 : 0)
+    cursor += MERGE
+  }
+  return cursor
+}
+
+function readMerges(view: DataView, at: number): { merges: MergeSpec[]; next: number } | null {
+  if (at + 1 > view.byteLength) return null
+  const count = view.getUint8(at)
+  let cursor = at + 1
+  const merges: MergeSpec[] = []
+  for (let i = 0; i < count; i++) {
+    if (cursor + MERGE > view.byteLength) return null
+    merges.push({
+      tick: view.getUint16(cursor),
+      self: WORLDLINE_IDS[view.getUint8(cursor + 2)] ?? '',
+      other: WORLDLINE_IDS[view.getUint8(cursor + 3)] ?? '',
+      direction: view.getUint8(cursor + 4) === 0 ? 'in' : 'out',
+    })
+    cursor += MERGE
+  }
+  return { merges, next: cursor }
+}
+
+// FEAT: a versão descreve o que o formato carrega, e sobe só quando há costura para carregar, para
+// um mundo já compartilhado sair byte a byte igual — a mesma regra vale para o link e para o arquivo
+export function formatVersion(link: MultiverseLink): number {
+  const seams =
+    (link.merges?.length ?? 0) + link.branches.reduce((sum, b) => sum + (b.merges?.length ?? 0), 0)
+  return seams === 0 ? CROSSED_VERSION : SEAMED_VERSION
+}
+
 export function encodeMultiverse(link: MultiverseLink): string {
+  const version = formatVersion(link)
   const size =
     7 +
     2 +
@@ -280,10 +372,13 @@ export function encodeMultiverse(link: MultiverseLink): string {
     1 +
     link.branches.reduce((sum, b) => sum + 3 + 2 + b.decisions.length * DECISION, 0) +
     crossingSize(link.crossings) +
-    link.branches.reduce((sum, b) => sum + crossingSize(b.crossings), 0)
+    link.branches.reduce((sum, b) => sum + crossingSize(b.crossings), 0) +
+    (version < SEAMED_VERSION
+      ? 0
+      : mergeSize(link.merges) + link.branches.reduce((sum, b) => sum + mergeSize(b.merges), 0))
   const bytes = new Uint8Array(size)
   const view = new DataView(bytes.buffer)
-  view.setUint8(0, CROSSED_VERSION)
+  view.setUint8(0, version)
   view.setUint32(1, link.seed)
   view.setUint16(5, link.tick)
   let cursor = writeDecisions(view, 7, link.decisions)
@@ -296,6 +391,10 @@ export function encodeMultiverse(link: MultiverseLink): string {
   }
   cursor = writeCrossings(view, cursor, link.crossings)
   for (const branch of link.branches) cursor = writeCrossings(view, cursor, branch.crossings)
+  if (version >= SEAMED_VERSION) {
+    cursor = writeMerges(view, cursor, link.merges)
+    for (const branch of link.branches) cursor = writeMerges(view, cursor, branch.merges)
+  }
   return toBase64Url(bytes)
 }
 
@@ -327,20 +426,42 @@ export function decodeMultiverse(text: string): MultiverseLink | null {
       cursor = read.next
     }
   }
+  const seams: MergeSpec[][] = []
+  if (version >= SEAMED_VERSION) {
+    for (let i = 0; i <= plain.length; i++) {
+      const read = readMerges(view, cursor)
+      if (!read) return null
+      seams.push(read.merges)
+      cursor = read.next
+    }
+  }
   if (cursor !== bytes.length) return null
+  // FEAT: sem costura o campo nem aparece, então um link antigo volta com a forma que sempre teve
+  const own = seams[0] ?? []
   const link: MultiverseLink = {
     version,
     seed: view.getUint32(1),
     tick: view.getUint16(5),
     decisions: root.decisions,
     crossings: logs[0] ?? [],
-    branches: plain.map((branch, i) => ({ ...branch, crossings: logs[i + 1] ?? [] })),
+    ...(own.length === 0 ? {} : { merges: own }),
+    branches: plain.map((branch, i) => {
+      const sewn = seams[i + 1] ?? []
+      return {
+        ...branch,
+        crossings: logs[i + 1] ?? [],
+        ...(sewn.length === 0 ? {} : { merges: sewn }),
+      }
+    }),
   }
   return isValidMultiverse(link) ? link : null
 }
 
-// FEAT: a forma curta não carrega travessias, então um mundo atravessado vai pela forma longa
+// FEAT: a forma curta não carrega travessia nem costura, então quem tem uma vai pela forma longa
 export function linkHash(link: MultiverseLink): string {
-  const plain = link.branches.length === 0 && (link.crossings?.length ?? 0) === 0
+  const plain =
+    link.branches.length === 0 &&
+    (link.crossings?.length ?? 0) === 0 &&
+    (link.merges?.length ?? 0) === 0
   return plain ? `#/w/${encodeLink(link)}` : `#/m/${encodeMultiverse(link)}`
 }

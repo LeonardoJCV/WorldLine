@@ -3,6 +3,8 @@ import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
   BranchSpec,
   FromWorker,
+  MergeSpec,
+  SeamPreview,
   Series,
   Snapshot,
   Speed,
@@ -65,8 +67,9 @@ export class SimulationClient {
     root: readonly Decision[],
     branches: readonly BranchSpec[],
     crossings: readonly Crossing[] = [],
+    merges: readonly MergeSpec[] = [],
   ): void {
-    this.#port.send({ type: 'open', seed, tick, root, branches, crossings })
+    this.#port.send({ type: 'open', seed, tick, root, branches, crossings, merges })
   }
 
   play(speed: Speed): void {
@@ -142,6 +145,26 @@ export class SimulationClient {
     this.#port.send({ type: 'remove', world })
   }
 
+  async merge(survivor: WorldlineId, other: WorldlineId): Promise<WorldlineId> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, { type: 'merge', requestId, survivor, other })
+    if (reply.type !== 'merged') throw new Error(`unexpected ${reply.type} reply`)
+    return reply.world
+  }
+
+  async mergePreview(survivor: WorldlineId, other: WorldlineId): Promise<SeamPreview> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, {
+      type: 'mergePreview',
+      requestId,
+      survivor,
+      other,
+    })
+    if (reply.type !== 'mergePreview') throw new Error(`unexpected ${reply.type} reply`)
+    const { seamed, shock, food, debtIn, debtSettled } = reply
+    return { seamed, shock, food, debtIn, debtSettled }
+  }
+
   async range(world: WorldlineId, from: number, to: number, buckets: number): Promise<RangeResult> {
     const requestId = this.#nextId++
     const reply = await this.#request(requestId, {
@@ -209,8 +232,10 @@ export class SimulationClient {
       (message.type === 'range' ||
         message.type === 'inspect' ||
         message.type === 'branched' ||
+        message.type === 'merged' ||
         message.type === 'crossed' ||
         message.type === 'distance' ||
+        message.type === 'mergePreview' ||
         message.type === 'error') &&
       message.requestId !== undefined
     ) {

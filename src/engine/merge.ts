@@ -3,7 +3,7 @@ import { addDebt, type Debt, type Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
 import { clamp } from './math.ts'
 import { MERGE_SHOCK } from './params.ts'
-import { NEVER, type Variable, type WorldState } from './state.ts'
+import { NEVER, isValidAllocation, type Variable, type WorldState } from './state.ts'
 
 export interface Merge {
   readonly tick: number
@@ -20,6 +20,17 @@ export interface Merge {
   readonly strain?: number
   readonly colonies?: readonly Colony[]
   readonly home?: number | null
+}
+
+// FEAT: sem alocação uma dívida de doutrina nunca se quita, então nenhuma costura entra sem ela
+export function validateMerge(merge: Merge): Merge {
+  for (const debt of merge.debts ?? []) {
+    if (debt.kind !== 'doctrine') continue
+    if (debt.allocation === undefined || !isValidAllocation(debt.allocation)) {
+      throw new RangeError('a doctrine debt in a confluence carries an allocation')
+    }
+  }
+  return merge
 }
 
 // FEAT: 0/0 nunca divide; sem gente dos dois lados a costura reparte ao meio

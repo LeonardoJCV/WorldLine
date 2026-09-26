@@ -6,6 +6,7 @@ import { useLocale, useT } from '../i18n/index.ts'
 import { useSimulation } from '../sim/runtime.ts'
 import { lastInheritance } from './colonies.ts'
 import { endingYear, paradoxView, repayHint } from './debt.ts'
+import { lastConfluence } from './merge.ts'
 
 // FEAT: o alívio dura tempo de leitura, não anos simulados — a ×256 alguns anos passariam num piscar
 const RELIEF_MS = 8000
@@ -15,6 +16,8 @@ type Spoken = {
   readonly kind: ParadoxKind | null
   readonly status: Snapshot['status'] | null
   readonly inherited: number | null
+  // FEAT: o ano da última confluência desta história, que anula dívida sem ninguém ter quitado nada
+  readonly confluence: number | null
 }
 
 export function ParadoxNotice() {
@@ -31,19 +34,22 @@ export function ParadoxNotice() {
   const hint = repayHint(debts.map((debt) => debt.kind))
   const [announced, setAnnounced] = useState<'relief' | 'collapse' | null>(null)
   const inherited = lastInheritance(events)?.start ?? null
+  const confluence = lastConfluence(events)?.start ?? null
   // FEAT: anuncia-se a espécie do paradoxo e o estado deste mundo, não o objeto, que nasce a cada quadro
-  const spoken = useRef<Spoken>({ id: focus, kind: null, status, inherited })
+  const spoken = useRef<Spoken>({ id: focus, kind: null, status, inherited, confluence })
 
   useEffect(() => {
     const before = spoken.current
-    spoken.current = { id: focus, kind, status, inherited }
+    spoken.current = { id: focus, kind, status, inherited, confluence }
     // FEAT: só o colapso visto acontecer se anuncia; um mundo que já chega colapsado do endereço, não
     if (before.id !== focus) setAnnounced(null)
     else if (before.status === 'running' && status === 'collapsed') setAnnounced('collapse')
     // FIX: a herança zera o paradoxo sem quitar nada; quem fala desse ano é o anúncio da herança
     else if (before.inherited !== inherited) setAnnounced(null)
+    // FIX: medido — a confluência anula a dívida com quem desaguou, e alívio ali seria falso
+    else if (before.confluence !== confluence) setAnnounced(null)
     else if (before.kind !== null && kind === null) setAnnounced('relief')
-  }, [focus, kind, status, inherited])
+  }, [focus, kind, status, inherited, confluence])
 
   useEffect(() => {
     if (announced === null) return

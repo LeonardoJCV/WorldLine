@@ -9,6 +9,7 @@ import {
   type CrossingKind,
   type Dose,
 } from './crossing.ts'
+import { METRICS, worldMetrics } from './events.ts'
 import { GOLDEN_CASES, GOLDEN_SCRIPTS, INHERITANCE_CASE, MERGE_CASE, mergeSeam } from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
@@ -440,6 +441,10 @@ describe('determinism properties', () => {
           for (let t = 0; t <= w.present.tick; t += 97) {
             for (const variable of VARIABLES)
               if (!Number.isFinite(w.valueAt(variable, t))) return false
+            // FEAT: metrics ficam fora de VARIABLES, então precisam do próprio varredor; Infinity
+            // é sentinela deliberado aqui (foodSecurity, crowding), só NaN é a classe do defeito
+            const metrics = worldMetrics(w.stateAt(t), w.world)
+            for (const metric of METRICS) if (Number.isNaN(metrics[metric])) return false
           }
           return true
         },

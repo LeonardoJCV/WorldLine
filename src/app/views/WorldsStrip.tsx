@@ -7,6 +7,7 @@ import { simulation, useSimulation } from '../sim/runtime.ts'
 import type { WorldView } from '../sim/store.ts'
 import { crossOrigins } from './cross.ts'
 import { debtView, endingYear } from './debt.ts'
+import { mergePartners, seamedRemoval } from './merge.ts'
 
 function distanceToOrigin(world: WorldView, worlds: readonly WorldView[]): number | null {
   const origin = worlds.find((candidate) => candidate.info.id === world.info.parent)
@@ -21,11 +22,14 @@ export function WorldsStrip() {
   const focus = useSimulation((s) => s.focus)
   const mode = useSimulation((s) => s.mode)
   const crossOrigin = useSimulation((s) => s.crossOrigin)
+  const mergeOther = useSimulation((s) => s.mergeOther)
   const [confirming, setConfirming] = useState<WorldlineId | null>(null)
   if (worlds.length < 2) return null
-  const { setFocus, remove, setCrossOrigin } = simulation.getState()
+  const { setFocus, remove, setCrossOrigin, setMergeOther } = simulation.getState()
   // FEAT: no modo Cruzar, a tira oferece as mesmas origens que o painel considera utilizáveis
   const usable = mode === 'cross' ? crossOrigins(worlds, focus) : []
+  // FEAT: e no modo Confluir, as mesmas histórias que podem desaguar na que está em foco
+  const partners = mode === 'merge' ? mergePartners(worlds, focus) : []
 
   return (
     <section className="worlds" aria-labelledby="worlds-title">
@@ -40,6 +44,12 @@ export function WorldsStrip() {
           const distance = distanceToOrigin(world, worlds)
           const isOrigin = id === crossOrigin
           const canPickOrigin = usable.some((candidate) => candidate.info.id === id)
+          const isOther = id === mergeOther
+          const canPickOther = partners.some((candidate) => candidate.info.id === id)
+          // FEAT: uma história que desaguou não se apaga nem se extingue; a tira diz onde ela foi dar
+          const sewn = world.present.status === 'merged' ? (world.merges.at(-1) ?? null) : null
+          // FEAT: e diz também que ela não se remove mais, porque outra história a carrega dentro de si
+          const sewnAway = parent === null ? null : seamedRemoval(worlds, id)
           // FEAT: o total já vem pronto do motor; a tira só decide se mostra o selo, não quanto se deve
           const debt = debtView(world.debts, world.previousDebts)
           // FIX: colapso é o prazo do paradoxo vencido — depois dele não há mais contagem em curso
@@ -66,7 +76,14 @@ export function WorldsStrip() {
                       ? t('worlds.root')
                       : t('worlds.branch', { parent, year: formatYear(fork) })}
                   </span>
-                  {extinct ? (
+                  {sewn ? (
+                    <span>
+                      {t('worlds.merged', {
+                        other: sewn.other,
+                        year: formatYear(sewn.tick),
+                      })}
+                    </span>
+                  ) : extinct ? (
                     <span>
                       {t('worlds.extinct', {
                         year: formatYear(
@@ -117,19 +134,37 @@ export function WorldsStrip() {
                   {t('cross.origin', { id })}
                 </button>
               )}
+              {canPickOther && (
+                <button
+                  type="button"
+                  className="worlds__origin"
+                  aria-pressed={isOther}
+                  aria-label={t('worlds.merge', { id })}
+                  onClick={() => setMergeOther(id)}
+                >
+                  {t('merge.from', { id })}
+                </button>
+              )}
               {parent !== null &&
                 (confirming === id ? (
                   <span className="worlds__confirm" role="alert">
-                    {t('worlds.confirm', { id })}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        remove(id)
-                        setConfirming(null)
-                      }}
-                    >
-                      {t('worlds.confirmYes')}
-                    </button>
+                    {/* FIX: o hospedeiro recusa remover quem uma costura nomeia; a tira diz por quê */}
+                    {sewnAway ? (
+                      t('worlds.sewn', { id: sewnAway.gone, other: sewnAway.keeper })
+                    ) : (
+                      <>
+                        {t('worlds.confirm', { id })}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            remove(id)
+                            setConfirming(null)
+                          }}
+                        >
+                          {t('worlds.confirmYes')}
+                        </button>
+                      </>
+                    )}
                     <button type="button" onClick={() => setConfirming(null)}>
                       {t('worlds.cancel')}
                     </button>

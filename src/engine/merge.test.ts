@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { selfSufficient, type Colony } from './colony.ts'
 import { repay, type Debt } from './debt.ts'
 import { EVENTS, worldDerived } from './events.ts'
-import { mergeColonies, mergeStates, mergeWeights, settleDebts, type Merge } from './merge.ts'
+import {
+  mergeColonies,
+  mergeStates,
+  mergeWeights,
+  settleDebts,
+  validateMerge,
+  type Merge,
+} from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
 import { NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
@@ -425,5 +432,48 @@ describe('mergeColonies', () => {
       [colony({ body: 4, founded: 2200, record: 9 })],
     )
     expect(ownOlder[0]?.record).toBe(1)
+  })
+})
+
+describe('validateMerge', () => {
+  const owing = (debts: readonly Debt[]): Merge => incoming({ population: 1000 }, { debts })
+
+  it('takes a doctrine debt that carries the allocation it asks the survivor to keep', () => {
+    const seam = owing([debt({ kind: 'doctrine', owed: 4, allocation: GUEST_DOCTRINE })])
+    expect(validateMerge(seam)).toBe(seam)
+  })
+
+  it('refuses a doctrine debt with no allocation, and one whose allocation is not whole', () => {
+    expect(() => validateMerge(owing([debt({ kind: 'doctrine', owed: 4 })]))).toThrow(RangeError)
+    const broken: Allocation = { ...GUEST_DOCTRINE, research: 0 }
+    expect(() =>
+      validateMerge(owing([debt({ kind: 'doctrine', owed: 4, allocation: broken })])),
+    ).toThrow(RangeError)
+  })
+
+  // FEAT: só a doutrina precisa da alocação, então nenhuma outra dívida pode ser recusada por faltar
+  it('takes knowledge and resource debts without one, and a seam that owes nothing', () => {
+    const others = owing([
+      debt({ kind: 'knowledge', owed: 7, origin: 'C' }),
+      debt({ kind: 'resource', owed: 3, origin: 'D' }),
+    ])
+    expect(validateMerge(others)).toBe(others)
+    const clean = incoming({ population: 1000 })
+    expect(validateMerge(clean)).toBe(clean)
+  })
+
+  it('refuses it because that debt would never repay a single credit', () => {
+    const s = world({ allocation: HOST_DOCTRINE })
+    const derived = worldDerived(s, TEST_WORLD)
+    let unpayable: readonly Debt[] = [debt({ kind: 'doctrine', owed: 5 })]
+    for (let year = 1; year <= 50; year++) unpayable = repay(unpayable, s, derived, year)
+    expect(unpayable[0]?.owed).toBe(5)
+    const payable = repay(
+      [debt({ kind: 'doctrine', owed: 5, allocation: HOST_DOCTRINE })],
+      s,
+      derived,
+      1,
+    )
+    expect(payable[0]?.owed).toBeLessThan(5)
   })
 })

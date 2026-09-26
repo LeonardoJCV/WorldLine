@@ -177,6 +177,72 @@ async function enterCross(page: Page, width: number, height: number) {
   await page.waitForTimeout(300)
 }
 
+// FEAT: duas histórias no mesmo ano, a costura medida e ainda por aceitar
+async function enterMerge(page: Page, width: number, height: number) {
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width, height })
+  await page.goto('/?seed=482913')
+  await page.getByRole('button', { name: '×256' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: 'Intervene' }).click()
+  const history = page.getByRole('slider', { name: /Worldline history/ })
+  await history.focus()
+  await history.press('Home')
+  for (let i = 0; i < 6; i++) await history.press('Shift+ArrowRight')
+  await expect(page.getByRole('button', { name: /Branch from year/ })).toBeEnabled()
+  const industry = page.getByRole('slider', { name: /Industry/ })
+  await industry.focus()
+  for (let i = 0; i < 25; i++) await industry.press('ArrowRight')
+  await page.getByRole('button', { name: /Branch from year/ }).click()
+  await page.locator('.mode').getByRole('button', { name: 'Merge' }).click()
+  await page.getByRole('button', { name: 'From history A, let it flow into this one' }).click()
+  await expect(page.locator('.merge__shock')).toBeVisible()
+  await expect(page.locator('button.merge__confirm')).toBeEnabled()
+  await page.waitForTimeout(300)
+}
+
+test('merge panel', async ({ page }) => {
+  await enterMerge(page, 1440, 900)
+  await page.screenshot({ path: 'screens/merge-panel.png' })
+})
+
+// FEAT: aceita a costura e deixa o ano virar, que é quando o motor une as duas de verdade
+async function sewAndTurn(page: Page, width: number, height: number) {
+  await enterMerge(page, width, height)
+  await page.locator('button.merge__confirm').scrollIntoViewIfNeeded()
+  await page.locator('button.merge__confirm').click()
+  await expect(page.locator('.merge__status')).toContainText('flowed into')
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(page.locator('.confluence')).toBeVisible()
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBe(0)
+  await page.waitForTimeout(300)
+}
+
+test('confluence notice', async ({ page }) => {
+  await sewAndTurn(page, 1440, 900)
+  await expect(page.locator('.confluence')).toBeInViewport()
+  await page.screenshot({ path: 'screens/confluence-notice.png' })
+})
+
+test('merge mobile', async ({ page }) => {
+  await sewAndTurn(page, 390, 844)
+  await expect(page.locator('.confluence')).toBeInViewport()
+  await page.screenshot({ path: 'screens/merge-mobile.png' })
+})
+
+test('merge strip', async ({ page }) => {
+  await sewAndTurn(page, 1440, 900)
+  const strip = page.locator('.worlds')
+  await strip.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(300)
+  await strip.screenshot({ path: 'screens/merge-strip.png' })
+})
+
 test('cross panel', async ({ page }) => {
   await enterCross(page, 1440, 900)
   await page.screenshot({ path: 'screens/cross-panel.png' })

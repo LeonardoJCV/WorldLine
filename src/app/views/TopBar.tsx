@@ -8,7 +8,7 @@ import { usePhone } from './BottomSheet.tsx'
 import { SetupMenu } from './SetupMenu.tsx'
 
 const OPTIONS: readonly Speed[] = [...SPEEDS, 'max']
-const MODES: readonly Mode[] = ['observe', 'intervene', 'cross']
+const MODES: readonly Mode[] = ['observe', 'intervene', 'cross', 'merge']
 
 export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const t = useT()

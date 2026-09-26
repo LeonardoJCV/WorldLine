@@ -367,7 +367,10 @@ export function computeMetrics(s: WorldState, d: Derived): Metrics {
     environment: s.environment,
     stability: s.stability,
     foodSecurity: d.foodSecurity,
-    crowding: s.population / d.carryingCapacity,
+    // FIX: zero contra zero é ninguém disputando nada; gente contra zero é lotação sem limite,
+    // e Infinity já é prática deste arquivo (foodSecurity, quatro linhas acima)
+    crowding:
+      s.population === 0 && d.carryingCapacity === 0 ? 0 : s.population / d.carryingCapacity,
     energyRatio: s.energy / d.energyTarget,
     economyTrend: s.economy / (s.recentEconomy[0] ?? s.economy),
     birthRate: d.birthRate,

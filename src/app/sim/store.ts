@@ -3,11 +3,13 @@ import type { Colony } from '../../engine/colony.ts'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { Debt, Paradox } from '../../engine/debt.ts'
 import type { EventRecord } from '../../engine/events.ts'
+import type { Merge } from '../../engine/merge.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
   EndReason,
   EventUpdate,
+  SeamPreview,
   Snapshot,
   Speed,
   WorldlineId,
@@ -16,7 +18,7 @@ import type {
 import type { MultiverseLink } from '../world/link.ts'
 import type { SimulationClient } from './client.ts'
 
-export type Mode = 'observe' | 'intervene' | 'cross'
+export type Mode = 'observe' | 'intervene' | 'cross' | 'merge'
 
 export interface View {
   readonly span: number
@@ -29,6 +31,7 @@ export interface WorldView {
   readonly events: readonly EventRecord[]
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
+  readonly merges: readonly Merge[]
   readonly debts: readonly Debt[]
   // FEAT: a dívida do último ano diferente já relatado, para a tendência não piscar a cada quadro
   readonly previousDebts: readonly Debt[] | null
@@ -54,8 +57,12 @@ export interface SimulationState {
   readonly cursor: number | null
   readonly inspected: Snapshot | null
   readonly inspectedOrigin: Snapshot | null
+  // FEAT: a costura que o hospedeiro previu, sem gravar nada — desaparece quando o foco muda
+  readonly mergePreview: SeamPreview | null
   readonly mode: Mode
   readonly crossOrigin: WorldlineId | null
+  // FEAT: a história escolhida para desaguar nesta, como crossOrigin é a escolhida para atravessar
+  readonly mergeOther: WorldlineId | null
   readonly selected: number | null
   readonly decisions: readonly Decision[]
   readonly view: View | null
@@ -70,6 +77,7 @@ export interface SimulationState {
   setCursor(tick: number | null): void
   setMode(mode: Mode): void
   setCrossOrigin(id: WorldlineId | null): void
+  setMergeOther(id: WorldlineId | null): void
   select(index: number | null): void
   decide(allocation: Allocation): void
   branch(allocation: Allocation): void
@@ -77,6 +85,8 @@ export interface SimulationState {
   remove(id: WorldlineId): void
   setFocus(id: WorldlineId): void
   setView(view: View | null): void
+  previewMerge(other: WorldlineId): void
+  merge(other: WorldlineId): Promise<void>
 }
 
 export type SimulationStore = StoreApi<SimulationState>
@@ -137,6 +147,14 @@ function asError(error: unknown): Error {
 export function createSimulationStore(client: SimulationClient): SimulationStore {
   // FEAT: uma entrada por realidade (id + geração, para uma realidade recriada não herdar a de outra)
   const debtHistory = new Map<string, DebtSnapshot>()
+  // FIX: cada pedido de prévia é um objeto novo; só a resposta do PEDIDO MAIS RECENTE se grava —
+  // ao contrário de comparar campos contra o estado ao vivo, dois pedidos iguais em sequência não
+  // se confundem, porque cada um tem a sua própria identidade
+  let seamRequest: {
+    readonly survivor: WorldlineId
+    readonly other: WorldlineId
+    readonly now: number
+  } | null = null
   const store = createStore<SimulationState>()((set, get) => ({
     seed: null,
     now: 0,
@@ -155,8 +173,10 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     cursor: null,
     inspected: null,
     inspectedOrigin: null,
+    mergePreview: null,
     mode: 'observe',
     crossOrigin: null,
+    mergeOther: null,
     selected: null,
     decisions: [],
     view: null,
@@ -184,15 +204,24 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         cursor: null,
         inspected: null,
         inspectedOrigin: null,
+        mergePreview: null,
         mode: 'observe',
         crossOrigin: null,
+        mergeOther: null,
         selected: null,
         decisions: [],
         view: null,
         linkVersion: link.version,
         branching: false,
       })
-      client.open(link.seed, link.tick, link.decisions, link.branches, link.crossings ?? [])
+      client.open(
+        link.seed,
+        link.tick,
+        link.decisions,
+        link.branches,
+        link.crossings ?? [],
+        link.merges ?? [],
+      )
     },
     togglePlay() {
       const { playing, speed, ended } = get()
@@ -242,10 +271,19 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       )
     },
     setMode(mode) {
-      set({ mode, ...(mode === 'cross' ? {} : { crossOrigin: null }) })
+      set({
+        mode,
+        ...(mode === 'cross' ? {} : { crossOrigin: null }),
+        // FIX: sair do modo leva a escolha e a prévia; nenhuma costura fica prometida fora dele
+        ...(mode === 'merge' ? {} : { mergeOther: null, mergePreview: null }),
+      })
     },
     setCrossOrigin(id) {
       set({ crossOrigin: id })
+    },
+    // FIX: a prévia guardada é sempre do par escolhido; trocar de par apaga a anterior antes de pedir outra
+    setMergeOther(id) {
+      set({ mergeOther: id, mergePreview: null })
     },
     select(index) {
       set({ selected: index })
@@ -300,6 +338,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     },
     remove(id) {
       if (get().crossOrigin === id) set({ crossOrigin: null })
+      if (get().mergeOther === id) set({ mergeOther: null })
       client.remove(id)
     },
     setFocus(id) {
@@ -308,15 +347,52 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       set({
         focus: id,
         ...(get().crossOrigin === id ? { crossOrigin: null } : {}),
+        ...(get().mergeOther === id ? { mergeOther: null } : {}),
         selected: null,
         inspected: null,
         inspectedOrigin: null,
+        mergePreview: null,
         ...focused(worlds, id),
       })
       if (cursor !== null) get().setCursor(cursor)
     },
     setView(view) {
       set({ view })
+    },
+    // FEAT: pede ao hospedeiro o mesmo cálculo que uma costura real faria, sem gravar nada
+    previewMerge(other) {
+      const request = { survivor: get().focus, other, now: get().now }
+      seamRequest = request
+      // FIX: dois guardas — a identidade pega o pedido antigo entre dois em voo; os campos pegam
+      // o foco que já foi embora sem ninguém pedir outra prévia, exatamente como o setCursor já faz
+      const stale = () => {
+        const state = get()
+        return (
+          seamRequest !== request || state.focus !== request.survivor || state.now !== request.now
+        )
+      }
+      client.mergePreview(request.survivor, other).then(
+        (result) => {
+          if (!stale()) set({ mergePreview: result })
+        },
+        (error: unknown) => {
+          if (!stale()) set({ error: messageOf(error) })
+        },
+      )
+    },
+    // FEAT: quem chama só sabe que a costura existe quando o worker a grava nas duas pontas
+    merge(other) {
+      return client.merge(get().focus, other).then(
+        () => {
+          // FIX: a prévia morre com a costura que ela previa, senão ficaria falando de um par que já não há
+          set({ mergeOther: null, mergePreview: null, error: null })
+        },
+        (error: unknown) => {
+          const failure = asError(error)
+          set({ error: failure.message })
+          return Promise.reject(failure)
+        },
+      )
     },
   }))
 
@@ -335,6 +411,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
             events: upsert(old?.events ?? [], update.events),
             decisions: update.decisions,
             crossings: update.crossings,
+            merges: update.merges,
             debts: update.debts,
             previousDebts: trackDebts(
               debtHistory,
@@ -348,9 +425,13 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         })
         const current = store.getState().focus
         const focus = worlds.some((world) => world.info.id === current) ? current : 'A'
-        // FIX: remover uma realidade leva junto as que nasceram dela, e a origem escolhida pode ser uma delas
+        // FIX: remover uma realidade leva junto as que nasceram dela, e a escolhida pode ser uma delas
         const chosen = store.getState().crossOrigin
         const kept = chosen !== null && worlds.some((world) => world.info.id === chosen)
+        const other = store.getState().mergeOther
+        const keptOther = other !== null && worlds.some((world) => world.info.id === other)
+        // FIX: a prévia é de um ano só; virado o ano ela fala de uma costura que já não é esta
+        const sameYear = store.getState().now === message.now
         store.setState({
           now: message.now,
           credit: message.credit,
@@ -360,6 +441,8 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
           focus,
           ...focused(worlds, focus),
           ...(kept ? {} : { crossOrigin: null }),
+          ...(keptOther ? {} : { mergeOther: null }),
+          ...(sameYear ? {} : { mergePreview: null }),
           ...(focus === current
             ? {}
             : { selected: null, cursor: null, inspected: null, inspectedOrigin: null }),

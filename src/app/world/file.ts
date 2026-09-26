@@ -1,7 +1,7 @@
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import { SECTORS, type Allocation, type Decision } from '../../engine/state.ts'
-import type { BranchSpec } from '../../worker/protocol.ts'
-import { isValidMultiverse, type MultiverseLink } from './link.ts'
+import type { BranchSpec, MergeSpec } from '../../worker/protocol.ts'
+import { formatVersion, isValidMultiverse, type MultiverseLink } from './link.ts'
 
 export interface WorldFile {
   readonly name: string
@@ -12,12 +12,14 @@ export function serializeWorld(file: WorldFile): string {
   return JSON.stringify(
     {
       format: 'worldline',
-      version: file.link.version,
+      // FIX: a versão sai do que o arquivo grava, senão um arquivo sem costura se diria costurado
+      version: formatVersion(file.link),
       name: file.name,
       seed: file.link.seed,
       tick: file.link.tick,
       decisions: file.link.decisions,
       crossings: file.link.crossings ?? [],
+      merges: file.link.merges ?? [],
       branches: file.link.branches,
     },
     null,
@@ -84,14 +86,36 @@ function toDecisions(value: unknown): Decision[] | null {
   return decisions.some((decision) => decision === null) ? null : (decisions as Decision[])
 }
 
+function toMerge(value: unknown): MergeSpec | null {
+  if (!isRecord(value) || typeof value.tick !== 'number') return null
+  if (typeof value.self !== 'string' || typeof value.other !== 'string') return null
+  if (value.direction !== 'in' && value.direction !== 'out') return null
+  return { tick: value.tick, self: value.self, other: value.other, direction: value.direction }
+}
+
+function toMerges(value: unknown): MergeSpec[] | null {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) return null
+  const merges = value.map(toMerge)
+  return merges.some((merge) => merge === null) ? null : (merges as MergeSpec[])
+}
+
 function toBranch(value: unknown): BranchSpec | null {
   if (!isRecord(value) || typeof value.parent !== 'number' || typeof value.fork !== 'number') {
     return null
   }
   const decisions = toDecisions(value.decisions)
   const crossings = toCrossings(value.crossings)
-  if (decisions === null || crossings === null) return null
-  return { parent: value.parent, fork: value.fork, decisions, crossings }
+  const merges = toMerges(value.merges)
+  if (decisions === null || crossings === null || merges === null) return null
+  // FEAT: um galho sem costura volta com a forma que sempre teve, sem um campo vazio a mais
+  return {
+    parent: value.parent,
+    fork: value.fork,
+    decisions,
+    crossings,
+    ...(merges.length === 0 ? {} : { merges }),
+  }
 }
 
 function toBranches(value: unknown): BranchSpec[] | null {
@@ -117,12 +141,15 @@ export function parseWorldFile(text: string): WorldFile | null {
   if (crossings === null) return null
   const branches = toBranches(data.branches)
   if (branches === null) return null
+  const merges = toMerges(data.merges)
+  if (merges === null) return null
   const link: MultiverseLink = {
     version: data.version,
     seed: data.seed,
     tick: data.tick,
     decisions,
     crossings,
+    ...(merges.length === 0 ? {} : { merges }),
     branches,
   }
   return isValidMultiverse(link) ? { name: data.name, link } : null
