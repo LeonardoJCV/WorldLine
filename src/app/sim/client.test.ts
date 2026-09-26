@@ -129,4 +129,32 @@ describe('SimulationClient', () => {
     client.step(10)
     await expect(client.cross('A', 'A', 'doctrine', 1)).rejects.toThrow(/same worldline/)
   })
+
+  // FIX: sem 'mergePreview' no roteamento de #receive esta promessa nunca resolve, e o teste estoura
+  it('resolves a mergePreview request with the seamed snapshot and its shock', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const received: FromWorker[] = []
+    client.subscribe((message) => received.push(message))
+    client.open(482913, 0, [], [])
+    client.step(2000)
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    const preview = await client.mergePreview('A', id)
+    expect(preview.seamed.status).toBe('running')
+    expect(typeof preview.shock).toBe('number')
+    expect(received.every((m) => m.type === 'progress' || m.type === 'branched')).toBe(true)
+  })
+
+  it('rejects a mergePreview the worker refuses', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    client.open(482913, 0, [], [])
+    client.step(10)
+    await expect(client.mergePreview('A', 'A')).rejects.toThrow(/same/)
+  })
 })

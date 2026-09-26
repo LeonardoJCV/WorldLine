@@ -15,7 +15,7 @@ import type {
   WorldlineInfo,
 } from '../../worker/protocol.ts'
 import type { MultiverseLink } from '../world/link.ts'
-import type { SimulationClient } from './client.ts'
+import type { SeamPreview, SimulationClient } from './client.ts'
 
 export type Mode = 'observe' | 'intervene' | 'cross'
 
@@ -57,7 +57,7 @@ export interface SimulationState {
   readonly inspected: Snapshot | null
   readonly inspectedOrigin: Snapshot | null
   // FEAT: a costura que o hospedeiro previu, sem gravar nada — desaparece quando o foco muda
-  readonly mergePreview: Snapshot | null
+  readonly mergePreview: SeamPreview | null
   readonly mode: Mode
   readonly crossOrigin: WorldlineId | null
   readonly selected: number | null
@@ -142,6 +142,14 @@ function asError(error: unknown): Error {
 export function createSimulationStore(client: SimulationClient): SimulationStore {
   // FEAT: uma entrada por realidade (id + geração, para uma realidade recriada não herdar a de outra)
   const debtHistory = new Map<string, DebtSnapshot>()
+  // FIX: cada pedido de prévia é um objeto novo; só a resposta do PEDIDO MAIS RECENTE se grava —
+  // ao contrário de comparar campos contra o estado ao vivo, dois pedidos iguais em sequência não
+  // se confundem, porque cada um tem a sua própria identidade
+  let seamRequest: {
+    readonly survivor: WorldlineId
+    readonly other: WorldlineId
+    readonly now: number
+  } | null = null
   const store = createStore<SimulationState>()((set, get) => ({
     seed: null,
     now: 0,
@@ -335,12 +343,23 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     },
     // FEAT: pede ao hospedeiro o mesmo cálculo que uma costura real faria, sem gravar nada
     previewMerge(other) {
-      const { focus } = get()
-      client.mergePreview(focus, other).then(
-        (seamed) => {
-          if (get().focus === focus) set({ mergePreview: seamed })
+      const request = { survivor: get().focus, other, now: get().now }
+      seamRequest = request
+      // FIX: dois guardas — a identidade pega o pedido antigo entre dois em voo; os campos pegam
+      // o foco que já foi embora sem ninguém pedir outra prévia, exatamente como o setCursor já faz
+      const stale = () => {
+        const state = get()
+        return (
+          seamRequest !== request || state.focus !== request.survivor || state.now !== request.now
+        )
+      }
+      client.mergePreview(request.survivor, other).then(
+        (result) => {
+          if (!stale()) set({ mergePreview: result })
         },
-        (error: unknown) => set({ error: messageOf(error) }),
+        (error: unknown) => {
+          if (!stale()) set({ error: messageOf(error) })
+        },
       )
     },
   }))

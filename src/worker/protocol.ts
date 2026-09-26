@@ -173,7 +173,13 @@ export type FromWorker =
   | { readonly type: 'inspect'; readonly requestId: number; readonly snapshot: Snapshot }
   | { readonly type: 'branched'; readonly requestId: number; readonly world: WorldlineId }
   | { readonly type: 'merged'; readonly requestId: number; readonly world: WorldlineId }
-  | { readonly type: 'mergePreview'; readonly requestId: number; readonly seamed: Snapshot }
+  | {
+      readonly type: 'mergePreview'
+      readonly requestId: number
+      readonly seamed: Snapshot
+      // FEAT: o abalo é constante do motor; a tela nunca a conhece, então o hospedeiro entrega o valor já pronto
+      readonly shock: number
+    }
   | {
       readonly type: 'crossed'
       readonly requestId: number

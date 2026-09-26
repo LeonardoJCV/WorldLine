@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { HORIZON } from '../../engine/params.ts'
+import type { FromWorker, Snapshot, ToWorker } from '../../worker/protocol.ts'
 import { currentLink } from '../world/current.ts'
-import { SimulationClient } from './client.ts'
+import { SimulationClient, type Port } from './client.ts'
 import { createSimulationStore } from './store.ts'
 import { connectInProcess, flush } from './testing.ts'
 
@@ -9,6 +10,64 @@ function setup() {
   const { port, clock } = connectInProcess()
   const store = createSimulationStore(new SimulationClient(port))
   return { store, clock }
+}
+
+// FEAT: um posto que grava tudo que sai, e ainda repassa ao hospedeiro de verdade por trás
+function recordingPort(): { readonly port: Port; readonly sent: ToWorker[] } {
+  const { port } = connectInProcess()
+  const sent: ToWorker[] = []
+  return {
+    sent,
+    port: {
+      send: (message) => {
+        sent.push(message)
+        port.send(message)
+      },
+      listen: (next, failure) => port.listen(next, failure),
+    },
+  }
+}
+
+// FEAT: um posto de mentira, para controlar a ORDEM em que as respostas chegam de volta
+function fakePort(): {
+  readonly port: Port
+  readonly sent: ToWorker[]
+  readonly deliver: (message: FromWorker) => void
+} {
+  const sent: ToWorker[] = []
+  let handler: ((message: FromWorker) => void) | null = null
+  return {
+    sent,
+    deliver: (message) => handler?.(message),
+    port: {
+      send: (message) => sent.push(message),
+      listen: (next) => {
+        handler = next
+      },
+    },
+  }
+}
+
+function fakeSnapshot(shock: number): Snapshot {
+  return {
+    tick: 2000,
+    values: {
+      population: shock,
+      food: 1,
+      energy: 1,
+      technology: 1,
+      economy: 1,
+      environment: 1,
+      stability: 1,
+    },
+    previous: null,
+    eras: 0,
+    active: [],
+    allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 },
+    status: 'running',
+    home: null,
+    debts: [],
+  }
 }
 
 describe('simulation store', () => {
@@ -528,5 +587,77 @@ describe('simulation store', () => {
     expect(reopened.getState().worlds.map((world) => world.crossings)).toEqual(
       store.getState().worlds.map((world) => world.crossings),
     )
+  })
+
+  // FIX: a sobrevivente é sempre quem está em foco; trocar os dois argumentos pediria a costura ao contrário
+  it('asks the host to preview the focus as survivor and the given world as departing', async () => {
+    const { port, sent } = recordingPort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.getState().create(482913)
+    store.getState().step(2000)
+    await flush()
+    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    await flush()
+    await flush()
+    expect(store.getState().focus).toBe('B')
+    store.getState().setFocus('A')
+
+    store.getState().previewMerge('B')
+    await flush()
+
+    const message = sent.find((m) => m.type === 'mergePreview')
+    expect(message).toMatchObject({ type: 'mergePreview', survivor: 'A', other: 'B' })
+    expect(store.getState().mergePreview?.seamed.status).toBe('running')
+    expect(typeof store.getState().mergePreview?.shock).toBe('number')
+  })
+
+  // FIX: 'now' já é o guard que setCursor usa; a prévia precisa do mesmo, e também de 'other'
+  it('keeps only the most recently requested preview when replies land out of order', async () => {
+    const { port, sent, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+
+    store.getState().previewMerge('B')
+    store.getState().previewMerge('C')
+
+    const requests = sent.filter((m) => m.type === 'mergePreview')
+    expect(requests).toMatchObject([
+      { other: 'B', requestId: requests[0]?.requestId },
+      { other: 'C', requestId: requests[1]?.requestId },
+    ])
+    const [first, second] = requests
+    if (!first || !second) throw new Error('expected two requests')
+
+    // FEAT: a resposta do pedido mais ANTIGO chega DEPOIS — se vencer, a tela mostraria o par errado
+    deliver({
+      type: 'mergePreview',
+      requestId: second.requestId,
+      seamed: fakeSnapshot(2),
+      shock: 2,
+    })
+    deliver({ type: 'mergePreview', requestId: first.requestId, seamed: fakeSnapshot(1), shock: 1 })
+    await flush()
+    await flush()
+
+    expect(store.getState().mergePreview?.shock).toBe(2)
+  })
+
+  it('drops a preview reply once the focus has moved on from the request that asked it', async () => {
+    const { port, sent, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+
+    store.getState().previewMerge('B')
+    const [request] = sent.filter((m) => m.type === 'mergePreview')
+    if (!request) throw new Error('expected a request')
+    store.setState({ focus: 'C' })
+
+    deliver({
+      type: 'mergePreview',
+      requestId: request.requestId,
+      seamed: fakeSnapshot(9),
+      shock: 9,
+    })
+    await flush()
+
+    expect(store.getState().mergePreview).toBeNull()
   })
 })

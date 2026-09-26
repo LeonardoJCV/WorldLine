@@ -4,6 +4,7 @@ import { debtRatio } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
 import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../engine/golden.ts'
 import type { EventRecord } from '../engine/events.ts'
+import { mergeWeights } from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation, WorldState } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
@@ -1121,6 +1122,15 @@ describe('SimulationHost: confluences', () => {
     expect(reply?.seamed.values.food).toBeCloseTo(
       (a?.present.values.food ?? 0) + (b?.present.values.food ?? 0),
     )
+    // FIX: o abalo relatado bate com a mesma mistura que a costura de verdade usaria para a estabilidade
+    const weights = mergeWeights(
+      a?.present.values.population ?? 0,
+      b?.present.values.population ?? 0,
+    )
+    const predicted =
+      (a?.present.values.stability ?? 0) * weights.a +
+      (b?.present.values.stability ?? 0) * weights.b
+    expect(reply?.shock).toBeCloseTo(predicted - (reply?.seamed.values.stability ?? 0))
 
     // FIX: nenhum 'progress' novo é a prova de que a prévia não mexeu em nada
     expect(all(sent, 'progress')).toHaveLength(progressBefore)
@@ -1151,6 +1161,51 @@ describe('SimulationHost: confluences', () => {
     expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
     expect(last(sent, 'error')?.message).toMatch(/extinct/)
     expect(all(sent, 'mergePreview')).toEqual([])
+  })
+
+  // FIX: uma prévia validada só por #living responderia isto com um número, e a costura de verdade
+  // recusaria no ato seguinte — a mesma #ensureSeamable tem de julgar as duas do mesmo jeito
+  it('refuses a preview exactly where a real confluence would, in the same year already spoken for', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 200, allocation: balanced })
+    host.handle({ type: 'merge', requestId: 3, survivor: 'A', other: 'B' })
+    expect(last(sent, 'merged')).toEqual({ type: 'merged', requestId: 3, world: 'A' })
+    host.handle({ type: 'mergePreview', requestId: 4, survivor: 'A', other: 'C' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
+    expect(last(sent, 'error')?.message).toMatch(/year 2000/)
+    expect(all(sent, 'mergePreview')).toEqual([])
+  })
+
+  // FIX: 'debts'/'paradox'/'colonies' e o Snapshot não contam echoes, strain, recentEconomy nem
+  // lastCrossing — comparar só essas chaves é cega a uma mutação neles; rodar os mesmos anos depois
+  // num universo gêmeo que NUNCA pediu prévia não é cego a nada disso, porque qualquer uma delas
+  // muda o que os dois universos relatam mais adiante
+  it('leaves both worldlines running exactly as they would without ever being asked for a preview', () => {
+    function seeded() {
+      const context = pair()
+      // FEAT: um eco de tecnologia em B, para uma mutação que rouba os echoes dela aparecer nos anos seguintes
+      context.host.handle({
+        type: 'cross',
+        requestId: 50,
+        origin: 'A',
+        destination: 'B',
+        kind: 'knowledge',
+        dose: 1,
+      })
+      context.host.handle({ type: 'step', years: 1 })
+      return context
+    }
+
+    const baseline = seeded()
+    const withPreview = seeded()
+
+    withPreview.host.handle({ type: 'mergePreview', requestId: 99, survivor: 'A', other: 'B' })
+
+    baseline.host.handle({ type: 'step', years: 40 })
+    withPreview.host.handle({ type: 'step', years: 40 })
+
+    expect(frozen(world(withPreview.sent, 'A'))).toEqual(frozen(world(baseline.sent, 'A')))
+    expect(frozen(world(withPreview.sent, 'B'))).toEqual(frozen(world(baseline.sent, 'B')))
   })
 
   it('takes six histories down to one living, five confluences later', () => {

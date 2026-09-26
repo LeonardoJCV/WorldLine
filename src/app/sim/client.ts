@@ -39,6 +39,11 @@ export interface DistanceResult {
   readonly values: Float32Array
 }
 
+export interface SeamPreview {
+  readonly seamed: Snapshot
+  readonly shock: number
+}
+
 type Listener = (message: FromWorker) => void
 
 interface Pending {
@@ -144,7 +149,7 @@ export class SimulationClient {
     this.#port.send({ type: 'remove', world })
   }
 
-  async mergePreview(survivor: WorldlineId, other: WorldlineId): Promise<Snapshot> {
+  async mergePreview(survivor: WorldlineId, other: WorldlineId): Promise<SeamPreview> {
     const requestId = this.#nextId++
     const reply = await this.#request(requestId, {
       type: 'mergePreview',
@@ -153,7 +158,7 @@ export class SimulationClient {
       other,
     })
     if (reply.type !== 'mergePreview') throw new Error(`unexpected ${reply.type} reply`)
-    return reply.seamed
+    return { seamed: reply.seamed, shock: reply.shock }
   }
 
   async range(world: WorldlineId, from: number, to: number, buckets: number): Promise<RangeResult> {
