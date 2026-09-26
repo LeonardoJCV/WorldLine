@@ -56,6 +56,7 @@ export const en = {
   'event.merge': 'Confluence',
   'event.merged_away': 'Outflow',
   'event.debt_settled': 'Accounts settled',
+  'event.work_done': 'Work completed',
   'mode.label': 'Mode',
   'mode.observe': 'Observe',
   'mode.intervene': 'Intervene',

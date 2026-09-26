@@ -37,6 +37,7 @@ export const EVENT_IDS = [
   'merge',
   'merged_away',
   'debt_settled',
+  'work_done',
 ] as const
 export type EventId = (typeof EVENT_IDS)[number]
 
@@ -335,6 +336,15 @@ export const EVENTS: readonly EventDef[] = [
     trigger: [{ metric: 'population', op: '<', value: 0 }],
     cooldown: 0,
     influences: ['debtRatio'],
+  },
+  // FEAT: recibo de obra concluída, escrito direto pelo step() na Tarefa 4; o gatilho nunca vale
+  {
+    id: 'work_done',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: [],
   },
 ]
 

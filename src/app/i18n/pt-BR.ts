@@ -54,6 +54,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'event.merge': 'Confluência',
   'event.merged_away': 'Deságue',
   'event.debt_settled': 'Contas acertadas',
+  'event.work_done': 'Obra concluída',
   'mode.label': 'Modo',
   'mode.observe': 'Observar',
   'mode.intervene': 'Intervir',

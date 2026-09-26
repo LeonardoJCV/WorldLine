@@ -83,5 +83,18 @@ export function hashState(s: WorldState): string {
   if (s.home !== null) h = feed(h, s.home)
   // FEAT: o nome da outra história é recibo, não física, e fica fora, como Debt.origin
   if (s.lastMerge) h = feed(h, s.lastMerge.tick)
+  // FEAT: sem obra nenhuma o bloco não entra, e um mundo sem obras sai igual ao de antes delas
+  if (s.works.length > 0) {
+    h = feed(h, s.works.length)
+    for (const work of s.works) {
+      h = feed(h, work.def)
+      h = feed(h, work.done)
+    }
+  }
+  if (s.building) {
+    h = feed(h, s.building.def)
+    h = feed(h, s.building.progress)
+    h = feed(h, s.building.since)
+  }
   return h.toString(16).padStart(8, '0')
 }

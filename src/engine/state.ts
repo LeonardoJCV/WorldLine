@@ -2,6 +2,9 @@ import type { Colony } from './colony.ts'
 import type { CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
+import type { Building, Work } from './work.ts'
+
+export type { Building, Work }
 
 export const SECTORS = ['agriculture', 'industry', 'research', 'conservation'] as const
 export type Sector = (typeof SECTORS)[number]
@@ -68,6 +71,9 @@ export interface WorldState {
   readonly home: number | null
   // FEAT: quem essa história absorveu; null até o step() escrever o primeiro merge, na Tarefa 5
   readonly lastMerge: { readonly tick: number; readonly other: string } | null
+  // FEAT: obras concluídas, e a única em curso; as duas nascem vazias, então o hash segue igual
+  readonly works: readonly Work[]
+  readonly building: Building | null
 }
 
 export function isValidAllocation(allocation: Allocation): boolean {

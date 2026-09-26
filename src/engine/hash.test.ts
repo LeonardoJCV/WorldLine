@@ -141,6 +141,16 @@ describe('hashState', () => {
     expect(hashState(composite)).toBe('18c12365')
   })
 
+  it('ignores the works fields while they are empty', () => {
+    expect(hashState({ ...state, works: [], building: null })).toBe(hashState(state))
+  })
+
+  it('separates two worlds by the works they have done, and by the one under way', () => {
+    const base = hashState(state)
+    expect(hashState({ ...state, works: [{ def: 0, done: 120, record: 3 }] })).not.toBe(base)
+    expect(hashState({ ...state, building: { def: 5, progress: 40, since: 100 } })).not.toBe(base)
+  })
+
   it('ignores a new event that never fired, but reacts once one has', () => {
     // FIX: os cinco eventos da dívida (Tarefa 4) só entram no hash depois que dispararam uma vez;
     // um mundo que nunca cruzou nada tem lastEnded[11..] sempre em NEVER e reproduz o fingerprint antigo
