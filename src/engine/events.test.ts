@@ -12,6 +12,7 @@ import { CAUSAL_WINDOW } from './params.ts'
 import { NEUTRAL_MODIFIERS, derive, integrate } from './rules.ts'
 import { Era, NEVER, type WorldState } from './state.ts'
 import { TEST_WORLD, makeMetrics, makeState } from './testing.ts'
+import { workIndex } from './work.ts'
 
 const shortage: EventDef = {
   id: 'famine',
@@ -519,6 +520,54 @@ describe('the two rungs the ladder was missing', () => {
     )
     expect(outcome.eras & Era.classical).toBe(Era.classical)
     expect(outcome.eras & Era.electric).toBe(Era.electric)
+  })
+})
+
+// FEAT: a obra move coeficiente desde a camada permanente, então ela tem voz na cadeia causal
+describe('the works in the causal chain', () => {
+  const chemistry = workIndex('chemistry')
+  const dying = makeMetrics({ environment: 20 })
+  const crisis = (s: WorldState) =>
+    evaluateEvents(s, dying, 1, 30).started.find((r) => r.event === 'ecological_crisis')?.causes
+
+  it('names a completed work as the cause of the crisis its effect caused', () => {
+    const s = world(EVENTS, { works: [{ def: chemistry, done: 40, record: 12 }] })
+    expect(crisis(s)).toContainEqual({ kind: 'event', record: 12 })
+  })
+
+  // FEAT: a marca da obra não expira, então ela não tem janela causal como a decisão tem
+  it('still names the work a thousand years after it was finished', () => {
+    const s = world(EVENTS, { tick: 3000, works: [{ def: chemistry, done: 40, record: 12 }] })
+    expect(crisis(s)).toContainEqual({ kind: 'event', record: 12 })
+  })
+
+  it('blames a work only for what it touched', () => {
+    const granary = workIndex('granary')
+    const s = world(EVENTS, { works: [{ def: granary, done: 40, record: 12 }] })
+    expect(crisis(s)?.some((cause) => cause.kind === 'event')).toBe(false)
+  })
+
+  it('names the works slice of a recent decision, because the slice now moves metrics', () => {
+    const s = world(EVENTS, { lastDecision: { tick: 100 - CAUSAL_WINDOW, sectors: ['works'] } })
+    expect(crisis(s)).toContainEqual({
+      kind: 'decision',
+      tick: 100 - CAUSAL_WINDOW,
+      sectors: ['works'],
+    })
+  })
+
+  it('gives the work receipt the metrics the catalogue moves', () => {
+    const receipt = EVENTS.find((def) => def.id === 'work_done')
+    expect(receipt?.influences).toContain('environment')
+    expect(receipt?.influences).toContain('foodSecurity')
+    expect(receipt?.influences).not.toContain('paradoxActive')
+  })
+
+  // FEAT: vazio só é correto onde um fim não propaga para lugar nenhum
+  it('leaves influences empty only on the terminal events', () => {
+    for (const def of EVENTS) {
+      if (def.influences.length === 0) expect(def.kind, def.id).toBe('terminal')
+    }
   })
 })
 

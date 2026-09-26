@@ -12,6 +12,7 @@ import {
   type WorldConfig,
   type WorldState,
 } from './state.ts'
+import { FACTOR_KEYS, TERM_KEYS, WORKS, type WorkKey } from './work.ts'
 
 export const EVENT_IDS = [
   'agricultural_revolution',
@@ -69,6 +70,36 @@ export interface Condition {
   readonly op: '<' | '>'
   readonly value: number
 }
+
+// FEAT: o que cada chave da camada permanente move, para a obra pronta poder ser nomeada como causa
+const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly Metric[]>> = {
+  harvest: ['food', 'foodSecurity'],
+  production: ['food', 'foodSecurity', 'economy', 'economyTrend'],
+  research: ['technology'],
+  energy: ['energy', 'energyRatio'],
+  economy: ['economy', 'economyTrend'],
+  capacity: ['crowding'],
+  colonyCost: ['energyRatio'],
+  mortality: ['population'],
+  spoil: ['food', 'foodSecurity'],
+  harvestNoise: ['food', 'foodSecurity'],
+  pollution: ['environment'],
+}
+
+function workInfluences(def: number): readonly Metric[] {
+  const effect = WORKS[def]?.effect
+  if (!effect) return []
+  return METRICS.filter((metric) =>
+    [...FACTOR_KEYS, ...TERM_KEYS].some(
+      (key) => effect[key] !== undefined && WORK_INFLUENCES[key].includes(metric),
+    ),
+  )
+}
+
+// FEAT: a união do que o catálogo inteiro move — o recibo da obra e a fatia de obras falam por ela
+const WORK_METRICS: readonly Metric[] = METRICS.filter((metric) =>
+  WORKS.some((_, def) => workInfluences(def).includes(metric)),
+)
 
 export interface EventDef {
   readonly id: EventId
@@ -351,7 +382,7 @@ export const EVENTS: readonly EventDef[] = [
     duration: 1,
     trigger: [{ metric: 'population', op: '<', value: 0 }],
     cooldown: 0,
-    influences: [],
+    influences: WORK_METRICS,
   },
   // FEAT: os dois degraus que faltavam na escada, apendados no fim para não mexer no índice de
   // nenhum acontecimento antigo — e por isso fora da ordem cronológica da tabela
@@ -384,9 +415,7 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
   industry: ['energy', 'energyRatio', 'economy', 'economyTrend', 'environment'],
   research: ['technology'],
   conservation: ['environment'],
-  // FEAT: a obra move o progresso da obra e mais nada até a camada permanente entrar no derive,
-  // então a lista segue vazia — quem a preenche é a tarefa que fia essa camada
-  works: [],
+  works: WORK_METRICS,
 }
 
 // FEAT: doutrina mexe no que qualquer setor mexe; só quem abre dívida chega ao paradoxo
@@ -499,6 +528,11 @@ function causesOf(
     if (entry.start === s.tick) continue
     if (other.kind === 'era' && s.tick - entry.start > CAUSAL_WINDOW) continue
     if (other.influences.some(involved)) causes.push({ kind: 'event', record: entry.record })
+  }
+
+  // FEAT: a obra pronta não tem janela como a decisão tem, porque a marca dela não expira nunca
+  for (const work of s.works) {
+    if (workInfluences(work.def).some(involved)) causes.push({ kind: 'event', record: work.record })
   }
 
   const decision = s.lastDecision

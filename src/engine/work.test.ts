@@ -121,6 +121,16 @@ describe('the works catalogue', () => {
       expect(work.effect).toEqual(EXPECTED[work.id].effect)
     }
   })
+
+  // FEAT: uma chave que nenhuma obra move é uma chave morta na camada permanente
+  it('moves every key of the layer with at least one work', () => {
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) {
+      expect(
+        WORKS.some((work) => work.effect[key] !== undefined),
+        key,
+      ).toBe(true)
+    }
+  })
 })
 
 describe('NEUTRAL_MODS', () => {

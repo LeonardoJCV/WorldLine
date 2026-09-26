@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import type { Commission } from './commission.ts'
 import { crossingAmounts, crossingCost, type Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
 import { EVENTS, METRICS, worldMetrics } from './events.ts'
 import { PARAMS as K } from './params.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
-import { Era, VARIABLES } from './state.ts'
+import { Era, VARIABLES, type WorldState } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
+import {
+  FACTOR_KEYS,
+  NEUTRAL_MODS,
+  TERM_KEYS,
+  WORKS,
+  workIndex,
+  workMods,
+  type Work,
+  type WorkKey,
+} from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const neutral = NEUTRAL_MODIFIERS
@@ -266,6 +277,160 @@ describe('a world emptied by an out-crossing where the land already collapsed', 
     if (!crowdingTrigger) throw new Error('epidemic must trigger on crowding')
     expect(crowdingTrigger.op).toBe('>')
     expect(crowded.crowding).toBeGreaterThan(crowdingTrigger.value)
+  })
+})
+
+// FEAT: a segunda camada — permanente, separada dos eventos e feita só da lista de obras prontas
+describe('the permanent layer of the works', () => {
+  const WORK_KEYS: readonly WorkKey[] = [...FACTOR_KEYS, ...TERM_KEYS]
+  const lean = 0
+
+  // FEAT: um probe com colônia, tecnologia e economia para toda leitura da tabela ser mensurável
+  function probe(works: readonly Work[]): WorldState {
+    return makeState({
+      works,
+      technology: 30,
+      economy: 2,
+      colonies: [{ body: 1, founded: 0, population: 1000, support: 0, record: 0 }],
+    })
+  }
+
+  const derived = (s: WorldState, noise = lean) => derive(s, TEST_WORLD, neutral, noise)
+  const year = (s: WorldState) => integrate(s, derived(s), neutral)
+
+  interface Reading {
+    readonly read: (s: WorldState) => number
+    readonly rises: (value: number) => boolean
+  }
+
+  // FEAT: onde cada chave do catálogo aterra, e para que lado ela empurra a grandeza que toca
+  const READINGS: Readonly<Record<WorkKey, Reading>> = {
+    harvest: { read: (s) => derived(s).foodProduction, rises: (v) => v > 1 },
+    production: { read: (s) => derived(s).foodProduction, rises: (v) => v > 1 },
+    research: { read: (s) => year(s).technology, rises: (v) => v > 1 },
+    energy: { read: (s) => derived(s).energyTarget, rises: (v) => v > 1 },
+    economy: { read: (s) => year(s).economy, rises: (v) => v > 1 },
+    capacity: { read: (s) => derived(s).carryingCapacity, rises: (v) => v > 1 },
+    colonyCost: { read: (s) => derived(s).energyTarget, rises: (v) => v < 1 },
+    mortality: { read: (s) => derived(s).deathRate, rises: (v) => v > 0 },
+    spoil: { read: (s) => derived(s).foodAvailable, rises: (v) => v < 0 },
+    harvestNoise: { read: (s) => derived(s).foodProduction, rises: (v) => v < 0 },
+    pollution: { read: (s) => derived(s).pollution, rises: (v) => v > 0 },
+  }
+
+  it('derives differently for two worlds identical except their works', () => {
+    const bare = makeState({ works: [] })
+    const irrigated = makeState({ works: [{ def: workIndex('irrigation'), done: 100, record: 0 }] })
+    expect(derived(irrigated).foodProduction).toBeGreaterThan(derived(bare).foodProduction)
+  })
+
+  // FEAT: o teste que separa obra de evento — nenhum modificador temporário sobrevive a isto,
+  // porque o ano é mil anos depois do fim da obra e não existe acontecimento ativo nenhum
+  it('keeps the effect a thousand years after the work was done, with no active event', () => {
+    const old = makeState({
+      tick: 1100,
+      active: [],
+      works: [{ def: workIndex('irrigation'), done: 100, record: 0 }],
+    })
+    const none = makeState({ tick: 1100, active: [], works: [] })
+    expect(old.active).toEqual([])
+    expect(derived(old).foodProduction).toBeGreaterThan(derived(none).foodProduction)
+  })
+
+  it('is exactly neutral with no works, so the seventeen fingerprints cannot move', () => {
+    expect(workMods([])).toEqual(NEUTRAL_MODS)
+    for (const key of FACTOR_KEYS) expect(NEUTRAL_MODS[key]).toBe(1)
+    for (const key of TERM_KEYS) expect(NEUTRAL_MODS[key]).toBe(0)
+
+    // FEAT: as duas contas que a camada reescreveu, afirmadas com === contra a fórmula de antes
+    const s = makeState()
+    const d = derive(s, TEST_WORLD, neutral, calm)
+    expect(d.foodAvailable).toBe(s.food * (1 - K.spoil) + d.foodProduction)
+    expect(d.carryingCapacity).toBe(d.capacity * (1 - 1 / (K.laborShare * K.y0)))
+  })
+
+  it('reads all eleven keys of the layer, so no key lands nowhere', () => {
+    expect(WORK_KEYS).toHaveLength(11)
+    expect(Object.keys(READINGS).sort()).toEqual([...WORK_KEYS].sort())
+  })
+
+  const EFFECTFUL = WORKS.map((work, def) => ({ id: work.id, def, effect: work.effect })).filter(
+    (work) => Object.keys(work.effect).length > 0,
+  )
+
+  // FEAT: o foguete é a única obra de efeito vazio de propósito — o portão da era espacial é a
+  // prova dele, e por isso ele é o único que fica fora desta tabela
+  it('leaves only the rocket out of the table, because only the rocket moves no coefficient', () => {
+    expect(EFFECTFUL).toHaveLength(24)
+    expect(EFFECTFUL.map((work) => work.id)).not.toContain('rocket')
+  })
+
+  it.each(EFFECTFUL)('carries the effect of $id into the derived world', ({ id, def, effect }) => {
+    const before = probe([])
+    const after = probe([{ def, done: 0, record: 0 }])
+    for (const key of WORK_KEYS) {
+      const value = effect[key]
+      if (value === undefined) continue
+      const reading = READINGS[key]
+      const label = `${id}.${key}`
+      if (reading.rises(value)) {
+        expect(reading.read(after), label).toBeGreaterThan(reading.read(before))
+      } else {
+        expect(reading.read(after), label).toBeLessThan(reading.read(before))
+      }
+    }
+  })
+
+  // FIX: uma taxa de perda negativa criaria comida do nada, então ela para em zero
+  it('never lets the granaries spoil less than nothing and create food', () => {
+    const granary = workIndex('granary')
+    const works = Array.from({ length: 5 }, (_, i) => ({ def: granary, done: 0, record: i }))
+    expect(K.spoil + workMods(works).spoil).toBeLessThan(0)
+    // FEAT: sem gente e sem terra a colheita do ano é zero, então o que sobra é o estoque puro
+    const s = makeState({ population: 0, environment: 0, food: 1e6, works })
+    const d = derived(s)
+    expect(d.foodProduction).toBe(0)
+    expect(d.foodAvailable).toBe(s.food)
+    expect(d.foodAvailable).toBeLessThanOrEqual(s.food)
+  })
+
+  // FIX: uma mortalidade negativa ressuscitaria gente, então ela para em zero
+  it('never raises the dead, however many works push mortality down', () => {
+    const healers = ['aqueduct', 'sanitation', 'medicine'] as const
+    const works = healers.map((id, i) => ({ def: workIndex(id), done: 0, record: i }))
+    const s = makeState({ technology: 100, economy: 50, environment: 100, food: 4e6, works })
+    expect(workMods(works).mortality).toBeLessThan(0)
+    const d = derived(s)
+    expect(d.deathRate).toBe(0)
+    expect(integrate(s, d, neutral).population).toBe(s.population * (1 + d.birthRate))
+  })
+
+  // FEAT: a queixa que o MVP responde, medida pela API pública: o ano 3000 de um mundo que
+  // construiu não é o ano 3000 do mesmo mundo que não construiu — e as obras ficaram lá atrás
+  it('makes the year three thousand differ from the same year without the works', () => {
+    const orders: readonly Commission[] = [
+      { tick: 100, work: 'irrigation' },
+      { tick: 400, work: 'granary' },
+      { tick: 700, work: 'pottery' },
+      { tick: 1000, work: 'plough' },
+    ]
+    const bare = new Worldline(1)
+    const built = new Worldline(1, [], null, [], [], orders)
+    bare.advance(3000)
+    built.advance(3000)
+    expect(built.present.works.length).toBeGreaterThan(0)
+    for (const work of built.present.works) expect(work.done).toBeLessThan(2000)
+    expect(built.hashAt(3000)).not.toBe(bare.hashAt(3000))
+    expect(built.present.population).not.toBe(bare.present.population)
+  })
+
+  // FIX: uma variância negativa não existe: com o piso, o ano magro nunca fica melhor que o calmo
+  it('never turns the calendars into a negative variance', () => {
+    const calendar = workIndex('calendar')
+    const many = probe(Array.from({ length: 4 }, (_, i) => ({ def: calendar, done: 0, record: i })))
+    expect(K.harvestNoise + workMods(many.works).harvestNoise).toBeLessThan(0)
+    expect(derived(many, 0).foodProduction).toBe(derived(many, 1).foodProduction)
+    expect(derived(many, 0).foodProduction).toBeLessThanOrEqual(derived(many, 0.5).foodProduction)
   })
 })
 

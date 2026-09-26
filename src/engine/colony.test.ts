@@ -12,7 +12,9 @@ import {
 } from './colony.ts'
 import {
   COLONY_CAPACITY,
+  COLONY_ENERGY_BASE,
   COLONY_FLOOR,
+  COLONY_FOUND_COST,
   COLONY_GROWTH,
   COLONY_HOLD,
   COLONY_INTAKE,
@@ -30,6 +32,7 @@ import {
 } from './params.ts'
 import type { Body, BodyKind } from './system.ts'
 import { makeState } from './testing.ts'
+import { workIndex } from './work.ts'
 
 function body(index: number, kind: BodyKind, habitability: number, home = false): Body {
   return { index, kind, distance: 1 + index, habitability, home }
@@ -47,7 +50,15 @@ const BODIES: readonly Body[] = [
 const BARREN: readonly Body[] = [body(0, 'rocky', 0.95, true), body(1, 'ice', 0.05)]
 
 function world(overrides: Partial<ColonisingWorld> = {}): ColonisingWorld {
-  return { eras: SPACE_ERA, energy: 14, population: 1e6, colonies: [], home: null, ...overrides }
+  return {
+    eras: SPACE_ERA,
+    energy: 14,
+    population: 1e6,
+    colonies: [],
+    home: null,
+    works: [],
+    ...overrides,
+  }
 }
 
 function colony(overrides: Partial<Colony> = {}): Colony {
@@ -243,6 +254,21 @@ describe('tickColonies', () => {
     expect(colonyCost(first.colonies)).toBe(0)
     const second = tickColonies(first.colonies, world({ energy: 1e6 }), BARREN)
     expect(second.colonies).toEqual([])
+  })
+
+  // FEAT: o estaleiro é a única obra que barateia a frota, e o preço dela é um só no ano: o alvo
+  // da energia e o portão de fundar mais uma veem o mesmo desconto
+  it('charges a discounted fleet once the shipyard is standing', () => {
+    expect(colonyCost([colony({ support: 0 })], 0.7)).toBeCloseTo(COLONY_UPKEEP * 0.7, 12)
+    expect(colonyCost([], 0.7)).toBe(0)
+
+    const works = [{ def: workIndex('shipyard'), done: 100, record: 0 }]
+    const tight = {
+      energy: COLONY_ENERGY_BASE + COLONY_FOUND_COST + COLONY_UPKEEP * 0.8,
+      colonies: [colony({ body: 2, support: 0 })],
+    }
+    expect(foundColony(world(tight), BODIES, 2400, 7)).toBeNull()
+    expect(foundColony(world({ ...tight, works }), BODIES, 2400, 7)?.body).toBe(3)
   })
 
   it('charges energy while support is short and stops at one', () => {

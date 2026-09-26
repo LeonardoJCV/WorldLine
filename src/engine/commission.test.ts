@@ -87,6 +87,14 @@ describe('progressWork', () => {
     expect(progressWork(plain)).toBeCloseTo(progressWork(plain, NEUTRAL_MODS), 10)
     expect(progressWork(forged)).toBeCloseTo(progressWork(plain, NEUTRAL_MODS) * 1.15, 10)
   })
+
+  // FEAT: a obra come o ano antes de os modificadores do ano serem colhidos, então ela sente a
+  // camada permanente e nunca a dos acontecimentos — combinar as duas aqui é decisão, não descuido
+  it('advances the work with the works layer alone, never with the active events', () => {
+    const unrest = EVENTS.findIndex((def) => def.id === 'civil_unrest')
+    const troubled = { ...base, active: [{ def: unrest, record: 0, start: 0 }] }
+    expect(progressWork(troubled)).toBe(progressWork(base))
+  })
 })
 
 // FEAT: um mundo que põe o ano inteiro na obra e produz o bastante para fechar a irrigação nele

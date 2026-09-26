@@ -3,6 +3,7 @@ import { debtRatio } from './debt.ts'
 import { clamp, pow, smoothstep } from './math.ts'
 import { DEBT_WEIGHT, PARAMS as K } from './params.ts'
 import { Era, VARIABLES, hasEra, type WorldConfig, type WorldState } from './state.ts'
+import { workMods } from './work.ts'
 
 export interface Modifiers {
   readonly harvest: number
@@ -57,6 +58,9 @@ export function derive(
   mods: Modifiers,
   harvestNoise: number,
 ): Derived {
+  // FEAT: a segunda camada, permanente: ela não sai de `active`, sai das obras prontas, e é por
+  // isso que o ano 3000 não sai igual ao ano 300 — nenhum modificador daqui expira
+  const w = workMods(s.works)
   const agriculture = s.allocation.agriculture / 100
   const industry = s.allocation.industry / 100
   const labor = s.population * K.laborShare
@@ -71,14 +75,20 @@ export function derive(
     Math.sqrt(s.environment / 100) *
     (K.agriBase + K.agriWeight * agriculture) *
     (1 + K.mechWeight * mech)
-  const carryingCapacity = capacity * (1 - 1 / (K.laborShare * K.y0))
-  const shock = (1 + K.harvestNoise * (2 * harvestNoise - 1)) * mods.harvest
+  const carryingCapacity = capacity * (1 - 1 / (K.laborShare * K.y0)) * w.capacity
+  // FIX: variância negativa não existe, e sem o piso o ano magro passaria a ser melhor que o calmo
+  const noise = Math.max(0, K.harvestNoise + w.harvestNoise)
+  const shock = (1 + noise * (2 * harvestNoise - 1)) * mods.harvest * w.harvest
   const stabilityYield = K.harvestStabilityBase + ((1 - K.harvestStabilityBase) * s.stability) / 100
   const demand = labor + capacity / K.y0
   // FIX: sem ninguém e sem terra os dois zeram juntos, e colheita nenhuma é zero, não indefinida
   const foodProduction =
-    demand > 0 ? ((capacity * labor) / demand) * shock * stabilityYield * mods.production : 0
-  const foodAvailable = s.food * (1 - K.spoil) + foodProduction
+    demand > 0
+      ? ((capacity * labor) / demand) * shock * stabilityYield * mods.production * w.production
+      : 0
+  // FIX: uma perda negativa criaria comida do nada, então a taxa de perda para em zero
+  const spoil = Math.max(0, K.spoil + w.spoil)
+  const foodAvailable = s.food * (1 - spoil) + foodProduction
   // FIX: sem ninguém para alimentar, a comida por pessoa não é uma divisão
   const foodSecurity = s.population > 0 ? foodAvailable / s.population : Number.POSITIVE_INFINITY
   // FIX: a colônia consome vazão, não estoque: o custo sai do alvo da energia, não do nível
@@ -86,11 +96,13 @@ export function derive(
     K.energyBase,
     (K.energyBase + K.energyWeight * industry) *
       (1 + (K.energyTech * s.technology) / 100) *
-      (hasEra(s, Era.industrial) ? K.industrialEnergy : 1) -
-      colonyCost(s.colonies),
+      (hasEra(s, Era.industrial) ? K.industrialEnergy : 1) *
+      w.energy -
+      colonyCost(s.colonies, w.colonyCost),
   )
   const pollution =
-    K.pN * K.pollutionScale * s.energy * (1 - clean) * pow(s.population / K.P0, K.pollutionPopExp)
+    K.pN * K.pollutionScale * s.energy * (1 - clean) * pow(s.population / K.P0, K.pollutionPopExp) +
+    w.pollution
   const transition = s.economy / K.yDT
   const fed = smoothstep(K.fertilityFrom, K.fertilityTo, foodSecurity)
   const birthRate =
@@ -99,11 +111,15 @@ export function derive(
     mods.birth
   const hunger = Math.max(0, 1 - foodSecurity)
   const degradation = 1 - s.environment / 100
-  const deathRate =
+  // FIX: uma mortalidade negativa ressuscitaria gente, então ela para em zero
+  const deathRate = Math.max(
+    0,
     (K.d0 * (1 - (K.techMortality * s.technology) / 100)) / (1 + K.wealthMortality * s.economy) +
-    K.dFam * hunger * Math.sqrt(hunger) +
-    K.dPol * degradation * degradation +
-    mods.mortality
+      K.dFam * hunger * Math.sqrt(hunger) +
+      K.dPol * degradation * degradation +
+      mods.mortality +
+      w.mortality,
+  )
 
   return {
     labor,
@@ -121,6 +137,7 @@ export function derive(
 }
 
 export function integrate(s: WorldState, d: Derived, mods: Modifiers, migrated = 0): WorldState {
+  const w = workMods(s.works)
   const research = s.allocation.research / 100
   const conservation = s.allocation.conservation / 100
 
@@ -136,7 +153,9 @@ export function integrate(s: WorldState, d: Derived, mods: Modifiers, migrated =
     Math.min(1, d.foodSecurity) *
     (K.econStabilityBase + ((1 - K.econStabilityBase) * s.stability) / 100) *
     mods.economy *
-    mods.production
+    mods.production *
+    w.economy *
+    w.production
   const economy = s.economy + K.econInertia * (economyTarget - s.economy)
 
   const technology = clamp(
@@ -146,7 +165,8 @@ export function integrate(s: WorldState, d: Derived, mods: Modifiers, migrated =
         Math.sqrt(s.economy) *
         (1 - s.technology / 100) *
         (hasEra(s, Era.industrial) ? K.industrialResearch : 1) *
-        mods.research,
+        mods.research *
+        w.research,
     0,
     100,
   )
