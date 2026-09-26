@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { totalOwed, type Debt } from '../../engine/debt.ts'
+import type { Debt } from '../../engine/debt.ts'
 import type { EventRecord } from '../../engine/events.ts'
 import type { Merge } from '../../engine/merge.ts'
 import type { Status, Variable } from '../../engine/state.ts'
-import type { Snapshot, WorldlineId } from '../../worker/protocol.ts'
+import type { SeamPreview, Snapshot, WorldlineId } from '../../worker/protocol.ts'
 import {
   confluenceView,
   homeChange,
   lastConfluence,
   mergeBlock,
   mergePartners,
+  previewForYear,
   seamView,
   seamedRemoval,
   type MergeBlockInput,
@@ -42,8 +43,20 @@ function snapshot(
   }
 }
 
-// FEAT: as duas que se costuram; dívida com qualquer uma delas é interna, e interna não é dívida
-const PAIR: readonly [string, string] = ['A', 'B']
+// FEAT: a resposta do hospedeiro: o estado previsto e os quatro números que só o motor sabe fazer
+function preview(
+  seamed: Snapshot,
+  numbers: Partial<Omit<SeamPreview, 'seamed'>> = {},
+): SeamPreview {
+  return {
+    seamed,
+    shock: 0,
+    food: { now: 0, next: 0 },
+    debtIn: 0,
+    debtSettled: 0,
+    ...numbers,
+  }
+}
 
 function living(tick = 2000, status: Status = 'running'): Snapshot {
   return { ...snapshot(), tick, status }
@@ -82,7 +95,7 @@ describe('seamView', () => {
       economy: 5,
       environment: 61,
     })
-    const view = seamView(now, seamed, incoming, 0, PAIR)
+    const view = seamView(now, incoming, preview(seamed))
     const kind = (variable: Variable) => view.rows.find((row) => row.variable === variable)?.kind
     expect(kind('food')).toBe('sum')
     for (const variable of ['energy', 'technology', 'economy', 'environment'] as const) {
@@ -93,8 +106,7 @@ describe('seamView', () => {
   it('labels population as sum when the seam actually summed it (same home)', () => {
     const now = snapshot({ population: 1_000 })
     const incoming = snapshot({ population: 4_000 })
-    const seamed = snapshot({ population: 5_000 })
-    const view = seamView(now, seamed, incoming, 0, PAIR)
+    const view = seamView(now, incoming, preview(snapshot({ population: 5_000 })))
     expect(view.rows.find((row) => row.variable === 'population')?.kind).toBe('sum')
   })
 
@@ -103,8 +115,7 @@ describe('seamView', () => {
   it('labels population as blend when the seam kept only the heavier side (different homes)', () => {
     const now = snapshot({ population: 1_000 })
     const incoming = snapshot({ population: 4_000 })
-    const seamed = snapshot({ population: 4_000 })
-    const view = seamView(now, seamed, incoming, 0, PAIR)
+    const view = seamView(now, incoming, preview(snapshot({ population: 4_000 })))
     expect(view.rows.find((row) => row.variable === 'population')?.kind).toBe('blend')
   })
 
@@ -113,49 +124,57 @@ describe('seamView', () => {
     const incoming = snapshot({ population: 1_000_000, stability: 40, technology: 50 })
     // FEAT: valores arbitrários (não a mistura real) para provar que a linha só lê, nunca calcula
     const seamed = snapshot({ population: 12_345, stability: 6, technology: 78 })
-    const view = seamView(now, seamed, incoming, 0, PAIR)
+    const view = seamView(now, incoming, preview(seamed))
     for (const row of view.rows) {
       expect(row.now).toBe(now.values[row.variable])
       expect(row.next).toBe(seamed.values[row.variable])
     }
   })
 
-  // FIX: o abalo chega pronto do hospedeiro; a tela só o repassa, nunca o deriva dos snapshots de novo
-  it('reads shock exactly as given, never recomputing it from the snapshots', () => {
-    const now = snapshot({ population: 3_000_000, stability: 999 })
-    const incoming = snapshot({ population: 1_000_000, stability: -999 })
-    const seamed = snapshot({ population: 4_000_000, stability: 55 })
-    // FEAT: 42 não bate com nenhuma mistura possível destes números; só um passthrough acerta
-    expect(seamView(now, seamed, incoming, 42, PAIR).shock).toBe(42)
-    expect(seamView(now, seamed, incoming, 0, PAIR).shock).toBe(0)
-  })
-
-  // FIX: dos 35 que a outra devia, 25 eram à sobrevivente e se anulam; só 10 chegam de verdade
-  it('counts as incoming only the debt that survives the seam, and as settled what annihilates', () => {
-    const now = snapshot({}, [
+  // FIX: os quatro números chegam prontos do hospedeiro; a tela só os repassa, e nenhum deles se
+  // deriva outra vez dos snapshots — nem o abalo, nem a comida, nem as duas contas de dívida
+  it('reads shock, food and debt exactly as given, never recomputing any of them', () => {
+    const now = snapshot({ population: 3_000_000, stability: 999 }, [
       { kind: 'resource', owed: 40, since: 0, origin: 'B' },
       { kind: 'resource', owed: 60, since: 0, origin: 'C' },
     ])
-    const incoming = snapshot({}, [
+    const incoming = snapshot({ population: 1_000_000, stability: -999 }, [
       { kind: 'resource', owed: 25, since: 0, origin: 'A' },
       { kind: 'resource', owed: 10, since: 0, origin: 'C' },
     ])
-    // FEAT: só a dívida com C sobrevive à costura; a de A com B era interna e some
-    const seamed = snapshot({}, [{ kind: 'resource', owed: 70, since: 0, origin: 'C' }])
-    const view = seamView(now, seamed, incoming, 0, PAIR)
-    expect(view.debtIn).toBe(10)
-    expect(view.debtSettled).toBe(65)
-    // FEAT: o que chega mais o que a sobrevivente guarda é o total da história unida
-    expect(totalOwed(seamed.debts)).toBe(60 + view.debtIn)
+    const seamed = snapshot({ population: 4_000_000, stability: 55 }, [
+      { kind: 'resource', owed: 70, since: 0, origin: 'C' },
+    ])
+    // FEAT: nenhum destes números bate com conta alguma sobre os três livros-razão acima (que dariam
+    // 10 e 65); só um passthrough acerta os quatro
+    const view = seamView(
+      now,
+      incoming,
+      preview(seamed, {
+        shock: 42,
+        food: { now: 1.31, next: 0.64 },
+        debtIn: 777,
+        debtSettled: 888,
+      }),
+    )
+    expect(view.shock).toBe(42)
+    expect(view.food).toEqual({ now: 1.31, next: 0.64 })
+    expect(view.debtIn).toBe(777)
+    expect(view.debtSettled).toBe(888)
+    expect(seamView(now, incoming, preview(seamed)).shock).toBe(0)
   })
+})
 
-  it('reports no settlement, and the whole incoming debt, when neither owed the other', () => {
-    const now = snapshot({}, [{ kind: 'resource', owed: 60, since: 0, origin: 'C' }])
-    const incoming = snapshot({}, [{ kind: 'resource', owed: 10, since: 0, origin: 'C' }])
-    const seamed = snapshot({}, [{ kind: 'resource', owed: 70, since: 0, origin: 'C' }])
-    const view = seamView(now, seamed, incoming, 0, PAIR)
-    expect(view.debtIn).toBe(10)
-    expect(view.debtSettled).toBe(0)
+// FIX: nada repõe a prévia depois de a costura mudar, então mostrar a do ano passado como se fosse
+// a de agora seria a tela prometendo números de uma costura que já não é esta
+describe('previewForYear', () => {
+  it('keeps the preview of the present year and drops every other one', () => {
+    const seam = preview(snapshot())
+    expect(seam.seamed.tick).toBe(2000)
+    expect(previewForYear(seam, 2000)).toBe(seam)
+    expect(previewForYear(seam, 2001)).toBeNull()
+    expect(previewForYear(seam, 1999)).toBeNull()
+    expect(previewForYear(null, 2000)).toBeNull()
   })
 })
 

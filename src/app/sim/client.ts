@@ -4,6 +4,7 @@ import type {
   BranchSpec,
   FromWorker,
   MergeSpec,
+  SeamPreview,
   Series,
   Snapshot,
   Speed,
@@ -37,11 +38,6 @@ export interface DistanceResult {
   readonly from: number
   readonly to: number
   readonly values: Float32Array
-}
-
-export interface SeamPreview {
-  readonly seamed: Snapshot
-  readonly shock: number
 }
 
 type Listener = (message: FromWorker) => void
@@ -165,7 +161,8 @@ export class SimulationClient {
       other,
     })
     if (reply.type !== 'mergePreview') throw new Error(`unexpected ${reply.type} reply`)
-    return { seamed: reply.seamed, shock: reply.shock }
+    const { seamed, shock, food, debtIn, debtSettled } = reply
+    return { seamed, shock, food, debtIn, debtSettled }
   }
 
   async range(world: WorldlineId, from: number, to: number, buckets: number): Promise<RangeResult> {

@@ -9,13 +9,14 @@ import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
   EndReason,
   EventUpdate,
+  SeamPreview,
   Snapshot,
   Speed,
   WorldlineId,
   WorldlineInfo,
 } from '../../worker/protocol.ts'
 import type { MultiverseLink } from '../world/link.ts'
-import type { SeamPreview, SimulationClient } from './client.ts'
+import type { SimulationClient } from './client.ts'
 
 export type Mode = 'observe' | 'intervene' | 'cross' | 'merge'
 
@@ -429,6 +430,8 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         const kept = chosen !== null && worlds.some((world) => world.info.id === chosen)
         const other = store.getState().mergeOther
         const keptOther = other !== null && worlds.some((world) => world.info.id === other)
+        // FIX: a prévia é de um ano só; virado o ano ela fala de uma costura que já não é esta
+        const sameYear = store.getState().now === message.now
         store.setState({
           now: message.now,
           credit: message.credit,
@@ -439,6 +442,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
           ...focused(worlds, focus),
           ...(kept ? {} : { crossOrigin: null }),
           ...(keptOther ? {} : { mergeOther: null }),
+          ...(sameYear ? {} : { mergePreview: null }),
           ...(focus === current
             ? {}
             : { selected: null, cursor: null, inspected: null, inspectedOrigin: null }),

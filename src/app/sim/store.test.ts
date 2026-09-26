@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HORIZON } from '../../engine/params.ts'
-import type { FromWorker, Snapshot, ToWorker } from '../../worker/protocol.ts'
+import type { FromWorker, SeamPreview, Snapshot, ToWorker } from '../../worker/protocol.ts'
 import { currentLink } from '../world/current.ts'
 import { SimulationClient, type Port } from './client.ts'
 import { createSimulationStore } from './store.ts'
@@ -67,6 +67,17 @@ function fakeSnapshot(shock: number): Snapshot {
     status: 'running',
     home: null,
     debts: [],
+  }
+}
+
+// FEAT: a prévia inteira, para os testes de despacho olharem só o abalo que a distingue
+function fakePreview(shock: number, tick = 2000): SeamPreview {
+  return {
+    seamed: { ...fakeSnapshot(shock), tick },
+    shock,
+    food: { now: 1.2, next: 0.8 },
+    debtIn: 0,
+    debtSettled: 0,
   }
 }
 
@@ -628,13 +639,8 @@ describe('simulation store', () => {
     if (!first || !second) throw new Error('expected two requests')
 
     // FEAT: a resposta do pedido mais ANTIGO chega DEPOIS — se vencer, a tela mostraria o par errado
-    deliver({
-      type: 'mergePreview',
-      requestId: second.requestId,
-      seamed: fakeSnapshot(2),
-      shock: 2,
-    })
-    deliver({ type: 'mergePreview', requestId: first.requestId, seamed: fakeSnapshot(1), shock: 1 })
+    deliver({ type: 'mergePreview', requestId: second.requestId, ...fakePreview(2) })
+    deliver({ type: 'mergePreview', requestId: first.requestId, ...fakePreview(1) })
     await flush()
     await flush()
 
@@ -650,12 +656,7 @@ describe('simulation store', () => {
     if (!request) throw new Error('expected a request')
     store.setState({ focus: 'C' })
 
-    deliver({
-      type: 'mergePreview',
-      requestId: request.requestId,
-      seamed: fakeSnapshot(9),
-      shock: 9,
-    })
+    deliver({ type: 'mergePreview', requestId: request.requestId, ...fakePreview(9) })
     await flush()
 
     expect(store.getState().mergePreview).toBeNull()
@@ -725,11 +726,28 @@ describe('simulation store', () => {
     expect(store.getState().mergePreview).toBeNull()
   })
 
+  // FIX: com os anos correndo nenhuma prévia nova se pede (o painel só pede com o tempo parado),
+  // então sem esta limpeza a costura do ano passado ficaria guardada como se fosse a de agora
+  it('forgets the preview as soon as the year turns', async () => {
+    const { port, deliver } = fakePort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.setState({ mergePreview: fakePreview(7), now: 2000 })
+
+    deliver({ type: 'progress', now: 2000, credit: 0, playing: false, ended: null, worlds: [] })
+    await flush()
+    // FEAT: o mesmo ano relatado outra vez não apaga nada
+    expect(store.getState().mergePreview).not.toBeNull()
+
+    deliver({ type: 'progress', now: 2001, credit: 0, playing: true, ended: null, worlds: [] })
+    await flush()
+    expect(store.getState().mergePreview).toBeNull()
+  })
+
   // FIX: a prévia guardada é sempre do par em tela; trocar de parceira sem apagá-la mostraria a costura errada
   it('forgets the preview of the previous pair as soon as another is chosen', async () => {
     const { port, deliver } = fakePort()
     const store = createSimulationStore(new SimulationClient(port))
-    store.setState({ mergePreview: { seamed: fakeSnapshot(7), shock: 7 } })
+    store.setState({ mergePreview: fakePreview(7) })
 
     store.getState().setMergeOther('C')
 

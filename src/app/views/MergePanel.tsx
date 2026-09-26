@@ -5,7 +5,7 @@ import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
 import { bodyName, currentHome } from './colonies.ts'
 import { worldEnded } from './cross.ts'
-import { homeChange, mergeBlock, mergePartners, seamView } from './merge.ts'
+import { homeChange, mergeBlock, mergePartners, previewForYear, seamView } from './merge.ts'
 
 interface Done {
   readonly survivor: WorldlineId
@@ -48,11 +48,11 @@ export function MergePanel() {
   const written = done !== null && now <= done.year ? done : null
 
   // FIX: a prévia só vale para o ano em que a costura acontece, que é o presente do hospedeiro
-  const seamed = preview !== null && preview.seamed.tick === now ? preview : null
+  const seamed = previewForYear(preview, now)
   const seam =
     present !== null && incoming !== null && seamed !== null && other !== null
       ? {
-          view: seamView(present, seamed.seamed, incoming, seamed.shock, [focus, other]),
+          view: seamView(present, incoming, seamed),
           incoming,
           homes: homeChange(
             currentHome(seed, present.home),
@@ -142,6 +142,13 @@ export function MergePanel() {
           </ul>
           <p className="merge__shock">
             {t('merge.shock', { shock: formatDecimal(seam.view.shock, locale, 1) })}
+          </p>
+          {/* FEAT: o celeiro soma na linha acima, e esta frase diz que a colheita não soma com ele */}
+          <p className="merge__food">
+            {t('merge.food', {
+              now: formatMetric('foodSecurity', seam.view.food.now, locale),
+              next: formatMetric('foodSecurity', seam.view.food.next, locale),
+            })}
           </p>
           {seam.view.debtIn > 0 && (
             <p className="merge__note">

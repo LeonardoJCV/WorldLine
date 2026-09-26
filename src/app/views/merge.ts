@@ -1,8 +1,13 @@
-import { totalOwed } from '../../engine/debt.ts'
 import type { Cause, EventRecord } from '../../engine/events.ts'
 import type { Merge } from '../../engine/merge.ts'
 import { VARIABLES, type Variable } from '../../engine/state.ts'
-import type { Snapshot, WorldlineId, WorldlineInfo } from '../../worker/protocol.ts'
+import type {
+  SeamFood,
+  SeamPreview,
+  Snapshot,
+  WorldlineId,
+  WorldlineInfo,
+} from '../../worker/protocol.ts'
 import type { MessageKey } from '../i18n/en.ts'
 import { formatYear } from '../i18n/format.ts'
 import type { Params } from '../i18n/index.ts'
@@ -18,8 +23,15 @@ export interface SeamRow {
 export interface SeamView {
   readonly rows: readonly SeamRow[]
   readonly shock: number
+  readonly food: SeamFood
   readonly debtIn: number
   readonly debtSettled: number
+}
+
+// FEAT: a prévia vale para o ano em que a costura acontece, e o presente do hospedeiro é esse ano
+export function previewForYear(preview: SeamPreview | null, now: number): SeamPreview | null {
+  if (preview === null || preview.seamed.tick !== now) return null
+  return preview
 }
 
 // FIX: população nem sempre soma — quando os lares divergem, mergeStates mantém só a história mais
@@ -31,27 +43,18 @@ function kindOf(now: number, next: number, incoming: number): 'sum' | 'blend' {
   return Math.abs(next - (now + incoming)) <= SUM_TOLERANCE * scale ? 'sum' : 'blend'
 }
 
-// FEAT: a tela nunca calcula a costura; ela só compara os snapshots e o abalo que o hospedeiro já rendeu
-export function seamView(
-  now: Snapshot,
-  seamed: Snapshot,
-  incoming: Snapshot,
-  shock: number,
-  between: readonly [string, string],
-): SeamView {
+// FEAT: a tela nunca calcula a costura; ela lê as linhas dos dois snapshots e repassa, sem tocar,
+// cada número que só o motor sabe fazer — abalo, comida e dívida chegam prontos do hospedeiro
+export function seamView(now: Snapshot, incoming: Snapshot, preview: SeamPreview): SeamView {
   const rows = VARIABLES.map((variable) => {
     const before = now.values[variable]
-    const next = seamed.values[variable]
+    const next = preview.seamed.values[variable]
     const arriving = incoming.values[variable]
     return { variable, now: before, next, kind: kindOf(before, next, arriving) }
   })
 
-  // FIX: o que vem junto é só o que sobrevive à costura — a dívida da outra com quem se costura
-  // se anula, e anunciá-la como "vem com ela" seria dizer um número que não chega a chegar
-  const debtIn = totalOwed(incoming.debts.filter((debt) => !between.includes(debt.origin)))
-  const debtSettled = totalOwed(now.debts) + totalOwed(incoming.debts) - totalOwed(seamed.debts)
-
-  return { rows, shock, debtIn, debtSettled }
+  const { shock, food, debtIn, debtSettled } = preview
+  return { rows, shock, food, debtIn, debtSettled }
 }
 
 // FEAT: a costura pede da outra história o mesmo que a travessia pede da origem: viva, e não esta

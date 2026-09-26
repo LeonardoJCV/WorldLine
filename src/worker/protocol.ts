@@ -29,8 +29,25 @@ export interface Snapshot {
   readonly status: Status
   // FEAT: o corpo onde a história mora hoje; null enquanto ela nunca saiu do planeta natal
   readonly home: number | null
-  // FEAT: a prévia de uma costura precisa da dívida das três pontas, e só o snapshot chega até ela
+  // FEAT: o livro-razão do estado que este snapshot descreve
   readonly debts: readonly Debt[]
+}
+
+// FEAT: a comida por pessoa que o motor lê nos dois estados, porque o estoque somar não é a colheita
+// crescer: a tela compara os dois números e não deriva nenhum
+export interface SeamFood {
+  readonly now: number
+  readonly next: number
+}
+
+// FEAT: tudo o que o hospedeiro rende de uma costura especulativa — o estado previsto e os números
+// que só o motor sabe calcular, para nenhuma regra da costura viver na tela
+export interface SeamPreview {
+  readonly seamed: Snapshot
+  readonly shock: number
+  readonly food: SeamFood
+  readonly debtIn: number
+  readonly debtSettled: number
 }
 
 export interface EventUpdate {
@@ -173,13 +190,8 @@ export type FromWorker =
   | { readonly type: 'inspect'; readonly requestId: number; readonly snapshot: Snapshot }
   | { readonly type: 'branched'; readonly requestId: number; readonly world: WorldlineId }
   | { readonly type: 'merged'; readonly requestId: number; readonly world: WorldlineId }
-  | {
-      readonly type: 'mergePreview'
-      readonly requestId: number
-      readonly seamed: Snapshot
-      // FEAT: o abalo é constante do motor; a tela nunca a conhece, então o hospedeiro entrega o valor já pronto
-      readonly shock: number
-    }
+  // FEAT: abalo, comida e dívida são regra do motor; a tela nunca as conhece, então chegam prontas
+  | ({ readonly type: 'mergePreview'; readonly requestId: number } & SeamPreview)
   | {
       readonly type: 'crossed'
       readonly requestId: number

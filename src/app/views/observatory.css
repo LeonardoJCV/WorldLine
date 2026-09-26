@@ -1423,6 +1423,12 @@ button.causal__node:hover {
   font-size: var(--text-sm);
 }
 
+/* FEAT: o custo maior da costura lê com o peso e a largura do abalo, e numa linha só, ao lado dele */
+.merge__food {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+}
+
 .merge__note {
   max-width: 48ch;
   margin: var(--space-1) 0 0;

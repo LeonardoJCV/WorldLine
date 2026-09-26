@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { VARIABLES, type Variable } from '../src/engine/state.ts'
+import { MODEL_VERSION } from '../src/engine/params.ts'
+import { VARIABLES, type Allocation, type Variable } from '../src/engine/state.ts'
 import { STRANDS } from '../src/app/current/normalize.ts'
+import { encodeMultiverse } from '../src/app/world/link.ts'
 import { useGraphics } from './stage.ts'
 import { branchFromStart, installParadox, runToParadox, worldAtYear } from './support.ts'
 
@@ -617,6 +619,63 @@ test('announces the confluence on a phone without pushing anything sideways', as
 
 // FIX: reaberta de um endereço, uma história já unida não anuncia nada — ninguém viu as duas virarem
 // uma, e um anúncio de um ano antigo seria a tela contando o que não aconteceu agora
+// FEAT: duas histórias no ano pedido, abertas direto do endereço, para a costura poder acontecer
+// longe do ano 5 sem o navegador reviver dois séculos em tempo real
+const LEAN: Allocation = { agriculture: 30, industry: 30, research: 20, conservation: 20 }
+
+function pairAtYear(year: number): string {
+  return `/#/m/${encodeMultiverse({
+    version: MODEL_VERSION,
+    seed: 482913,
+    tick: year,
+    decisions: [],
+    crossings: [],
+    branches: [{ parent: 0, fork: 0, decisions: [{ tick: 0, allocation: LEAN }], crossings: [] }],
+  })}`
+}
+
+// FIX: toda a suíte costurava no ano 5, o único regime medido em que a fome NÃO vem; medido no ano
+// 200 o celeiro somado é uma promessa que um ano depois vale zero, e é isso que a frase da comida diz
+test('names what the seam costs in food, and the famine that follows proves the number', async ({
+  page,
+}) => {
+  test.slow()
+  await page.goto(pairAtYear(200))
+  await expect(page.getByTestId('year')).toHaveText('0200')
+  await modeTab(page).click()
+  await pickHistory(page, 'B')
+  await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
+
+  // FEAT: a linha do celeiro lê como ganho — soma, com um '+' — e é essa leitura que a frase corrige
+  const barn = await parts(flow(page, 'food'))
+  expect(barn.kind).toBe('sum')
+  const promised = compact(barn.next)
+  expect(promised).toBeGreaterThan(compact(barn.now))
+
+  const sentence = page.locator('.merge__food')
+  await expect(sentence).toBeVisible()
+  const said = ((await sentence.textContent()) ?? '').trim()
+  const numbers =
+    /^Food per person: ([\d.]+) apart, ([\d.]+) together — stores add up, harvests do not$/.exec(
+      said,
+    )
+  if (!numbers) throw new Error(`the panel never named the cost in food: ${said}`)
+  const [, today = '', united = ''] = numbers
+  // FEAT: medido nesta semente e neste ano — a história unida come menos por pessoa do que a de agora
+  expect(Number(united)).toBeLessThan(Number(today))
+
+  await expect(confirm(page)).toBeEnabled()
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toHaveText('B flowed into A.')
+  // FEAT: a fome começa no ano seguinte à costura, e um registro se lê no ano em que o motor o fecha
+  for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(page.getByTestId('year')).toHaveText('0202')
+
+  // FEAT: a fome é de 0201, o ano logo após a costura, e o celeiro que o painel somou já não existe
+  await expect(page.locator('.events__item', { hasText: 'Famine' })).toContainText('0201')
+  expect(compact(await stateValue(page, 'food'))).toBeLessThan(promised * 0.1)
+})
+
 test('never announces a confluence the observer did not watch happen', async ({ page }) => {
   test.slow()
   await pairAtYearFive(page)

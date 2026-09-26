@@ -9,9 +9,16 @@ import {
   type CrossingKind,
   type Dose,
 } from '../engine/crossing.ts'
-import { bearsDebt, circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
+import { bearsDebt, circularParadox, debtRatio, totalOwed, type Debt } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
-import { mergeStates, mergeWeights, validateMerge, type Merge } from '../engine/merge.ts'
+import { worldMetrics } from '../engine/events.ts'
+import {
+  mergeStates,
+  mergeWeights,
+  settleDebts,
+  validateMerge,
+  type Merge,
+} from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
   VARIABLES,
@@ -719,11 +726,27 @@ export class SimulationHost {
     const weights = mergeWeights(present.population, arrival.values?.population ?? 0)
     const predicted = present.stability * weights.a + (arrival.values?.stability ?? 0) * weights.b
     const shock = predicted - seamed.stability
+    // FIX: o celeiro soma e a colheita não, então o custo maior da costura é a comida por pessoa —
+    // o motor a lê nos dois estados com a mesma função que os acontecimentos consultam
+    const world = survivor.worldline.world
+    const food = {
+      now: worldMetrics(present, world).foodSecurity,
+      next: worldMetrics(seamed, world).foodSecurity,
+    }
+    // FIX: a dívida interna se anula pela regra do motor, chamada aqui: um livro-razão vazio do lado
+    // da anfitriã deixa `settleDebts` render exatamente o que da outra sobrevive à costura
+    const between: readonly [string, string] = [arrival.self, arrival.other]
+    const debtIn = totalOwed(settleDebts([], arrival.debts ?? [], between))
+    const debtSettled =
+      totalOwed(present.debts) + totalOwed(arrival.debts ?? []) - totalOwed(seamed.debts)
     this.#send({
       type: 'mergePreview',
       requestId,
       seamed: this.#snapshot(survivor, seamed),
       shock,
+      food,
+      debtIn,
+      debtSettled,
     })
   }
 

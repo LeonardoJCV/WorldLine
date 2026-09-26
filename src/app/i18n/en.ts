@@ -332,6 +332,7 @@ export const en = {
   'merge.sum': '{now} + {incoming} → {next}',
   'merge.blend': '{now} and {incoming} → {next}',
   'merge.shock': 'The seam takes {shock} from stability, and the number above already counts it',
+  'merge.food': 'Food per person: {now} apart, {next} together — stores add up, harvests do not',
   'merge.debtIn': '{value} of debt comes with it',
   'merge.debtSettled': '{value} settles, because they owed each other',
   'merge.homes': 'The history will live on {body}; {left} becomes a colony',
