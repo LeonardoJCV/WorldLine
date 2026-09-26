@@ -48,8 +48,9 @@ const BRIGHT = '#ffffff'
 const MUTED = 'rgba(142, 136, 181, 0.7)'
 // FEAT: mesma família de cor dos marcadores de travessia na cena 3D
 const CROSSING_COLOR = '#f2d9a8'
-const FONT = '500 12px "Archivo Variable", system-ui, sans-serif'
-const FONT_STRONG = '650 12px "Archivo Variable", system-ui, sans-serif'
+// FEAT: exportados para o e2e medir a tinta real destes tipos e conferi-la com ERA_LABEL_INK
+export const LABEL_FONT = '500 12px "Archivo Variable", system-ui, sans-serif'
+export const LABEL_FONT_STRONG = '650 12px "Archivo Variable", system-ui, sans-serif'
 export const LABEL_WIDTH = 150
 
 function traceRibbon(ctx: CanvasRenderingContext2D, ribbon: Ribbon): void {
@@ -95,7 +96,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   for (const marker of input.markers) {
     const chosen = marker.index === input.selected
     ctx.textAlign = 'left'
-    ctx.font = chosen ? FONT_STRONG : FONT
+    ctx.font = chosen ? LABEL_FONT_STRONG : LABEL_FONT
     if (marker.kind === 'era') {
       const y = eraLabelY(frame, marker.row, rows)
       ctx.strokeStyle = chosen ? BRIGHT : AXIS
@@ -171,7 +172,7 @@ function drawCursor(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   ctx.moveTo(x, top)
   ctx.lineTo(x, frame.centerY + frame.height * 0.45)
   ctx.stroke()
-  ctx.font = FONT
+  ctx.font = LABEL_FONT
   ctx.fillStyle = INK
   ctx.textAlign = 'center'
   ctx.fillText(input.yearLabel(input.cursor), x, top - 10)
@@ -194,7 +195,7 @@ function drawCompanions(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   ctx.strokeStyle = 'rgba(230, 228, 245, 0.45)'
   ctx.fillStyle = INK
   ctx.lineWidth = 1.5
-  ctx.font = FONT_STRONG
+  ctx.font = LABEL_FONT_STRONG
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'
   for (const track of input.companions) {
