@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { GOLDEN_CASES, INHERITANCE_CASE, MERGE_CASE } from '../engine/golden.ts'
+import {
+  GOLDEN_CASES,
+  GOLDEN_SCRIPTS,
+  INHERITANCE_CASE,
+  MERGE_CASE,
+  mergeSeam,
+} from '../engine/golden.ts'
 import { CAUSAL_WINDOW } from '../engine/params.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
@@ -88,5 +94,58 @@ describe('runMergeCheck', () => {
     ]
     expect(published).toHaveLength(17)
     expect(new Set(published).size).toBe(17)
+  })
+})
+
+describe('the works the reference histories never build', () => {
+  // FEAT: nenhum roteiro comissiona nada, então os dezessete têm de sair com a obra vazia — e é
+  // essa afirmação, e não a confiança, que sustenta que nenhum fingerprint se moveu nesta tarefa
+  const idle = (world: Worldline) => {
+    expect(world.commissions).toEqual([])
+    expect(world.present.works).toEqual([])
+    expect(world.present.building).toBeNull()
+  }
+
+  it('leaves all seventeen fingerprints alone, with no work done and none under way', () => {
+    for (const { seed, script, year, hash } of GOLDEN_CASES) {
+      const plan = GOLDEN_SCRIPTS[script]
+      const world = new Worldline(seed, plan.decisions, null, plan.crossings)
+      world.advance(year)
+      idle(world)
+      expect(world.hashAt(year)).toBe(hash)
+    }
+
+    const collapsing = new Worldline(
+      COLLAPSE_CASE.seed,
+      COLLAPSE_DECISIONS,
+      null,
+      COLLAPSE_CROSSINGS,
+    )
+    collapsing.advance(COLLAPSE_CASE.year)
+    idle(collapsing)
+    expect(collapsing.hashAt(COLLAPSE_CASE.year)).toBe(COLLAPSE_CASE.hash)
+
+    const inherited = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const heir = new Worldline(
+      INHERITANCE_CASE.seed,
+      inherited.decisions,
+      null,
+      inherited.crossings,
+    )
+    heir.advance(INHERITANCE_CASE.year)
+    idle(heir)
+    expect(heir.hashAt(INHERITANCE_CASE.year)).toBe(INHERITANCE_CASE.hash)
+
+    const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
+    const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
+    const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
+    const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+    receives.advance(MERGE_CASE.tick)
+    departs.advance(MERGE_CASE.tick)
+    receives.merge(mergeSeam(departs.present).receives)
+    receives.advance(MERGE_CASE.year - MERGE_CASE.tick)
+    idle(receives)
+    idle(departs)
+    expect(receives.hashAt(MERGE_CASE.year)).toBe(MERGE_CASE.hash)
   })
 })

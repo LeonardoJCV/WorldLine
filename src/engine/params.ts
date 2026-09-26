@@ -76,6 +76,7 @@ export const PARAMS = {
   stabilityGrowth: 0.25,
   stabilityEnvironment: 0.3,
   stabilityInertia: 0.15,
+  workRate: 100,
 } as const
 
 export const REPAY_SCALE: Readonly<Record<'knowledge' | 'resource' | 'doctrine', number>> = {

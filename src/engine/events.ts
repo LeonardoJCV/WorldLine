@@ -384,7 +384,8 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
   industry: ['energy', 'energyRatio', 'economy', 'economyTrend', 'environment'],
   research: ['technology'],
   conservation: ['environment'],
-  // FEAT: a obra ainda não mexe em métrica nenhuma; a Tarefa 4 preenche esta lista
+  // FEAT: a obra move o progresso da obra e mais nada até a camada permanente entrar no derive,
+  // então a lista segue vazia — quem a preenche é a tarefa que fia essa camada
   works: [],
 }
 

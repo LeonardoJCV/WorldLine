@@ -1,4 +1,5 @@
 import { foundColony, heir, inherit, tickColonies, type Colony } from './colony.ts'
+import { tickWork, type Commission } from './commission.ts'
 import type { Crossing } from './crossing.ts'
 import {
   addDebt,
@@ -27,6 +28,7 @@ import { Channel, uniform } from './rng.ts'
 import { derive, integrate } from './rules.ts'
 import { Era, changedSectors, type Decision, type WorldConfig, type WorldState } from './state.ts'
 import { system } from './system.ts'
+import { WORKS } from './work.ts'
 
 export interface StepResult {
   readonly state: WorldState
@@ -129,6 +131,20 @@ function colonise(s: WorldState, world: WorldConfig, nextRecord: number): Depart
   }
 }
 
+// FEAT: a obra concluída sobe pela era que a abriu e pelas obras em que ela se apoiou
+function workCauses(s: WorldState, def: number): readonly Cause[] {
+  const work = WORKS[def]
+  if (!work) return []
+  const causes: Cause[] = []
+  const era = s.active.find((entry) => EVENTS[entry.def]?.era === work.era)
+  if (era) causes.push({ kind: 'event', record: era.record })
+  for (const need of work.needs) {
+    const built = s.works.find((done) => WORKS[done.def]?.id === need)
+    if (built) causes.push({ kind: 'event', record: built.record })
+  }
+  return causes
+}
+
 export function step(
   s: WorldState,
   world: WorldConfig,
@@ -136,6 +152,7 @@ export function step(
   decision?: Decision,
   crossings: readonly Crossing[] = [],
   merge?: Merge,
+  commission?: Commission,
 ): StepResult {
   if (s.status !== 'running') throw new Error(`worldline ended at year ${s.tick}`)
   if (decision && decision.tick !== s.tick) {
@@ -148,6 +165,9 @@ export function step(
   }
   if (merge && merge.tick !== s.tick) {
     throw new RangeError(`merge for year ${merge.tick} applied at year ${s.tick}`)
+  }
+  if (commission && commission.tick !== s.tick) {
+    throw new RangeError(`commission for year ${commission.tick} applied at year ${s.tick}`)
   }
 
   // FEAT: quem deságua não vive o ano — para nele, como uma extinção para, sem integrar
@@ -187,6 +207,15 @@ export function step(
   const departure = colonise(owing, world, nextRecord + mergeStarted.length)
   const peopled = departure.state
 
+  // FEAT: a obra come o ano depois de a alocação e a gente do ano estarem decididas, e a que fecha
+  // só move coeficiente no ano seguinte, como um acontecimento novo
+  const workRecord = nextRecord + mergeStarted.length + departure.started.length
+  const built = tickWork(peopled, workRecord, commission)
+  const workStarted =
+    built.finished === null
+      ? NO_RECORDS
+      : [moment('work_done', s.tick, workCauses(peopled, built.finished))]
+
   // Efeitos de eventos novos só entram no ano seguinte
   const mods = collectModifiers(peopled.active)
   const derived = derive(peopled, world, mods, uniform(world.seed, s.tick, Channel.harvest))
@@ -204,7 +233,7 @@ export function step(
     strain: resolution.strain,
   }
 
-  const first = nextRecord + mergeStarted.length + departure.started.length
+  const first = workRecord + workStarted.length
   const outcome = evaluateEvents(settled, computeMetrics(settled, derived), world.seed, first)
   const integrated = integrate(settled, derived, mods, departure.migrated)
   const ending: WorldState = {
@@ -213,8 +242,10 @@ export function step(
     active: outcome.active,
     lastEnded: outcome.lastEnded,
     status: outcome.extinct ? 'extinct' : outcome.collapsed ? 'collapsed' : 'running',
+    works: built.works,
+    building: built.building,
   }
-  const started = [...mergeStarted, ...departure.started, ...outcome.started]
+  const started = [...mergeStarted, ...departure.started, ...workStarted, ...outcome.started]
 
   // FEAT: o herdeiro é lido no instante em que o mundo natal acaba, porque a autossuficiência
   // pode ter sido perdida no caminho; sem ele a realidade termina exatamente como sempre terminou

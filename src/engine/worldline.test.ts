@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import type { Commission } from './commission.ts'
 import type { Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
 import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
 import { hashState } from './hash.ts'
 import type { Merge } from './merge.ts'
 import { DEFAULT_ALLOCATION, HORIZON, PARADOX_GRACE } from './params.ts'
+import { Era, hasEra } from './state.ts'
+import { workIndex, type WorkId } from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const SEED = 482913
@@ -487,5 +490,127 @@ describe('a year that carries a confluence', () => {
     expect(seamed.hashAt(1200)).toBe(plain.hashAt(1200))
     expect(seamed.hashAt(1299)).toBe(plain.hashAt(1299))
     expect(seamed.hashAt(1301)).not.toBe(plain.hashAt(1301))
+  })
+})
+
+describe('a commissioned work', () => {
+  // FEAT: o ano em que esta semente abre a era agrícola, medido e não fixado, para a calibração
+  // das obras poder movê-lo sem transformar este teste num fingerprint
+  const opened = (() => {
+    const line = new Worldline(SEED)
+    line.advance(1000)
+    for (let year = 0; year <= line.present.tick; year++) {
+      if (hasEra(line.stateAt(year), Era.agricultural)) return year
+    }
+    throw new Error('the seed never opens the agricultural era')
+  })()
+  const ORDERED = opened + 1
+  const END = 1000
+  const log: readonly Commission[] = [{ tick: ORDERED, work: 'irrigation' }]
+  const replayed = (years: number) => {
+    const line = new Worldline(SEED, [], null, [], [], log)
+    line.advance(years)
+    return line
+  }
+
+  it('commissions a work in the present year and finishes it when the years add up', () => {
+    const line = new Worldline(SEED)
+    line.advance(ORDERED)
+    expect(line.commission('irrigation')).toEqual({ tick: ORDERED, work: 'irrigation' })
+    expect(line.commissions).toEqual(log)
+    line.advance(END - ORDERED)
+
+    const [done, ...rest] = line.present.works
+    expect(rest).toEqual([])
+    expect(done?.def).toBe(workIndex('irrigation'))
+    expect(done?.done).toBeGreaterThan(ORDERED)
+    expect(line.present.building).toBeNull()
+    expect(line.stateAt(ORDERED + 1).building).toMatchObject({ def: done?.def, since: ORDERED })
+
+    const receipt = line.records[done?.record ?? -1]
+    expect(receipt?.event).toBe('work_done')
+    expect(receipt?.start).toBe(done?.done)
+    // FEAT: e o recibo sobe para a revolução agrícola, que é a era que abriu a obra
+    const era = receipt?.causes[0]
+    expect(era?.kind === 'event' && line.records[era.record]?.event).toBe('agricultural_revolution')
+  })
+
+  it('reproduces a commissioned history from its log and from its checkpoints', () => {
+    const live = new Worldline(SEED)
+    live.advance(ORDERED)
+    live.commission('irrigation')
+    live.advance(END - ORDERED)
+    const whole = replayed(END)
+    expect(whole.hashAt(END)).toBe(live.hashAt(END))
+    expect(whole.records).toEqual(live.records)
+    for (const year of [ORDERED - 1, ORDERED, ORDERED + 1, 512, END]) {
+      expect(whole.hashAt(year)).toBe(hashState(replayed(year).present))
+    }
+  })
+
+  it('leaves the years before the commission exactly as a world that never commissioned', () => {
+    const plain = new Worldline(SEED)
+    plain.advance(END)
+    expect(replayed(END).hashAt(ORDERED)).toBe(plain.hashAt(ORDERED))
+    expect(replayed(END).hashAt(END)).not.toBe(plain.hashAt(END))
+    expect(plain.present.works).toEqual([])
+    expect(plain.present.building).toBeNull()
+  })
+
+  it('gives a daughter the commissions made before the fork, and not the ones after', () => {
+    const line = replayed(END)
+    const late = line.fork(END)
+    expect(late.commissions).toEqual(log)
+    expect(late.present.works).toEqual(line.present.works)
+    expect(late.hashAt(END)).toBe(line.hashAt(END))
+
+    const early = line.fork(ORDERED)
+    expect(early.commissions).toEqual([])
+    expect(early.present.building).toBeNull()
+    early.advance(END - ORDERED)
+    expect(early.present.works).toEqual([])
+  })
+
+  it('replays a commission the years cannot honour instead of refusing it', () => {
+    // FEAT: a era espacial nunca abre nesta semente, e o mesmo vale para um ramo que divergiu antes
+    const line = new Worldline(SEED, [], null, [], [], [{ tick: 5, work: 'rocket' }])
+    line.advance(300)
+    expect(line.present.building).toBeNull()
+    expect(line.present.works).toEqual([])
+    const plain = new Worldline(SEED)
+    plain.advance(300)
+    expect(line.hashAt(300)).toBe(plain.hashAt(300))
+  })
+
+  it('replaces a commission made twice in the same year', () => {
+    const line = new Worldline(SEED)
+    line.advance(ORDERED)
+    line.commission('irrigation')
+    line.commission('granary')
+    expect(line.commissions).toEqual([{ tick: ORDERED, work: 'granary' }])
+  })
+
+  it('refuses a work that is not in the catalogue, and one made after the worldline ended', () => {
+    const line = new Worldline(SEED)
+    line.advance(100)
+    expect(() => line.commission('pyramid' as WorkId)).toThrow(RangeError)
+    expect(line.commissions).toEqual([])
+    line.advance(HORIZON)
+    expect(line.ended).toBe(true)
+    expect(() => line.commission('irrigation')).toThrow(Error)
+  })
+
+  it('rejects a malformed commission log', () => {
+    const bad = (commissions: readonly Commission[]) =>
+      new Worldline(SEED, [], null, [], [], commissions)
+    expect(() =>
+      bad([
+        { tick: 400, work: 'irrigation' },
+        { tick: 100, work: 'granary' },
+      ]),
+    ).toThrow(RangeError)
+    expect(() => bad([{ tick: 0.5, work: 'irrigation' }])).toThrow(RangeError)
+    expect(() => bad([{ tick: HORIZON, work: 'irrigation' }])).toThrow(RangeError)
+    expect(() => bad([{ tick: 10, work: 'obelisk' as WorkId }])).toThrow(RangeError)
   })
 })
