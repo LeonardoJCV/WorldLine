@@ -42,7 +42,9 @@ test('refuses files that are not worlds', async ({ page }) => {
     mimeType: 'application/json',
     buffer: Buffer.from('{"hello":"world"}'),
   })
-  await expect(page.getByText('This file is not a WORLDLINE world.')).toBeVisible()
+  await expect(
+    page.getByText('This file is not a WORLDLINE world, or it comes from an earlier model.'),
+  ).toBeVisible()
 })
 
 test('clears the import error once a valid file is imported', async ({ page }) => {
@@ -57,13 +59,17 @@ test('clears the import error once a valid file is imported', async ({ page }) =
     mimeType: 'application/json',
     buffer: Buffer.from('{"hello":"world"}'),
   })
-  await expect(page.getByText('This file is not a WORLDLINE world.')).toBeVisible()
+  await expect(
+    page.getByText('This file is not a WORLDLINE world, or it comes from an earlier model.'),
+  ).toBeVisible()
   await page.getByLabel('Import file').setInputFiles({
     name: 'world.json',
     mimeType: 'application/json',
     buffer: await readFile(path),
   })
-  await expect(page.getByText('This file is not a WORLDLINE world.')).toBeHidden()
+  await expect(
+    page.getByText('This file is not a WORLDLINE world, or it comes from an earlier model.'),
+  ).toBeHidden()
   await expect(page.getByTestId('seed')).toHaveText('482913')
   await expect(page.getByTestId('year')).toHaveText('0003')
 })
@@ -74,4 +80,59 @@ test('copies the world link', async ({ page, context }) => {
   await page.getByRole('button', { name: 'Copy link' }).click()
   await expect(page.getByText('Link copied.')).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(page.url())
+})
+
+// FEAT: o registro que um modelo anterior gravou, escrito direto no banco como ele ficou lá
+async function storeEarlierModelWorld(page: import('@playwright/test').Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('worldline', 1)
+        request.onupgradeneeded = () =>
+          request.result.createObjectStore('worlds', { keyPath: 'id' })
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction('worlds', 'readwrite')
+          transaction.objectStore('worlds').put({
+            id: 'before-the-works',
+            name: 'Before the works',
+            savedAt: Date.now(),
+            link: {
+              version: 2,
+              seed: 482913,
+              tick: 320,
+              decisions: [
+                {
+                  tick: 100,
+                  allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+                },
+              ],
+              crossings: [],
+              branches: [],
+            },
+          })
+          transaction.onerror = () => reject(transaction.error)
+          transaction.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+        }
+      }),
+  )
+}
+
+// FIX: o registro de modelo anterior era filtrado da lista e ficava no banco sem quem o apagasse
+test('keeps a world saved by an earlier model listed, and lets it be deleted', async ({ page }) => {
+  await page.goto('/')
+  await storeEarlierModelWorld(page)
+  await page.reload()
+  const item = page.getByRole('listitem').filter({ hasText: 'Before the works' })
+  await expect(item).toBeVisible()
+  await expect(item.getByText('Saved by an earlier model; it no longer reopens.')).toBeVisible()
+  await expect(item.getByRole('button', { name: 'Open' })).toHaveCount(0)
+  await item.getByRole('button', { name: 'Delete' }).click()
+  await expect(item).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Before the works' })).toHaveCount(0)
 })

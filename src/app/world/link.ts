@@ -189,10 +189,26 @@ export function encodeLink(link: WorldLink): string {
   return toBase64Url(bytes)
 }
 
+// FIX: a recusa de um link antigo é de política e vem antes de qualquer conta de bytes, senão o
+// link some sozinho e a tela nunca recebe a versão para anunciar
+function refusedLink(bytes: Uint8Array): WorldLink | null {
+  if (bytes.length < HEADER) return null
+  const view = new DataView(bytes.buffer)
+  const link: WorldLink = {
+    version: view.getUint8(0),
+    seed: view.getUint32(1),
+    tick: view.getUint16(5),
+    decisions: [],
+    crossings: [],
+  }
+  return isValidLink(link) ? link : null
+}
+
 export function decodeLink(text: string): WorldLink | null {
   const bytes = fromBase64Url(text)
   if (!bytes || bytes.length < HEADER) return null
   const view = new DataView(bytes.buffer)
+  if (!isCompatibleVersion(view.getUint8(0))) return refusedLink(bytes)
   const count = view.getUint16(7)
   if (bytes.length !== HEADER + count * DECISION) return null
   const decisions: Decision[] = []
@@ -404,6 +420,10 @@ export function decodeMultiverse(text: string): MultiverseLink | null {
   const bytes = fromBase64Url(text)
   if (!bytes || bytes.length < 10) return null
   const view = new DataView(bytes.buffer)
+  if (!isCompatibleVersion(view.getUint8(0))) {
+    const refused = refusedLink(bytes)
+    return refused === null ? null : toMultiverse(refused)
+  }
   const root = readDecisions(view, 7)
   if (!root || root.next + 1 > bytes.length) return null
   const count = view.getUint8(root.next)

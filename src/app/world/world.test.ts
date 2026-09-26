@@ -367,6 +367,10 @@ const crossed: MultiverseLink = {
 const VERSION_1 = 'AQAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAA'
 // FEAT: e pelo escritor da versão 2, na mesma alocação de quatro destinos
 const VERSION_2 = 'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAAAAAA'
+// FEAT: o link que um observador de verdade compartilhava: uma decisão de quatro setores, ano 320
+const DECIDED_V1 = 'AQAHXmEBQAABAGQoHhQK'
+// FEAT: o mesmo, em árvore — os bytes que o novo passo de sete leria como uma obra em zero
+const DECIDED_V2_TREE = 'AgAHXmEBQAABAGQoHhQKAAA'
 
 // FEAT: os bytes que o escritor da versão 4 produz para uma árvore sem costura
 const SEAMLESS_TREE = 'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAA'
@@ -512,9 +516,26 @@ describe('multiverse link', () => {
     )
   })
 
-  it('no longer reads a link written before the allocation grew', () => {
-    expect(decodeMultiverse(VERSION_1)).toBeNull()
-    expect(decodeMultiverse(VERSION_2)).toBeNull()
+  it('no longer replays a link written before the allocation grew', () => {
+    expect(decodeMultiverse(VERSION_1)?.decisions).toEqual([])
+    expect(decodeMultiverse(VERSION_2)?.decisions).toEqual([])
+  })
+
+  // FIX: a recusa era um efeito da conta de bytes, então o link antigo com decisão sumia sem aviso
+  it('refuses an old link on its version, and hands the version back so the screen can say so', () => {
+    for (const text of [DECIDED_V1, DECIDED_V2_TREE]) {
+      const back = decodeMultiverse(text) ?? decodeLink(text)
+      if (!back) throw new Error(`the old link ${text} vanished instead of being refused`)
+      expect(isCompatibleVersion(back.version)).toBe(false)
+      expect(back.seed).toBe(482913)
+      expect(back.tick).toBe(320)
+      expect(back.decisions).toEqual([])
+    }
+    // FEAT: a tela só anuncia o que a rota entrega; um link antigo não pode cair no genesis calado
+    const route = parseRoute(`#/w/${DECIDED_V1}`, '')
+    expect(route.screen).toBe('observatory')
+    expect(route.screen === 'observatory' && route.link.version).toBe(1)
+    expect(decodeLink(DECIDED_V1)?.version).toBe(1)
   })
 
   it('refuses trailing bytes', () => {
@@ -625,8 +646,33 @@ describe('library', () => {
       savedAt: 1,
       link: { version: MODEL_VERSION, seed: 482913, tick: 0, decisions: [] },
     }
-    expect(toSavedWorld(legacyRow)?.link.branches).toEqual([])
+    expect(toSavedWorld(legacyRow)?.link?.branches).toEqual([])
     expect(toSavedWorld({ ...legacyRow, link: { ...legacyRow.link, branches: 'x' } })).toBeNull()
+  })
+
+  // FIX: um registro de modelo anterior era filtrado da lista e ficava no banco sem quem o apagasse
+  it('keeps a record from an earlier model listed, named and without a link to open', () => {
+    const row = {
+      id: 'b',
+      name: 'Before the works',
+      savedAt: 2,
+      link: {
+        version: 2,
+        seed: 482913,
+        tick: 320,
+        decisions: [
+          {
+            tick: 100,
+            allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+          },
+        ],
+      },
+    }
+    const kept = toSavedWorld(row)
+    expect(kept).not.toBeNull()
+    expect(kept?.name).toBe('Before the works')
+    expect(kept?.id).toBe('b')
+    expect(kept?.link).toBeNull()
   })
 })
 

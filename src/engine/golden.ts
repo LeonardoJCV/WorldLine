@@ -67,6 +67,8 @@ const CROSSED: readonly Crossing[] = [
 ]
 
 // FEAT: indústria e pesquisa sem trégua, o único caminho que chega à era espacial
+// FEAT: num roteiro espacial a parcela de obras sai da agricultura, porque tirá-la da indústria
+// fecha a era espacial em todas as sementes
 const SPACEFARING: readonly Decision[] = [
   {
     tick: 0,

@@ -221,3 +221,15 @@ test('moves the window with the minimap keyboard', async ({ page }) => {
   await minimap.press('End')
   await expect(minimap).toHaveAttribute('aria-valuetext', new RegExp(`to ${present ?? ''}$`))
 })
+
+// FEAT: o link que um observador de verdade compartilhava antes das obras: uma decisão, ano 320
+const DECIDED_V1 = 'AQAHXmEBQAABAGQoHhQK'
+
+// FIX: a recusa saía da conta de bytes, então este link caía no genesis sem aviso nenhum
+test('says out loud that a link written before the works cannot be replayed', async ({ page }) => {
+  await page.goto(`/#/w/${DECIDED_V1}`)
+  await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(
+    page.getByText('This link was made with model v1; the world may differ from what was shared.'),
+  ).toBeVisible()
+})
