@@ -135,6 +135,8 @@ export const EVENTS: readonly EventDef[] = [
   },
   // FEAT: não é era, é condição: enquanto ela dura, nascem menos e cada um produz mais — e ela
   // se desfaz se a prosperidade que a abriu se desfizer
+  // FEAT: espera de 30 anos como a da dívida, porque uma transição demográfica é coisa de uma era
+  // inteira, não um abalo que volta todo ano
   {
     id: 'demographic_transition',
     kind: 'condition',
@@ -143,7 +145,7 @@ export const EVENTS: readonly EventDef[] = [
       { metric: 'birthRate', op: '<', value: 0.02 },
     ],
     release: [{ metric: 'economy', op: '<', value: 2 }],
-    cooldown: 0,
+    cooldown: 30,
     effect: { birth: 0.95, economy: 1.02 },
     influences: ['population', 'birthRate', 'economy', 'economyTrend'],
   },

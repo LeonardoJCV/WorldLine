@@ -7,6 +7,8 @@ import {
   buildRibbons,
   episodeY,
   eraLabelY,
+  eraLabelsFit,
+  eraRowsUsed,
   yearToX,
   type CrossingLine,
   type Frame,
@@ -85,6 +87,9 @@ function drawRibbons(ctx: CanvasRenderingContext2D, input: DrawInput, data: Rang
 
 function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
   const { frame } = input
+  const rows = eraRowsUsed(input.markers)
+  // FEAT: ou as fileiras cabem com folga para o texto, ou nenhum nome de era é desenhado
+  const labelled = eraLabelsFit(frame, rows)
   ctx.save()
   ctx.textBaseline = 'middle'
   for (const marker of input.markers) {
@@ -92,7 +97,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
     ctx.textAlign = 'left'
     ctx.font = chosen ? FONT_STRONG : FONT
     if (marker.kind === 'era') {
-      const y = eraLabelY(frame, marker.row)
+      const y = eraLabelY(frame, marker.row, rows)
       ctx.strokeStyle = chosen ? BRIGHT : AXIS
       ctx.lineWidth = 1
       ctx.beginPath()
@@ -103,7 +108,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       ctx.beginPath()
       ctx.arc(marker.x, frame.centerY, chosen ? 4 : 2.5, 0, Math.PI * 2)
       ctx.fill()
-      if (marker.row >= 0) {
+      if (marker.row >= 0 && labelled) {
         ctx.textAlign = marker.align === 'end' ? 'right' : 'left'
         ctx.fillText(
           input.label(marker.event),

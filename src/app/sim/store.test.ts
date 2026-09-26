@@ -345,7 +345,8 @@ describe('simulation store', () => {
     const b = state.worlds.find((w) => w.info.id === id)
     expect(b?.debts.length).toBeGreaterThan(0)
     expect(b?.debts[0]).toMatchObject({ kind: 'knowledge' })
-    // FEAT: com a era elétrica na escada, o presente salta um degrau e abre paradoxo em quem recebeu
+    // FEAT: com a era elétrica na escada, o presente salta um degrau e abre paradoxo em quem
+    // recebeu
     expect(b?.paradox).toMatchObject({ kind: 'leap' })
     expect(state.worlds.find((w) => w.info.id === 'A')?.debts).toEqual([])
     expect(state.worlds.find((w) => w.info.id === 'A')?.paradox).toBeNull()
