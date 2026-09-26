@@ -137,18 +137,51 @@ describe('hashState', () => {
       colonies: [{ body: 2, founded: 400, population: 1000, support: 0.2, record: 3 }],
       home: 2,
       lastMerge: { tick: 1450, other: 'B' },
+      works: [
+        { def: 0, done: 120, record: 3 },
+        { def: 5, done: 300, record: 4 },
+      ],
+      building: { def: 9, progress: 40, since: 1400 },
     }
-    expect(hashState(composite)).toBe('18c12365')
+    expect(hashState(composite)).toBe('ce38d83c')
   })
 
   it('ignores the works fields while they are empty', () => {
-    expect(hashState({ ...state, works: [], building: null })).toBe(hashState(state))
+    // FIX: comparado ao hash fixo, não a uma nova chamada, para pegar um campo que vaza mesmo vazio
+    expect(hashState({ ...state, works: [], building: null })).toBe('77ebb9f5')
   })
 
-  it('separates two worlds by the works they have done, and by the one under way', () => {
+  it('separates two worlds by every field of the works they have done', () => {
     const base = hashState(state)
-    expect(hashState({ ...state, works: [{ def: 0, done: 120, record: 3 }] })).not.toBe(base)
-    expect(hashState({ ...state, building: { def: 5, progress: 40, since: 100 } })).not.toBe(base)
+    const a = hashState({ ...state, works: [{ def: 0, done: 120, record: 3 }] })
+    const differentDef = hashState({ ...state, works: [{ def: 1, done: 120, record: 3 }] })
+    const differentDone = hashState({ ...state, works: [{ def: 0, done: 121, record: 3 }] })
+    const differentLength = hashState({
+      ...state,
+      works: [
+        { def: 0, done: 120, record: 3 },
+        { def: 0, done: 120, record: 3 },
+      ],
+    })
+    expect(a).not.toBe(base)
+    expect(a).not.toBe(differentDef)
+    expect(a).not.toBe(differentDone)
+    expect(a).not.toBe(differentLength)
+  })
+
+  it('separates two worlds by every field of the work under way', () => {
+    const base = hashState(state)
+    const a = hashState({ ...state, building: { def: 5, progress: 40, since: 100 } })
+    const differentDef = hashState({ ...state, building: { def: 6, progress: 40, since: 100 } })
+    const differentProgress = hashState({
+      ...state,
+      building: { def: 5, progress: 41, since: 100 },
+    })
+    const differentSince = hashState({ ...state, building: { def: 5, progress: 40, since: 101 } })
+    expect(a).not.toBe(base)
+    expect(a).not.toBe(differentDef)
+    expect(a).not.toBe(differentProgress)
+    expect(a).not.toBe(differentSince)
   })
 
   it('ignores a new event that never fired, but reacts once one has', () => {
