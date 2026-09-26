@@ -236,11 +236,26 @@ export class SimulationHost {
     tick: number,
     merges: readonly MergeSpec[],
     branches: readonly BranchSpec[],
+    born: readonly number[],
   ): readonly MergeSpec[] {
-    const queue = [merges, ...branches.map((branch) => branch.merges ?? [])].flat()
-    for (const seam of queue) {
-      if (!Number.isInteger(seam.tick) || seam.tick < 0 || seam.tick > tick) {
-        throw new RangeError(`a confluence in year ${seam.tick} is outside the shared history`)
+    const blocks = [
+      { since: 0, seams: merges },
+      ...branches.map((branch, index) => ({ since: born[index] ?? 0, seams: branch.merges ?? [] })),
+    ]
+    const queue: MergeSpec[] = []
+    for (const block of blocks) {
+      for (const seam of block.seams) {
+        if (!Number.isInteger(seam.tick) || seam.tick < 0 || seam.tick > tick) {
+          throw new RangeError(`a confluence in year ${seam.tick} is outside the shared history`)
+        }
+        // FIX: uma filha adiada não viveu os anos entre o fork e o nascimento dela, e a outra ponta
+        // da costura já passou desse ano; as duas têm de se encontrar no mesmo, então isso não existe
+        if (seam.tick < block.since) {
+          throw new RangeError(
+            `worldline ${seam.self} only exists from year ${block.since}, so it never had a confluence in year ${seam.tick}`,
+          )
+        }
+        queue.push(seam)
       }
     }
     return queue
@@ -294,14 +309,14 @@ export class SimulationHost {
       this.#make(base + 1, 'A', null, 0, new Worldline(seed, root, null, crossings)),
       ...branches.map(() => undefined),
     ]
-    const queue = this.#queue(tick, merges, branches)
+    const born = this.#born(branches)
+    const queue = this.#queue(tick, merges, branches, born)
     // FEAT: o recibo do lado que deságua é o que prova que aquela história não volta viva
     const away = new Set(
       queue
         .filter((seam) => seam.direction === 'out')
         .map((seam) => `${seam.tick}:${seam.self}:${seam.other}`),
     )
-    const born = this.#born(branches)
     const years = [...new Set([...born, ...queue.map((seam) => seam.tick)])].sort((a, b) => a - b)
     for (const year of years) {
       // FIX: um fork além do ano do link não adianta o multiverso; quem o recusa é `#grow`
@@ -313,7 +328,9 @@ export class SimulationHost {
         const id = WORLDLINE_IDS[index + 1]
         if (!id) throw new RangeError('worldline limit reached')
         const own = spec.crossings ?? []
-        const line = this.#grow(seed, parent, spec.fork, spec.decisions, spec.fork, own)
+        // FIX: uma filha adiada nasce no ano da mãe, e tem de alcançá-lo, ou a costura dela naquele
+        // mesmo ano cairia numa história parada no ano do fork, que é anterior ao de todo mundo
+        const line = this.#grow(seed, parent, spec.fork, spec.decisions, year, own)
         slots[index + 1] = this.#make(base + 2 + index, id, parent.info.id, spec.fork, line)
       })
       for (const seam of queue) {

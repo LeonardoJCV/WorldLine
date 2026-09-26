@@ -1587,3 +1587,260 @@ describe('SimulationHost: what the arrival record carries', () => {
     expect(world(sent, 'A')?.present.status).toBe('merged')
   })
 })
+
+describe('SimulationHost: reopening a deferred daughter', () => {
+  function told(sent: readonly FromWorker[], id: WorldlineId) {
+    const latest = world(sent, id)
+    if (!latest) throw new Error(`the host never reported worldline ${id}`)
+    return {
+      info: latest.info,
+      present: latest.present,
+      decisions: latest.decisions,
+      crossings: latest.crossings,
+      merges: latest.merges,
+      debts: latest.debts,
+      colonies: latest.colonies,
+    }
+  }
+
+  // FEAT: dois gestos comuns — bifurcar para o passado de um galho e então costurar, tudo no presente
+  function livedByTheTwoGestures() {
+    const context = setup()
+    context.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    context.host.handle({ type: 'step', years: 201 })
+    context.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 201,
+      allocation: balanced,
+    })
+    context.host.handle({
+      type: 'branch',
+      requestId: 2,
+      parent: 'B',
+      tick: 150,
+      allocation: starved,
+    })
+    context.host.handle({ type: 'merge', requestId: 3, survivor: 'A', other: 'C' })
+    context.host.handle({ type: 'step', years: 99 })
+    return context
+  }
+
+  const deferred: Extract<ToWorker, { type: 'open' }> = {
+    type: 'open',
+    seed: SEED,
+    tick: 300,
+    root: [],
+    merges: [{ tick: 201, self: 'A', other: 'C', direction: 'in' }],
+    branches: [
+      { parent: 0, fork: 201, decisions: [{ tick: 201, allocation: balanced }] },
+      {
+        parent: 1,
+        fork: 150,
+        decisions: [{ tick: 150, allocation: starved }],
+        merges: [{ tick: 201, self: 'C', other: 'A', direction: 'out' }],
+      },
+    ],
+  }
+
+  it('reopens a daughter forked into her parent past who then flowed into another history', () => {
+    const lived = livedByTheTwoGestures()
+    expect(all(lived.sent, 'error')).toEqual([])
+    const { host, sent } = setup()
+    host.handle(deferred)
+    expect(all(sent, 'error')).toEqual([])
+    for (const id of ['A', 'B', 'C'] as const) {
+      expect(told(sent, id)).toEqual(told(lived.sent, id))
+    }
+    expect(world(sent, 'C')?.present.status).toBe('merged')
+    expect(world(sent, 'C')?.present.tick).toBe(201)
+    expect(world(sent, 'C')?.info).toMatchObject({ parent: 'B', fork: 150 })
+    expect(last(sent, 'progress')?.now).toBe(300)
+  })
+
+  // FEAT: depois de alcançar o ano da mãe, a filha adiada segue no passo de todas as outras
+  it('reopens a deferred daughter that flows away years after she was built', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 201 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 201,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'branch', requestId: 2, parent: 'B', tick: 150, allocation: starved })
+    lived.host.handle({ type: 'step', years: 49 })
+    lived.host.handle({ type: 'merge', requestId: 3, survivor: 'A', other: 'C' })
+    lived.host.handle({ type: 'step', years: 50 })
+    expect(all(lived.sent, 'error')).toEqual([])
+
+    const { host, sent } = setup()
+    host.handle({
+      ...deferred,
+      merges: [{ tick: 250, self: 'A', other: 'C', direction: 'in' }],
+      branches: [
+        { parent: 0, fork: 201, decisions: [{ tick: 201, allocation: balanced }] },
+        {
+          parent: 1,
+          fork: 150,
+          decisions: [{ tick: 150, allocation: starved }],
+          merges: [{ tick: 250, self: 'C', other: 'A', direction: 'out' }],
+        },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    for (const id of ['A', 'B', 'C'] as const) {
+      expect(told(sent, id)).toEqual(told(lived.sent, id))
+    }
+    expect(world(sent, 'C')?.present.tick).toBe(250)
+  })
+
+  // FEAT: a filha adiada não viveu os anos entre o fork e o nascimento, então lá não cabe costura
+  it('refuses a confluence in a year a deferred daughter never lived', () => {
+    const atTheFork = setup()
+    atTheFork.host.handle({
+      ...deferred,
+      merges: [{ tick: 150, self: 'A', other: 'C', direction: 'in' }],
+      branches: [
+        { parent: 0, fork: 201, decisions: [{ tick: 201, allocation: balanced }] },
+        {
+          parent: 1,
+          fork: 150,
+          decisions: [{ tick: 150, allocation: starved }],
+          merges: [{ tick: 150, self: 'C', other: 'A', direction: 'out' }],
+        },
+      ],
+    })
+    expect(last(atTheFork.sent, 'error')?.message).toBe(
+      'worldline C only exists from year 201, so it never had a confluence in year 150',
+    )
+
+    const between = setup()
+    between.host.handle({
+      ...deferred,
+      merges: [{ tick: 175, self: 'A', other: 'C', direction: 'in' }],
+      branches: [
+        { parent: 0, fork: 201, decisions: [{ tick: 201, allocation: balanced }] },
+        {
+          parent: 1,
+          fork: 150,
+          decisions: [{ tick: 150, allocation: starved }],
+          merges: [{ tick: 175, self: 'C', other: 'A', direction: 'out' }],
+        },
+      ],
+    })
+    expect(last(between.sent, 'error')?.message).toBe(
+      'worldline C only exists from year 201, so it never had a confluence in year 175',
+    )
+    // FEAT: e o ano do nascimento, que é o da costura de verdade, segue passando
+    const { host, sent } = setup()
+    host.handle(deferred)
+    expect(all(sent, 'error')).toEqual([])
+    between.host.handle({ type: 'range', requestId: 1, world: 'A', from: 0, to: 1, buckets: 1 })
+    expect(last(between.sent, 'error')?.message).toBe('no worldline created')
+  })
+})
+
+describe('SimulationHost: the seam interleavings still round-trip', () => {
+  function told(sent: readonly FromWorker[], id: WorldlineId) {
+    const latest = world(sent, id)
+    if (!latest) throw new Error(`the host never reported worldline ${id}`)
+    return { present: latest.present, merges: latest.merges, decisions: latest.decisions }
+  }
+
+  it('still seams two pairs of histories in one single year', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 200 })
+    for (const [id, tick] of [
+      [1, 100],
+      [2, 120],
+      [3, 140],
+    ] as const) {
+      lived.host.handle({ type: 'branch', requestId: id, parent: 'A', tick, allocation: balanced })
+    }
+    lived.host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'B' })
+    lived.host.handle({ type: 'merge', requestId: 5, survivor: 'C', other: 'D' })
+    lived.host.handle({ type: 'step', years: 100 })
+    expect(all(lived.sent, 'error')).toEqual([])
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      merges: [{ tick: 200, self: 'A', other: 'B', direction: 'in' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 200, self: 'B', other: 'A', direction: 'out' }],
+        },
+        {
+          parent: 0,
+          fork: 120,
+          decisions: [{ tick: 120, allocation: balanced }],
+          merges: [{ tick: 200, self: 'C', other: 'D', direction: 'in' }],
+        },
+        {
+          parent: 0,
+          fork: 140,
+          decisions: [{ tick: 140, allocation: balanced }],
+          merges: [{ tick: 200, self: 'D', other: 'C', direction: 'out' }],
+        },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    for (const id of ['A', 'B', 'C', 'D'] as const) {
+      expect(told(sent, id)).toEqual(told(lived.sent, id))
+    }
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    expect(world(sent, 'D')?.present.status).toBe('merged')
+  })
+
+  it('still lets a branch fork in the very year its parent was seamed', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 200 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    lived.host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 200, allocation: starved })
+    lived.host.handle({ type: 'step', years: 100 })
+    expect(all(lived.sent, 'error')).toEqual([])
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      merges: [{ tick: 200, self: 'A', other: 'B', direction: 'in' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 200, self: 'B', other: 'A', direction: 'out' }],
+        },
+        { parent: 0, fork: 200, decisions: [{ tick: 200, allocation: starved }] },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    for (const id of ['A', 'B', 'C'] as const) {
+      expect(told(sent, id)).toEqual(told(lived.sent, id))
+    }
+    // FEAT: a costura é do ano do fork, e só o que vem estritamente antes dela se herda
+    expect(world(sent, 'C')?.merges).toEqual([])
+  })
+})

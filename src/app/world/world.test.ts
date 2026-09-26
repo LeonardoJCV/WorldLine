@@ -1030,3 +1030,55 @@ describe('a world file that carries a confluence', () => {
     expect(parseWorldFile(text.replace('"merges": [', '"merges": "none", "spare": ['))).toBeNull()
   })
 })
+
+// FEAT: dois gestos comuns do observador — bifurcar para o passado de um galho e então costurar
+function branchedIntoThePastThenSewn() {
+  const sent: FromWorker[] = []
+  const host = new SimulationHost((message) => sent.push(message), new FakeClock())
+  host.handle({ type: 'open', seed: sample.seed, tick: 0, root: [], branches: [] })
+  host.handle({ type: 'step', years: 201 })
+  host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 201, allocation: balanced })
+  host.handle({ type: 'branch', requestId: 2, parent: 'B', tick: 150, allocation: starved })
+  host.handle({ type: 'merge', requestId: 3, survivor: 'A', other: 'C' })
+  host.handle({ type: 'step', years: 99 })
+  const failure = sent.find((message) => message.type === 'error')
+  if (failure) throw new Error(failure.type === 'error' ? failure.message : 'the host failed')
+  const progress = sent.filter((message) => message.type === 'progress').at(-1)
+  if (!progress) throw new Error('the host reported nothing')
+  return { worlds: [...progress.worlds], now: progress.now, credit: progress.credit }
+}
+
+describe('a link made by branching into the past and then seaming', () => {
+  it('round-trips the whole multiverse, deferred daughter and her confluence included', () => {
+    const lived = branchedIntoThePastThenSewn()
+    const link = currentLink({
+      seed: sample.seed,
+      now: lived.now,
+      worlds: lived.worlds.map(viewOf),
+    })
+    if (!link) throw new Error('the host gave no link')
+    expect(isValidMultiverse(link)).toBe(true)
+    const back = decodeMultiverse(encodeMultiverse(link))
+    if (!back) throw new Error('the link did not survive')
+    expect(back).toEqual(link)
+    expect(back.version).toBe(SEAMED_VERSION)
+    // FEAT: a filha sai do ano 150 de uma mãe que só existe a partir do 201
+    expect(back.branches[1]).toMatchObject({ parent: 1, fork: 150 })
+    expect(back.branches[1]?.merges).toEqual([
+      { tick: 201, self: 'C', other: 'A', direction: 'out' },
+    ])
+
+    const again = reopen(back)
+    expect(again.now).toBe(lived.now)
+    expect(again.credit).toBe(lived.credit)
+    expect(again.worlds.map(told)).toEqual(lived.worlds.map(told))
+    expect(again.worlds.map((world) => world.present.status)).toEqual([
+      'running',
+      'running',
+      'merged',
+    ])
+    const file = parseWorldFile(serializeWorld({ name: 'Two gestures', link }))
+    expect(file?.link).toEqual(link)
+    expect(reopen(file?.link ?? back).worlds.map(told)).toEqual(lived.worlds.map(told))
+  })
+})
