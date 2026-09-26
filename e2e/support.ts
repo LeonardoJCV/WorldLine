@@ -89,7 +89,7 @@ export async function runToCollapse(page: Page) {
 // herança orfanar uma colônia irmã de verdade, não a única que o mundo natal chegou a ter
 export const SIBLING_CASE = {
   seed: 4242,
-  ended: 5013,
+  ended: 6674,
 } as const
 
 const SIBLING_DECISIONS: readonly Decision[] = [

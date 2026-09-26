@@ -345,11 +345,13 @@ describe('simulation store', () => {
     const b = state.worlds.find((w) => w.info.id === id)
     expect(b?.debts.length).toBeGreaterThan(0)
     expect(b?.debts[0]).toMatchObject({ kind: 'knowledge' })
-    expect(b?.paradox).toBeNull()
+    // FEAT: com a era elétrica na escada, o presente salta um degrau e abre paradoxo em quem recebeu
+    expect(b?.paradox).toMatchObject({ kind: 'leap' })
     expect(state.worlds.find((w) => w.info.id === 'A')?.debts).toEqual([])
+    expect(state.worlds.find((w) => w.info.id === 'A')?.paradox).toBeNull()
     store.getState().setFocus(id)
     expect(store.getState().debts).toEqual(b?.debts)
-    expect(store.getState().paradox).toBeNull()
+    expect(store.getState().paradox).toEqual(b?.paradox)
   })
 
   it('remembers the debts from the last year that differed, not from every progress message', async () => {

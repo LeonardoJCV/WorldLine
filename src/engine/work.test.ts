@@ -11,6 +11,7 @@ import {
   type WorkId,
   type WorkKey,
 } from './work.ts'
+import { Era } from './state.ts'
 
 describe('the works catalogue', () => {
   it('has twenty-five works with unique ids', () => {
@@ -207,5 +208,37 @@ describe('isCommissionable', () => {
   it('refuses an out-of-range index instead of throwing', () => {
     expect(isCommissionable({ eras: 0, works: [] }, 999)).toBe(false)
     expect(isCommissionable({ eras: 0, works: [] }, -1)).toBe(false)
+  })
+
+  // FEAT: o catálogo e o estado agora contam os bits do mesmo jeito; antes desta tarefa `work.era`
+  // vinha de um mapa local de cinco bits e `state.eras` de um Era de quatro, e os dois se cruzavam
+  it('reads the very bits the engine writes, with no map of its own', () => {
+    for (const work of WORKS) expect(Object.values(Era)).toContain(work.era)
+  })
+
+  it('accepts a space-era work when the state carries the real space bit', () => {
+    const rocket = workIndex('rocket')
+    const works = [{ def: workIndex('computer'), done: 1, record: 0 }]
+    expect(isCommissionable({ eras: Era.space, works }, rocket)).toBe(true)
+  })
+
+  // FIX: com os dois espaços de bits misturados, um mundo com as quatro eras antigas abertas
+  // declarava `chemistry` comissionável e deixava as cinco obras espaciais fora de alcance
+  it('keeps every space work shut on a world that climbed the ladder but never reached the top', () => {
+    const climbed = Era.agricultural | Era.classical | Era.industrial | Era.electric
+    const done = WORKS.flatMap((work, def) =>
+      (climbed & work.era) !== 0 ? [{ def, done: 1, record: def }] : [],
+    )
+    for (const [index, work] of WORKS.entries()) {
+      if (work.era !== Era.space) continue
+      expect(isCommissionable({ eras: climbed, works: done }, index), work.id).toBe(false)
+    }
+    // FEAT: e a era elétrica, aberta, não deixa a obra dela de fora
+    expect(
+      isCommissionable(
+        { eras: climbed, works: [{ def: workIndex('metallurgy'), done: 1, record: 0 }] },
+        workIndex('chemistry'),
+      ),
+    ).toBe(true)
   })
 })

@@ -38,6 +38,8 @@ export const EVENT_IDS = [
   'merged_away',
   'debt_settled',
   'work_done',
+  'era_classical',
+  'era_electric',
 ] as const
 export type EventId = (typeof EVENT_IDS)[number]
 
@@ -131,16 +133,19 @@ export const EVENTS: readonly EventDef[] = [
     cooldown: 0,
     influences: ['energy', 'energyRatio', 'technology', 'environment'],
   },
+  // FEAT: não é era, é condição: enquanto ela dura, nascem menos e cada um produz mais — e ela
+  // se desfaz se a prosperidade que a abriu se desfizer
   {
     id: 'demographic_transition',
-    kind: 'era',
-    era: Era.demographic,
+    kind: 'condition',
     trigger: [
       { metric: 'economy', op: '>', value: 3 },
       { metric: 'birthRate', op: '<', value: 0.02 },
     ],
+    release: [{ metric: 'economy', op: '<', value: 2 }],
     cooldown: 0,
-    influences: ['population'],
+    effect: { birth: 0.95, economy: 1.02 },
+    influences: ['population', 'birthRate', 'economy', 'economyTrend'],
   },
   {
     id: 'famine',
@@ -346,6 +351,30 @@ export const EVENTS: readonly EventDef[] = [
     cooldown: 0,
     influences: [],
   },
+  // FEAT: os dois degraus que faltavam na escada, apendados no fim para não mexer no índice de
+  // nenhum acontecimento antigo — e por isso fora da ordem cronológica da tabela
+  {
+    id: 'era_classical',
+    kind: 'era',
+    era: Era.classical,
+    trigger: [
+      { metric: 'technology', op: '>', value: 35 },
+      { metric: 'economy', op: '>', value: 3 },
+    ],
+    cooldown: 0,
+    influences: ['technology', 'economy', 'economyTrend'],
+  },
+  {
+    id: 'era_electric',
+    kind: 'era',
+    era: Era.electric,
+    trigger: [
+      { metric: 'technology', op: '>', value: 75 },
+      { metric: 'energy', op: '>', value: 6 },
+    ],
+    cooldown: 0,
+    influences: ['technology', 'energy', 'energyRatio'],
+  },
 ]
 
 const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
@@ -417,6 +446,7 @@ export function collectModifiers(
       production: mods.production * (effect.production ?? 1),
       economy: mods.economy * (effect.economy ?? 1),
       research: mods.research * (effect.research ?? 1),
+      birth: mods.birth * (effect.birth ?? 1),
       mortality: mods.mortality + (effect.mortality ?? 0),
       stability: mods.stability + (effect.stability ?? 0),
     }

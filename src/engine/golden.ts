@@ -119,20 +119,20 @@ export interface GoldenCase {
 }
 
 export const GOLDEN_CASES: readonly GoldenCase[] = [
-  { seed: 1, script: 'steady', year: 1000, hash: 'abd3d2dc' },
-  { seed: 1, script: 'steady', year: 5000, hash: '8e525a9f' },
+  { seed: 1, script: 'steady', year: 1000, hash: '33127513' },
+  { seed: 1, script: 'steady', year: 5000, hash: 'fdb5d40e' },
   { seed: 1, script: 'shifting', year: 1000, hash: 'da966e36' },
-  { seed: 1, script: 'shifting', year: 5000, hash: '671a3cf0' },
-  { seed: 482913, script: 'steady', year: 1000, hash: '1bb3adda' },
-  { seed: 482913, script: 'steady', year: 5000, hash: '6582d2fc' },
-  { seed: 482913, script: 'shifting', year: 1000, hash: 'd7cb5f60' },
-  { seed: 482913, script: 'shifting', year: 5000, hash: '5067b926' },
-  { seed: 0xffffffff, script: 'steady', year: 1000, hash: '8c23811b' },
-  { seed: 0xffffffff, script: 'steady', year: 5000, hash: '294c54eb' },
-  { seed: 0xffffffff, script: 'shifting', year: 1000, hash: '0245fcd7' },
-  { seed: 0xffffffff, script: 'shifting', year: 5000, hash: '75420923' },
-  { seed: 482913, script: 'crossed', year: 1000, hash: '7d4221bb' },
-  { seed: 482913, script: 'crossed', year: 5000, hash: 'e4974c9b' },
+  { seed: 1, script: 'shifting', year: 5000, hash: '459716dc' },
+  { seed: 482913, script: 'steady', year: 1000, hash: 'b95a67cb' },
+  { seed: 482913, script: 'steady', year: 5000, hash: '9bca7009' },
+  { seed: 482913, script: 'shifting', year: 1000, hash: '88815910' },
+  { seed: 482913, script: 'shifting', year: 5000, hash: 'cc92b6e5' },
+  { seed: 0xffffffff, script: 'steady', year: 1000, hash: 'e4666993' },
+  { seed: 0xffffffff, script: 'steady', year: 5000, hash: '84aaf346' },
+  { seed: 0xffffffff, script: 'shifting', year: 1000, hash: '8bc9e908' },
+  { seed: 0xffffffff, script: 'shifting', year: 5000, hash: '33dc97ba' },
+  { seed: 482913, script: 'crossed', year: 1000, hash: '13c3a6fd' },
+  { seed: 482913, script: 'crossed', year: 5000, hash: 'cef8326a' },
 ]
 
 // FEAT: o roteiro que sobrevive ao próprio mundo, fora dos doze para não mexer em nenhum deles
@@ -151,9 +151,9 @@ export const INHERITANCE_CASE: InheritanceCase = {
   seed: 482913,
   script: 'inherited',
   founded: 1951,
-  ended: 2150,
-  year: 2151,
-  hash: '62643dc9',
+  ended: 2229,
+  year: 2230,
+  hash: '8f8b86c8',
 }
 
 // FEAT: um GoldenPlan descreve UMA história, e uma confluência são duas; o caso nomeia os dois
@@ -179,7 +179,7 @@ export const MERGE_CASE: MergeCase = {
   guest: 'C',
   tick: 950,
   year: 1050,
-  hash: '96291691',
+  hash: 'ff427866',
 }
 
 export interface Seam {

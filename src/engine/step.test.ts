@@ -753,10 +753,11 @@ describe('step, with a merge', () => {
   })
 
   it('numbers the records right when a merge year also founds a colony and starts a condition', () => {
-    // FEAT: todas as eras já abertas, para só a confluência e o desassossego disputarem o número
+    // FEAT: todas as eras já abertas, para a confluência, a colônia e as condições do ano serem os
+    // únicos a disputar o número
     const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
       makeState({
-        eras: Era.agricultural | Era.industrial | Era.demographic | Era.space,
+        eras: Era.agricultural | Era.classical | Era.industrial | Era.electric | Era.space,
         energy: 14,
         technology: 95,
         economy: 9,
@@ -782,8 +783,9 @@ describe('step, with a merge', () => {
     expect(result.state.colonies).toHaveLength(1)
     // FEAT: a colônia nasce depois dos dois acontecimentos da confluência, não em cima deles
     expect(result.state.colonies[0]?.record).toBe(nextRecord + mergeCount)
-    const unrest = result.state.active.find((entry) => EVENTS[entry.def]?.id === 'civil_unrest')
-    // FEAT: e o desassossego nasce depois da confluência e da colônia, na mesma fila
-    expect(unrest?.record).toBe(nextRecord + mergeCount + 1)
+    // FEAT: e as condições nascem depois da confluência e da colônia, na ordem da tabela
+    const find = (id: string) => result.state.active.find((entry) => EVENTS[entry.def]?.id === id)
+    expect(find('demographic_transition')?.record).toBe(nextRecord + mergeCount + 1)
+    expect(find('civil_unrest')?.record).toBe(nextRecord + mergeCount + 2)
   })
 })

@@ -9,6 +9,8 @@ export interface Modifiers {
   readonly production: number
   readonly economy: number
   readonly research: number
+  // FEAT: fator sobre a natalidade, para a transição demográfica ter onde morder
+  readonly birth: number
   readonly mortality: number
   readonly stability: number
 }
@@ -18,6 +20,7 @@ export const NEUTRAL_MODIFIERS: Modifiers = {
   production: 1,
   economy: 1,
   research: 1,
+  birth: 1,
   mortality: 0,
   stability: 0,
 }
@@ -92,7 +95,8 @@ export function derive(
   const fed = smoothstep(K.fertilityFrom, K.fertilityTo, foodSecurity)
   const birthRate =
     (K.bMin + (K.bMax - K.bMin) / (1 + transition * transition)) *
-    (K.fertilityFloor + (1 - K.fertilityFloor) * fed)
+    (K.fertilityFloor + (1 - K.fertilityFloor) * fed) *
+    mods.birth
   const hunger = Math.max(0, 1 - foodSecurity)
   const degradation = 1 - s.environment / 100
   const deathRate =

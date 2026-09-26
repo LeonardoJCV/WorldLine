@@ -21,7 +21,13 @@ export const VARIABLES = [
 ] as const
 export type Variable = (typeof VARIABLES)[number]
 
-export const Era = { agricultural: 1, industrial: 2, demographic: 4, space: 8 } as const
+export const Era = {
+  agricultural: 1,
+  classical: 2,
+  industrial: 4,
+  electric: 8,
+  space: 16,
+} as const
 
 export const NEVER = -1_000_000
 

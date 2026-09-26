@@ -186,7 +186,7 @@ describe('layoutEvents', () => {
       [
         record('agricultural_revolution', 10, null),
         record('industrial_revolution', 12, null),
-        record('demographic_transition', 90, null),
+        record('era_electric', 90, null),
       ],
       0,
       100,
@@ -248,13 +248,14 @@ describe('layoutEvents', () => {
   // FEAT: anos reais do roteiro INHERITANCE_CASE (seed 482913, 'inherited'), lidos de Worldline.records em 3000
   const inheritance = [
     record('agricultural_revolution', 250, null),
-    record('demographic_transition', 354, null),
-    record('industrial_revolution', 648, null),
-    record('space_era', 1802, null),
+    record('era_classical', 543, null),
+    record('industrial_revolution', 644, null),
+    record('era_electric', 1331, null),
+    record('space_era', 1950, null),
   ]
   const LABEL_WIDTH = 150
 
-  it('keeps all four real eras of a spacefaring world on the chain, at realistic widths and time windows', () => {
+  it('keeps all five real eras of a spacefaring world on the chain, at realistic widths and time windows', () => {
     const widths = [320, 375, 414, 430, 768, 820, 1024, 1280, 1440, 1920, 2560]
     const presents = [1900, 2284, 3000, 5000, 10000]
     for (const width of widths) {
@@ -269,9 +270,9 @@ describe('layoutEvents', () => {
     }
   })
 
-  it('would still lose a label if a fifth era arrived -- proves the test above can fail', () => {
-    const fifthEra = [...inheritance, record('industrial_revolution', 1850, null)]
-    const markers = layoutEvents(fifthEra, 0, 10000, 10000, frame, LABEL_WIDTH)
+  it('would still lose a label if a sixth era arrived -- proves the test above can fail', () => {
+    const sixthEra = [...inheritance, record('industrial_revolution', 1990, null)]
+    const markers = layoutEvents(sixthEra, 0, 10000, 10000, frame, LABEL_WIDTH)
     expect(markers.some((marker) => marker.row === -1)).toBe(true)
   })
 })
@@ -283,11 +284,13 @@ describe('eraLabelY', () => {
       const { frame: short } = stageLayout(width, 120)
       const top = short.centerY - short.height / 2
       const bottom = short.centerY + short.height / 2
-      for (let row = 0; row < ERA_ROWS; row++) {
-        const y = eraLabelY(short, row)
+      const rows = Array.from({ length: ERA_ROWS }, (_, row) => eraLabelY(short, row))
+      for (const [row, y] of rows.entries()) {
         expect(y, `width=${width} row=${row} (top)`).toBeGreaterThanOrEqual(top)
         expect(y, `width=${width} row=${row} (bottom)`).toBeLessThanOrEqual(bottom)
       }
+      // FIX: cinco fileiras empilhadas no mesmo y seriam cinco nomes um por cima do outro
+      expect(new Set(rows).size, `width=${width}`).toBe(ERA_ROWS)
     }
   })
 

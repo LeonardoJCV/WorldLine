@@ -133,7 +133,7 @@ test('reaches the colony that saved the history, and tells the whole story of th
   // FEAT: a semente 4242 (support.ts) funda duas colônias antes do colapso, ao contrário do roteiro
   // dourado da herança (uma só) — só assim a lista tem uma irmã para perder de verdade
   // FIX: +5 anos depois do colapso — no próprio ano do prazo o passo que resolve o paradoxo ainda
-  // não rodou, e a herança do ano 6676 ainda não teria aparecido na lista
+  // não rodou, e a herança do ano 6674 ainda não teria aparecido na lista
   await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
   const events = page.locator('.panel.events')
   await expect(events).toBeVisible({ timeout: 60_000 })

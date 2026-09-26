@@ -622,8 +622,11 @@ describe('SimulationHost: crossings', () => {
     expect(b?.debts).toHaveLength(1)
     expect(b?.debts[0]).toMatchObject({ kind: 'knowledge', origin: 'A' })
     expect(b?.debts[0]?.owed).toBeGreaterThan(0)
-    expect(b?.paradox).toBeNull()
+    // FEAT: com a era elétrica na escada, um presente de dose 1 no ano 2000 já salta um degrau —
+    // o que importa aqui é que a dívida e o paradoxo vão para quem recebeu, não para quem deu
+    expect(b?.paradox).toMatchObject({ kind: 'leap' })
     expect(world(sent, 'A')?.debts).toEqual([])
+    expect(world(sent, 'A')?.paradox).toBeNull()
   })
 
   it('charges the destination debt ratio into the cost of the next crossing', () => {

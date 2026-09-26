@@ -9,7 +9,7 @@ import {
   type EventDef,
 } from './events.ts'
 import { CAUSAL_WINDOW } from './params.ts'
-import { NEUTRAL_MODIFIERS, derive } from './rules.ts'
+import { NEUTRAL_MODIFIERS, derive, integrate } from './rules.ts'
 import { Era, NEVER, type WorldState } from './state.ts'
 import { TEST_WORLD, makeMetrics, makeState } from './testing.ts'
 
@@ -427,6 +427,98 @@ describe('space era', () => {
       0,
     ).started
     expect(started.map((r) => r.event)).not.toContain('space_era')
+  })
+})
+
+describe('the demographic transition', () => {
+  const index = EVENTS.findIndex((def) => def.id === 'demographic_transition')
+  const active = [{ def: index, record: 0, start: 0 }]
+
+  it('is a condition, not an era, so it owns no bit at all', () => {
+    expect(EVENTS[index]?.kind).toBe('condition')
+    expect(EVENTS[index]?.era).toBeUndefined()
+  })
+
+  // FEAT: o conserto que a auditoria pediu — o bit sem leitor virou efeito com leitor, e este teste
+  // falha se alguém tirar o efeito da tabela
+  it('lowers the birth rate the engine actually integrates', () => {
+    const s = makeState({ economy: 4 })
+    const mods = collectModifiers(active)
+    expect(mods.birth).toBeLessThan(1)
+    const quiet = derive(s, TEST_WORLD, NEUTRAL_MODIFIERS, 0.5)
+    const transitioned = derive(s, TEST_WORLD, mods, 0.5)
+    expect(transitioned.birthRate).toBeLessThan(quiet.birthRate)
+    expect(transitioned.birthRate).toBeCloseTo(quiet.birthRate * (mods.birth ?? 1), 12)
+  })
+
+  it('raises what each person produces, which is the other half of its name', () => {
+    const s = makeState({ economy: 4 })
+    const mods = collectModifiers(active)
+    expect(mods.economy).toBeGreaterThan(1)
+    const quiet = integrate(s, derive(s, TEST_WORLD, NEUTRAL_MODIFIERS, 0.5), NEUTRAL_MODIFIERS)
+    const transitioned = integrate(s, derive(s, TEST_WORLD, mods, 0.5), mods)
+    expect(transitioned.economy).toBeGreaterThan(quiet.economy)
+    expect(transitioned.population).toBeLessThan(quiet.population)
+  })
+
+  it('lets go once the prosperity that opened it is gone', () => {
+    const s = world(EVENTS, { active })
+    const outcome = evaluateEvents(s, makeMetrics({ economy: 1 }), 1, 0)
+    expect(outcome.ended).toEqual([0])
+    expect(outcome.active).toEqual([])
+  })
+})
+
+describe('the two rungs the ladder was missing', () => {
+  it('opens the classical age on technology and economy, and nothing else', () => {
+    const started = evaluateEvents(
+      world(EVENTS),
+      makeMetrics({ technology: 36, economy: 4 }),
+      1,
+      0,
+    ).started
+    expect(started.map((r) => r.event)).toContain('era_classical')
+  })
+
+  it('keeps the classical age shut on a rich world that never learned anything', () => {
+    const started = evaluateEvents(
+      world(EVENTS),
+      makeMetrics({ technology: 34, economy: 40 }),
+      1,
+      0,
+    ).started
+    expect(started.map((r) => r.event)).not.toContain('era_classical')
+  })
+
+  it('opens the electric age on technology and energy, and nothing else', () => {
+    const started = evaluateEvents(
+      world(EVENTS),
+      makeMetrics({ technology: 76, energy: 7 }),
+      1,
+      0,
+    ).started
+    expect(started.map((r) => r.event)).toContain('era_electric')
+  })
+
+  it('keeps the electric age shut on a learned world that never lit a lamp', () => {
+    const started = evaluateEvents(
+      world(EVENTS),
+      makeMetrics({ technology: 99, energy: 5 }),
+      1,
+      0,
+    ).started
+    expect(started.map((r) => r.event)).not.toContain('era_electric')
+  })
+
+  it('writes each rung into the bit its own name owns', () => {
+    const outcome = evaluateEvents(
+      world(EVENTS),
+      makeMetrics({ technology: 76, economy: 4, energy: 7 }),
+      1,
+      0,
+    )
+    expect(outcome.eras & Era.classical).toBe(Era.classical)
+    expect(outcome.eras & Era.electric).toBe(Era.electric)
   })
 })
 

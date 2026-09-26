@@ -21,8 +21,9 @@ export interface StageLayout {
 export const WAVELENGTH = 180
 export const MIN_WIDTH = 1
 export const MAX_WIDTH = 8
-// FIX: um mundo que chega ao espaço tem quatro eras na corrente, não três (spec §7)
-export const ERA_ROWS = 4
+// FIX: a escada tem cinco degraus, então a corrente tem cinco fileiras — três engoliam o nome da
+// era espacial, quatro engoliriam o da elétrica
+export const ERA_ROWS = 5
 export const EPISODE_ROWS = 4
 const NARROW = 720
 const LABEL_GAP = 8
@@ -193,9 +194,11 @@ export const ERA_ROW_HEIGHT = 20
 export const EPISODE_ROW_HEIGHT = 8
 
 export function eraLabelY(frame: Frame, row: number): number {
-  const wanted = frame.centerY - frame.height * 0.26 - Math.max(row, 0) * ERA_ROW_HEIGHT
-  // FIX: cada fileira sobe até o topo do quadro, nunca além -- fileiras que já cabiam não se mexem
-  return Math.max(wanted, frame.centerY - frame.height / 2)
+  const base = frame.centerY - frame.height * 0.26
+  const top = frame.centerY - frame.height / 2
+  // FIX: num quadro curto as fileiras se aproximam em vez de empilharem rótulo sobre rótulo no topo
+  const step = Math.min(ERA_ROW_HEIGHT, (base - top) / Math.max(1, ERA_ROWS - 1))
+  return base - Math.max(row, 0) * Math.max(step, 0)
 }
 
 export function episodeY(frame: Frame, row: number): number {
