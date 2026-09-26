@@ -156,7 +156,9 @@ describe('hashState', () => {
     const a = hashState({ ...state, works: [{ def: 0, done: 120, record: 3 }] })
     const differentDef = hashState({ ...state, works: [{ def: 1, done: 120, record: 3 }] })
     const differentDone = hashState({ ...state, works: [{ def: 0, done: 121, record: 3 }] })
-    const differentLength = hashState({
+    // FIX: duas obras não isolam o prefixo de comprimento, porque dois itens alimentam duas vezes;
+    // quem fixa o prefixo é o pino composto acima, junto da ordem dos blocos
+    const twoWorks = hashState({
       ...state,
       works: [
         { def: 0, done: 120, record: 3 },
@@ -166,7 +168,7 @@ describe('hashState', () => {
     expect(a).not.toBe(base)
     expect(a).not.toBe(differentDef)
     expect(a).not.toBe(differentDone)
-    expect(a).not.toBe(differentLength)
+    expect(a).not.toBe(twoWorks)
   })
 
   it('separates two worlds by every field of the work under way', () => {
