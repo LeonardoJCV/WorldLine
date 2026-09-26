@@ -20,7 +20,9 @@ describe('derive', () => {
 
   it('produces more food with more agriculture', () => {
     const low = derive(
-      makeState({ allocation: { agriculture: 10, industry: 50, research: 30, conservation: 10 } }),
+      makeState({
+        allocation: { agriculture: 10, industry: 45, research: 30, conservation: 10, works: 5 },
+      }),
       TEST_WORLD,
       neutral,
       calm,
@@ -45,7 +47,9 @@ describe('derive', () => {
     const base = derive(makeState(), TEST_WORLD, neutral, calm)
     const industrial = derive(makeState({ eras: Era.industrial }), TEST_WORLD, neutral, calm)
     const heavy = derive(
-      makeState({ allocation: { agriculture: 20, industry: 60, research: 10, conservation: 10 } }),
+      makeState({
+        allocation: { agriculture: 20, industry: 55, research: 10, conservation: 10, works: 5 },
+      }),
       TEST_WORLD,
       neutral,
       calm,
@@ -122,7 +126,7 @@ describe('integrate', () => {
     const s = makeState({
       technology: 99.99,
       economy: 50,
-      allocation: { agriculture: 0, industry: 0, research: 100, conservation: 0 },
+      allocation: { agriculture: 0, industry: 0, research: 100, conservation: 0, works: 0 },
     })
     const next = integrate(s, derive(s, TEST_WORLD, neutral, calm), { ...neutral, research: 5 })
     expect(next.technology).toBeLessThanOrEqual(100)

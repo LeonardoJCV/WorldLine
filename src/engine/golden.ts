@@ -11,9 +11,18 @@ export interface GoldenPlan {
 }
 
 const SHIFTING: readonly Decision[] = [
-  { tick: 100, allocation: { agriculture: 25, industry: 55, research: 20, conservation: 0 } },
-  { tick: 600, allocation: { agriculture: 50, industry: 10, research: 20, conservation: 20 } },
-  { tick: 1500, allocation: { agriculture: 30, industry: 20, research: 40, conservation: 10 } },
+  {
+    tick: 100,
+    allocation: { agriculture: 25, industry: 50, research: 20, conservation: 0, works: 5 },
+  },
+  {
+    tick: 600,
+    allocation: { agriculture: 50, industry: 5, research: 20, conservation: 20, works: 5 },
+  },
+  {
+    tick: 1500,
+    allocation: { agriculture: 30, industry: 15, research: 40, conservation: 10, works: 5 },
+  },
 ]
 
 // FEAT: parcelas fixas no arquivo para o roteiro não depender de outro mundo
@@ -35,7 +44,7 @@ const CROSSED: readonly Crossing[] = [
     origin: { world: 'B', tick: 700 },
     cost: 2,
     direction: 'in',
-    allocation: { agriculture: 20, industry: 40, research: 30, conservation: 10 },
+    allocation: { agriculture: 20, industry: 35, research: 30, conservation: 10, works: 5 },
   },
   {
     tick: 900,
@@ -59,7 +68,10 @@ const CROSSED: readonly Crossing[] = [
 
 // FEAT: indústria e pesquisa sem trégua, o único caminho que chega à era espacial
 const SPACEFARING: readonly Decision[] = [
-  { tick: 0, allocation: { agriculture: 20, industry: 50, research: 30, conservation: 0 } },
+  {
+    tick: 0,
+    allocation: { agriculture: 15, industry: 50, research: 30, conservation: 0, works: 5 },
+  },
 ]
 
 // FEAT: um presente que um mundo de tecnologia saturada não tem como quitar; a dívida vira
@@ -79,8 +91,14 @@ const UNPAYABLE: readonly Crossing[] = [
 // FEAT: a história que recebe a confluência — duas viradas e nenhuma travessia, para a costura ser
 // a única coisa que lhe chega de fora
 const CONFLUENT: readonly Decision[] = [
-  { tick: 0, allocation: { agriculture: 45, industry: 25, research: 20, conservation: 10 } },
-  { tick: 800, allocation: { agriculture: 35, industry: 30, research: 25, conservation: 10 } },
+  {
+    tick: 0,
+    allocation: { agriculture: 45, industry: 20, research: 20, conservation: 10, works: 5 },
+  },
+  {
+    tick: 800,
+    allocation: { agriculture: 35, industry: 25, research: 25, conservation: 10, works: 5 },
+  },
 ]
 
 export const GOLDEN_SCRIPTS: Readonly<Record<GoldenScript, GoldenPlan>> = {
@@ -99,20 +117,20 @@ export interface GoldenCase {
 }
 
 export const GOLDEN_CASES: readonly GoldenCase[] = [
-  { seed: 1, script: 'steady', year: 1000, hash: '177ac51d' },
-  { seed: 1, script: 'steady', year: 5000, hash: '537a5d92' },
-  { seed: 1, script: 'shifting', year: 1000, hash: 'aeb1cbca' },
-  { seed: 1, script: 'shifting', year: 5000, hash: 'ddcfedc9' },
-  { seed: 482913, script: 'steady', year: 1000, hash: '470d2965' },
-  { seed: 482913, script: 'steady', year: 5000, hash: 'a42a4111' },
-  { seed: 482913, script: 'shifting', year: 1000, hash: '4f80c4a1' },
-  { seed: 482913, script: 'shifting', year: 5000, hash: '1c51ab0d' },
-  { seed: 0xffffffff, script: 'steady', year: 1000, hash: '648dbea4' },
-  { seed: 0xffffffff, script: 'steady', year: 5000, hash: '68b49e5f' },
-  { seed: 0xffffffff, script: 'shifting', year: 1000, hash: 'ae5e39c0' },
-  { seed: 0xffffffff, script: 'shifting', year: 5000, hash: '795871e1' },
-  { seed: 482913, script: 'crossed', year: 1000, hash: '6fe1fab6' },
-  { seed: 482913, script: 'crossed', year: 5000, hash: '8347686d' },
+  { seed: 1, script: 'steady', year: 1000, hash: 'abd3d2dc' },
+  { seed: 1, script: 'steady', year: 5000, hash: '8e525a9f' },
+  { seed: 1, script: 'shifting', year: 1000, hash: 'da966e36' },
+  { seed: 1, script: 'shifting', year: 5000, hash: '671a3cf0' },
+  { seed: 482913, script: 'steady', year: 1000, hash: '1bb3adda' },
+  { seed: 482913, script: 'steady', year: 5000, hash: '6582d2fc' },
+  { seed: 482913, script: 'shifting', year: 1000, hash: 'd7cb5f60' },
+  { seed: 482913, script: 'shifting', year: 5000, hash: '5067b926' },
+  { seed: 0xffffffff, script: 'steady', year: 1000, hash: '8c23811b' },
+  { seed: 0xffffffff, script: 'steady', year: 5000, hash: '294c54eb' },
+  { seed: 0xffffffff, script: 'shifting', year: 1000, hash: '0245fcd7' },
+  { seed: 0xffffffff, script: 'shifting', year: 5000, hash: '75420923' },
+  { seed: 482913, script: 'crossed', year: 1000, hash: '7d4221bb' },
+  { seed: 482913, script: 'crossed', year: 5000, hash: 'e4974c9b' },
 ]
 
 // FEAT: o roteiro que sobrevive ao próprio mundo, fora dos doze para não mexer em nenhum deles
@@ -130,10 +148,10 @@ export interface InheritanceCase {
 export const INHERITANCE_CASE: InheritanceCase = {
   seed: 482913,
   script: 'inherited',
-  founded: 1803,
-  ended: 2283,
-  year: 2284,
-  hash: '63e17c2a',
+  founded: 1951,
+  ended: 2150,
+  year: 2151,
+  hash: '62643dc9',
 }
 
 // FEAT: um GoldenPlan descreve UMA história, e uma confluência são duas; o caso nomeia os dois
@@ -159,7 +177,7 @@ export const MERGE_CASE: MergeCase = {
   guest: 'C',
   tick: 950,
   year: 1050,
-  hash: 'ce31f6b4',
+  hash: '96291691',
 }
 
 export interface Seam {

@@ -22,10 +22,17 @@ const allocation = fc
     fc.integer({ min: 0, max: 100 }),
     fc.integer({ min: 0, max: 100 }),
     fc.integer({ min: 0, max: 100 }),
+    fc.integer({ min: 0, max: 100 }),
   )
   .map((cuts): Allocation => {
-    const [a, b, c] = [...cuts].sort((x, y) => x - y) as [number, number, number]
-    return { agriculture: a, industry: b - a, research: c - b, conservation: 100 - c }
+    const [a, b, c, d] = [...cuts].sort((x, y) => x - y) as [number, number, number, number]
+    return {
+      agriculture: a,
+      industry: b - a,
+      research: c - b,
+      conservation: d - c,
+      works: 100 - d,
+    }
   })
 
 const script = (maxTick: number) =>
@@ -43,7 +50,13 @@ const script = (maxTick: number) =>
 const seed = fc.integer({ min: 0, max: 0xffffffff })
 
 const DONOR = { technology: 40, food: 600, energy: 400, population: 900 }
-const CREED: Allocation = { agriculture: 30, industry: 30, research: 20, conservation: 20 }
+const CREED: Allocation = {
+  agriculture: 30,
+  industry: 25,
+  research: 20,
+  conservation: 20,
+  works: 5,
+}
 
 const crossingAt = (tick: number, kind: CrossingKind, dose: Dose): Crossing => ({
   tick,

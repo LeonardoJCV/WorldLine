@@ -47,7 +47,7 @@ describe('hashState', () => {
   })
 
   it('pins the genesis hash', () => {
-    expect(hashState(state)).toMatchInlineSnapshot(`"77ebb9f5"`)
+    expect(hashState(state)).toMatchInlineSnapshot(`"33e6a25c"`)
   })
 
   it('ignores the debt fields while they are empty', () => {
@@ -101,7 +101,7 @@ describe('hashState', () => {
     const merged = { ...state, lastMerge: { tick: 1450, other: 'B' } }
     expect(hashState(merged)).not.toBe(hashState(state))
     // FIX: comparado ao hash fixo, não a uma nova chamada, para pegar um campo que vaza mesmo vazio
-    expect(hashState({ ...merged, lastMerge: null })).toBe('77ebb9f5')
+    expect(hashState({ ...merged, lastMerge: null })).toBe('33e6a25c')
   })
 
   it('hashes the year of a merge but never the name of the other history', () => {
@@ -120,9 +120,9 @@ describe('hashState', () => {
     const merged = hashState({ ...state, status: 'merged' })
     // FIX: comparação par a par, não só contra 'merged', para pegar uma colisão entre dois antigos
     expect(new Set([running, extinct, collapsed, merged]).size).toBe(4)
-    expect(running).toBe('77ebb9f5')
-    expect(extinct).toBe('26389b1a')
-    expect(collapsed).toBe('1f93f1b5')
+    expect(running).toBe('33e6a25c')
+    expect(extinct).toBe('1c3d4ab3')
+    expect(collapsed).toBe('db8eda1c')
   })
 
   it('pins a state with several optional blocks populated at once, so no block can move', () => {
@@ -143,12 +143,12 @@ describe('hashState', () => {
       ],
       building: { def: 9, progress: 40, since: 1400 },
     }
-    expect(hashState(composite)).toBe('ce38d83c')
+    expect(hashState(composite)).toBe('30d8a70d')
   })
 
   it('ignores the works fields while they are empty', () => {
     // FIX: comparado ao hash fixo, não a uma nova chamada, para pegar um campo que vaza mesmo vazio
-    expect(hashState({ ...state, works: [], building: null })).toBe('77ebb9f5')
+    expect(hashState({ ...state, works: [], building: null })).toBe('33e6a25c')
   })
 
   it('separates two worlds by every field of the works they have done', () => {

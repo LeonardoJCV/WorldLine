@@ -89,13 +89,22 @@ export async function runToCollapse(page: Page) {
 // herança orfanar uma colônia irmã de verdade, não a única que o mundo natal chegou a ter
 export const SIBLING_CASE = {
   seed: 4242,
-  ended: 6676,
+  ended: 5013,
 } as const
 
 const SIBLING_DECISIONS: readonly Decision[] = [
-  { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-  { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
-  { tick: 2600, allocation: { agriculture: 15, industry: 65, research: 20, conservation: 0 } },
+  {
+    tick: 0,
+    allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+  },
+  {
+    tick: 400,
+    allocation: { agriculture: 20, industry: 45, research: 30, conservation: 0, works: 5 },
+  },
+  {
+    tick: 2600,
+    allocation: { agriculture: 15, industry: 60, research: 20, conservation: 0, works: 5 },
+  },
 ]
 
 const SIBLING_CROSSINGS: readonly Crossing[] = [

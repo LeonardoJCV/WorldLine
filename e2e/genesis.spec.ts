@@ -22,7 +22,7 @@ test('refuses seeds outside the range', async ({ page }) => {
 })
 
 test('opens a shared world link', async ({ page }) => {
-  await page.goto('/#/w/AQAHXmEAAAAA')
+  await page.goto('/#/w/BAAHXmEAAAAA')
   await expect(page.getByTestId('seed')).toHaveText('482913')
   await expect(page.getByText('This link was made with model')).toHaveCount(0)
 })

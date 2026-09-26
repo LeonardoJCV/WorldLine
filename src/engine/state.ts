@@ -6,7 +6,7 @@ import type { Building, Work } from './work.ts'
 
 export type { Building, Work }
 
-export const SECTORS = ['agriculture', 'industry', 'research', 'conservation'] as const
+export const SECTORS = ['agriculture', 'industry', 'research', 'conservation', 'works'] as const
 export type Sector = (typeof SECTORS)[number]
 export type Allocation = Readonly<Record<Sector, number>>
 

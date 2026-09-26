@@ -353,6 +353,8 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
   industry: ['energy', 'energyRatio', 'economy', 'economyTrend', 'environment'],
   research: ['technology'],
   conservation: ['environment'],
+  // FEAT: a obra ainda não mexe em métrica nenhuma; a Tarefa 4 preenche esta lista
+  works: [],
 }
 
 // FEAT: doutrina mexe no que qualquer setor mexe; só quem abre dívida chega ao paradoxo

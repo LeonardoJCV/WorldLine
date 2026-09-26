@@ -36,7 +36,7 @@ function snapshot(
     previous: null,
     eras: 0,
     active: [],
-    allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 },
+    allocation: { agriculture: 25, industry: 20, research: 25, conservation: 25, works: 5 },
     status: 'running',
     home: null,
     debts,

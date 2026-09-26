@@ -115,7 +115,7 @@ test('falls back to the planet when the zoom digs past the floor', async ({ page
 
 test('has no system lens in 2D', async ({ page }) => {
   await useGraphics(page, '2d')
-  await page.goto('/#/w/AQAHXmEAAAAA/system')
+  await page.goto('/#/w/BAAHXmEAAAAA/system')
   await expect(page.getByTestId('seed')).toHaveText(String(SEED))
   await expect(stage(page)).toHaveAttribute('data-lens', 'current')
   await expect(page.locator('.system')).toHaveCount(0)

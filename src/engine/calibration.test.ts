@@ -17,10 +17,34 @@ import { step } from './step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from './state.ts'
 import { Worldline } from './worldline.ts'
 
-const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
-const industrial: Allocation = { agriculture: 25, industry: 60, research: 15, conservation: 0 }
-const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
-const research: Allocation = { agriculture: 35, industry: 20, research: 40, conservation: 5 }
+const balanced: Allocation = {
+  agriculture: 40,
+  industry: 25,
+  research: 20,
+  conservation: 10,
+  works: 5,
+}
+const industrial: Allocation = {
+  agriculture: 25,
+  industry: 55,
+  research: 15,
+  conservation: 0,
+  works: 5,
+}
+const starved: Allocation = {
+  agriculture: 5,
+  industry: 45,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
+const research: Allocation = {
+  agriculture: 35,
+  industry: 15,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
 
 function run(seed: number, allocation: Allocation, years: number): Worldline {
   const w = new Worldline(seed, [{ tick: 0, allocation }])
@@ -75,24 +99,31 @@ const DEBT_KINDS: readonly CrossingKind[] = ['knowledge', 'resource', 'doctrine'
 const DEBT_HORIZON = 2000
 const ELDER_GAP = 2000
 
-const donorAllocation: Allocation = { agriculture: 35, industry: 20, research: 40, conservation: 5 }
+const donorAllocation: Allocation = {
+  agriculture: 35,
+  industry: 15,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
 const invests: Readonly<Record<CrossingKind, Allocation>> = {
-  knowledge: { agriculture: 35, industry: 20, research: 40, conservation: 5 },
-  resource: { agriculture: 55, industry: 35, research: 5, conservation: 5 },
-  doctrine: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+  knowledge: { agriculture: 35, industry: 15, research: 40, conservation: 5, works: 5 },
+  resource: { agriculture: 55, industry: 30, research: 5, conservation: 5, works: 5 },
+  doctrine: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   people: donorAllocation,
 }
 const neglects: Readonly<Record<CrossingKind, Allocation>> = {
-  knowledge: { agriculture: 50, industry: 45, research: 0, conservation: 5 },
-  resource: { agriculture: 15, industry: 5, research: 50, conservation: 30 },
-  doctrine: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+  knowledge: { agriculture: 50, industry: 40, research: 0, conservation: 5, works: 5 },
+  resource: { agriculture: 15, industry: 0, research: 50, conservation: 30, works: 5 },
+  doctrine: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   people: donorAllocation,
 }
 const droppedDoctrine: Allocation = {
   agriculture: 35,
-  industry: 35,
+  industry: 30,
   research: 20,
   conservation: 10,
+  works: 5,
 }
 
 interface Borrowed {
@@ -307,14 +338,26 @@ describe('debt calibration', () => {
 // FEAT: a grade do espaço, a mesma de `npm run probe space`, reduzida para caber num teste
 const SPACE_SEEDS = [1, 7, 42, 4242, 482913, 99991, 1597463007, 0xffffffff]
 const SPACE_HORIZON = 5000
-const SPACER: Allocation = { agriculture: 20, industry: 50, research: 30, conservation: 0 }
+const SPACER: Allocation = {
+  agriculture: 15,
+  industry: 50,
+  research: 30,
+  conservation: 0,
+  works: 5,
+}
 const TURN: readonly Decision[] = [
   { tick: 0, allocation: balanced },
-  { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+  {
+    tick: 400,
+    allocation: { agriculture: 20, industry: 45, research: 30, conservation: 0, works: 5 },
+  },
 ]
 const RETREAT: readonly Decision[] = [
   ...TURN,
-  { tick: 3200, allocation: { agriculture: 40, industry: 15, research: 20, conservation: 25 } },
+  {
+    tick: 3200,
+    allocation: { agriculture: 40, industry: 10, research: 20, conservation: 25, works: 5 },
+  },
 ]
 
 interface Left {

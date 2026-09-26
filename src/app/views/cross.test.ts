@@ -37,7 +37,7 @@ function snapshot(
     previous: null,
     eras: 0,
     active: [],
-    allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 },
+    allocation: { agriculture: 25, industry: 20, research: 25, conservation: 25, works: 5 },
     status,
     home: null,
     debts: [],
@@ -320,7 +320,10 @@ describe('crossBlock', () => {
 
 describe('crossCarriesPreviousAllocation', () => {
   const decisions: readonly Decision[] = [
-    { tick: 10, allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 } },
+    {
+      tick: 10,
+      allocation: { agriculture: 25, industry: 20, research: 25, conservation: 25, works: 5 },
+    },
   ]
 
   it('warns when a doctrine crossing lands on the exact year the origin just decided', () => {

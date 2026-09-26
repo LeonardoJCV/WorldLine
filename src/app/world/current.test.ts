@@ -10,11 +10,11 @@ import { SEAMED_VERSION } from './link.ts'
 const present = { tick: 90 } as Snapshot
 const early = {
   tick: 10,
-  allocation: { agriculture: 30, industry: 30, research: 30, conservation: 10 },
+  allocation: { agriculture: 30, industry: 25, research: 30, conservation: 10, works: 5 },
 }
 const late = {
   tick: 50,
-  allocation: { agriculture: 10, industry: 40, research: 40, conservation: 10 },
+  allocation: { agriculture: 10, industry: 35, research: 40, conservation: 10, works: 5 },
 }
 
 const fromC: Crossing = {

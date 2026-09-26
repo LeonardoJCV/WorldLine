@@ -8,8 +8,8 @@ import { DEFAULT_ALLOCATION, HORIZON, PARADOX_GRACE } from './params.ts'
 import { Worldline } from './worldline.ts'
 
 const SEED = 482913
-const industrial = { agriculture: 25, industry: 55, research: 20, conservation: 0 }
-const green = { agriculture: 40, industry: 15, research: 20, conservation: 25 }
+const industrial = { agriculture: 25, industry: 50, research: 20, conservation: 0, works: 5 }
+const green = { agriculture: 40, industry: 10, research: 20, conservation: 25, works: 5 }
 
 describe('Worldline', () => {
   it('starts at year zero with one sample', () => {
@@ -238,7 +238,7 @@ describe('crossings', () => {
 })
 
 describe('collapse', () => {
-  const idle = { agriculture: 60, industry: 20, research: 0, conservation: 20 }
+  const idle = { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 }
   // FEAT: um presente muito acima da grandeza do mundo, num mundo que nunca pesquisa e por isso
   // nunca quita: o paradoxo entra no ato da travessia e o prazo vence
   const CROSSED_AT = 300

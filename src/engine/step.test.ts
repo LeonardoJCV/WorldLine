@@ -26,7 +26,7 @@ import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
 
 const { world, state } = genesis(482913)
-const shift = { agriculture: 20, industry: 50, research: 20, conservation: 10 }
+const shift = { agriculture: 20, industry: 45, research: 20, conservation: 10, works: 5 }
 
 describe('step', () => {
   it('advances one year deterministically', () => {
@@ -119,7 +119,7 @@ describe('crossings', () => {
   })
 
   it('takes the allocation of a doctrine crossing', () => {
-    const allocation = { agriculture: 10, industry: 10, research: 70, conservation: 10 }
+    const allocation = { agriculture: 10, industry: 5, research: 70, conservation: 10, works: 5 }
     const result = step(state, world, 0, undefined, [at('doctrine', [], { allocation })])
     expect(result.state.allocation).toEqual(allocation)
   })
@@ -184,12 +184,12 @@ describe('debt', () => {
     const researching = {
       ...state,
       debts,
-      allocation: { agriculture: 20, industry: 20, research: 60, conservation: 0 },
+      allocation: { agriculture: 20, industry: 15, research: 60, conservation: 0, works: 5 },
     }
     const idle = {
       ...state,
       debts,
-      allocation: { agriculture: 60, industry: 20, research: 0, conservation: 20 },
+      allocation: { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 },
     }
     const afterResearch = step(researching, world, 0)
     const afterIdle = step(idle, world, 0)
@@ -219,7 +219,7 @@ describe('paradox and collapse', () => {
   })
 
   const heavy: Debt = { kind: 'knowledge', owed: 500, since: 0, origin: 'B' }
-  const idle = { agriculture: 60, industry: 20, research: 0, conservation: 20 }
+  const idle = { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 }
 
   it('installs a leap paradox the year a gift alone would unlock an era out of reach', () => {
     // FEAT: tecnologia já acima da porta industrial; só a energia falta, e o presente a vence sozinho
@@ -377,7 +377,13 @@ describe('colonies', () => {
 })
 
 describe('leaving the planet, end to end', () => {
-  const SPACER: Allocation = { agriculture: 20, industry: 50, research: 30, conservation: 0 }
+  const SPACER: Allocation = {
+    agriculture: 15,
+    industry: 50,
+    research: 30,
+    conservation: 0,
+    works: 5,
+  }
   const YEARS = 3000
 
   function run(grounded: boolean): { world: typeof world; state: WorldState } {
@@ -536,7 +542,13 @@ describe('inheritance', () => {
   })
 
   it('saves a collapsing world as readily as a dying one, and takes the paradox off it', () => {
-    const idle: Allocation = { agriculture: 40, industry: 60, research: 0, conservation: 0 }
+    const idle: Allocation = {
+      agriculture: 40,
+      industry: 55,
+      research: 0,
+      conservation: 0,
+      works: 5,
+    }
     const heavy: Debt = { kind: 'knowledge', owed: 40, since: 0, origin: 'B' }
     const overdue: Paradox = { kind: 'debt', since: 0, deadline: 0 }
     const falling = (colonies: readonly Colony[]) =>

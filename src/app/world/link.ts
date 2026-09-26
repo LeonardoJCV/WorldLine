@@ -5,7 +5,7 @@ import {
   type Crossing,
   type Dose,
 } from '../../engine/crossing.ts'
-import { HORIZON, MAX_SEED } from '../../engine/params.ts'
+import { HORIZON, MAX_SEED, MODEL_VERSION } from '../../engine/params.ts'
 import { SECTORS, isValidAllocation, type Allocation, type Decision } from '../../engine/state.ts'
 import {
   MAX_WORLDLINES,
@@ -28,17 +28,19 @@ export interface MultiverseLink extends WorldLink {
 }
 
 const HEADER = 9
-const DECISION = 6
+// FEAT: o ano em dois bytes e um byte por setor, então o registro cresce junto com os setores
+const DECISION = 2 + SECTORS.length
 const CROSSING = 10
 // FEAT: a parcela vai em dupla precisão, para o mundo reaberto repetir a história byte a byte
 const AMOUNT = 8
 const MERGE = 5
+const SHARES = SECTORS.length
 const MAX_COST = 255
 const MAX_CROSSINGS = 255
 const MAX_MERGES = 255
-const CROSSED_VERSION = 2
+const CROSSED_VERSION = MODEL_VERSION
 // FEAT: a costura só existe a partir daqui, e um mundo sem costura nunca chega nesta versão
-export const SEAMED_VERSION = 3
+export const SEAMED_VERSION = MODEL_VERSION + 1
 
 function validDecisions(decisions: unknown, from: number): boolean {
   if (!Array.isArray(decisions)) return false
@@ -120,8 +122,8 @@ function validMerges(
   return true
 }
 
-// FEAT: um mundo sem travessia sai igual na v1 e na v2, então um link antigo não merece aviso
-const COMPATIBLE_VERSIONS: readonly number[] = [1, CROSSED_VERSION, SEAMED_VERSION]
+// FIX: a alocação ganhou um destino, então nenhum link anterior reexecuta na mesma história
+const COMPATIBLE_VERSIONS: readonly number[] = [CROSSED_VERSION, SEAMED_VERSION]
 
 export function isCompatibleVersion(version: number): boolean {
   return COMPATIBLE_VERSIONS.includes(version)
@@ -242,7 +244,7 @@ function readDecisions(view: DataView, at: number): { decisions: Decision[]; nex
 
 function crossingSize(crossings: readonly Crossing[] = []): number {
   return crossings.reduce(
-    (sum, c) => sum + CROSSING + c.amounts.length * AMOUNT + (c.kind === 'doctrine' ? 4 : 0),
+    (sum, c) => sum + CROSSING + c.amounts.length * AMOUNT + (c.kind === 'doctrine' ? SHARES : 0),
     1,
   )
 }
@@ -274,7 +276,7 @@ function writeCrossings(view: DataView, at: number, crossings: readonly Crossing
     if (crossing.kind === 'doctrine') {
       const allocation = crossing.allocation
       SECTORS.forEach((sector, k) => view.setUint8(cursor + k, allocation?.[sector] ?? 0))
-      cursor += 4
+      cursor += SHARES
     }
   }
   return cursor
@@ -290,7 +292,7 @@ function readCrossings(view: DataView, at: number): { crossings: Crossing[]; nex
     const kind = CROSSING_KINDS[view.getUint8(cursor + 2)]
     if (!kind) return null
     const parcels = view.getUint8(cursor + 9)
-    const shares = kind === 'doctrine' ? 4 : 0
+    const shares = kind === 'doctrine' ? SHARES : 0
     const body = cursor + CROSSING
     if (body + parcels * AMOUNT + shares > view.byteLength) return null
     const amounts: number[] = []

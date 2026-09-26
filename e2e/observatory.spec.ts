@@ -180,7 +180,7 @@ test('applies a decision in intervene mode', async ({ page }) => {
   for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
   await expect(agriculture).toHaveValue('45')
   const values = await Promise.all(
-    ['Agriculture', 'Industry', 'Research', 'Conservation'].map(async (name) =>
+    ['Agriculture', 'Industry', 'Research', 'Conservation', 'Works'].map(async (name) =>
       Number(await page.getByRole('slider', { name: new RegExp(name) }).inputValue()),
     ),
   )

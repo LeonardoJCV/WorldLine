@@ -14,9 +14,27 @@ import type { FromWorker, ToWorker, WorldlineId } from './protocol.ts'
 import { FakeClock } from './testing.ts'
 
 const SEED = 482913
-const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
-const industrial: Allocation = { agriculture: 25, industry: 60, research: 15, conservation: 0 }
-const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+const starved: Allocation = {
+  agriculture: 5,
+  industry: 45,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
+const industrial: Allocation = {
+  agriculture: 25,
+  industry: 55,
+  research: 15,
+  conservation: 0,
+  works: 5,
+}
+const balanced: Allocation = {
+  agriculture: 40,
+  industry: 25,
+  research: 20,
+  conservation: 10,
+  works: 5,
+}
 
 function setup() {
   const clock = new FakeClock()
@@ -130,7 +148,10 @@ describe('SimulationHost: a single worldline', () => {
       seed: SEED,
       tick: 0,
       root: [
-        { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+        {
+          tick: 0,
+          allocation: { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 },
+        },
       ],
       branches: [],
       crossings: [
@@ -997,7 +1018,7 @@ describe('SimulationHost: confluences', () => {
     host.handle({
       type: 'decide',
       world: 'B',
-      allocation: { agriculture: 45, industry: 55, research: 0, conservation: 0 },
+      allocation: { agriculture: 45, industry: 50, research: 0, conservation: 0, works: 5 },
     })
     host.handle({ type: 'step', years: 1 })
     host.handle({
@@ -1778,7 +1799,7 @@ describe('SimulationHost: what the arrival record carries', () => {
     cost: 9,
     direction: 'in',
   } as const
-  const idle: Allocation = { agriculture: 40, industry: 60, research: 0, conservation: 0 }
+  const idle: Allocation = { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 }
 
   // FEAT: uma história que não pesquisa nunca quita o presente, então carrega a tensão ano a ano
   const strained: Extract<ToWorker, { type: 'open' }> = {
@@ -1826,7 +1847,7 @@ describe('SimulationHost: what the arrival record carries', () => {
     lived.host.handle({
       type: 'open',
       seed: INHERITANCE_CASE.seed,
-      tick: 1810,
+      tick: 1958,
       root: plan.decisions,
       branches: [],
       crossings: plan.crossings,
@@ -1843,7 +1864,7 @@ describe('SimulationHost: what the arrival record carries', () => {
     // FIX: `colonies: []` no recibo passava por todos os testes; a colônia da que deságua pinça isso
     expect(world(lived.sent, 'B')?.merges).toMatchObject([
       {
-        tick: 1810,
+        tick: 1958,
         self: 'B',
         other: 'A',
         direction: 'in',
@@ -1858,16 +1879,16 @@ describe('SimulationHost: what the arrival record carries', () => {
     host.handle({
       type: 'open',
       seed: INHERITANCE_CASE.seed,
-      tick: 1812,
+      tick: 1960,
       root: plan.decisions,
       crossings: plan.crossings,
-      merges: [{ tick: 1810, self: 'A', other: 'B', direction: 'out' }],
+      merges: [{ tick: 1958, self: 'A', other: 'B', direction: 'out' }],
       branches: [
         {
           parent: 0,
           fork: 100,
           decisions: [{ tick: 100, allocation: balanced }],
-          merges: [{ tick: 1810, self: 'B', other: 'A', direction: 'in' }],
+          merges: [{ tick: 1958, self: 'B', other: 'A', direction: 'in' }],
         },
       ],
     })

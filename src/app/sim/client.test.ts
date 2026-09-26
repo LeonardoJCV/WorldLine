@@ -65,9 +65,10 @@ describe('SimulationClient', () => {
     client.step(60)
     const id = await client.branch('A', 20, {
       agriculture: 5,
-      industry: 50,
+      industry: 45,
       research: 40,
       conservation: 5,
+      works: 5,
     })
     expect(id).toBe('B')
     const distance = await client.distance('B', 'A', 0, 60, 6)
@@ -83,9 +84,10 @@ describe('SimulationClient', () => {
     client.step(2000)
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     const crossing = await client.cross('A', id, 'knowledge', 1)
     expect(crossing).toMatchObject({ kind: 'knowledge', dose: 1, direction: 'in' })
@@ -100,9 +102,10 @@ describe('SimulationClient', () => {
     client.step(2000)
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     const crossed = await client.crossBranch(id, 500, 'A', 'knowledge', 1)
     expect(crossed).toBe('C')
@@ -115,9 +118,10 @@ describe('SimulationClient', () => {
     client.step(2000)
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     await expect(client.crossBranch(id, 500, 'A', 'people', 1)).rejects.toThrow(/people/)
   })
@@ -140,9 +144,10 @@ describe('SimulationClient', () => {
     client.step(2000)
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     const preview = await client.mergePreview('A', id)
     expect(preview.seamed.status).toBe('running')
@@ -160,9 +165,10 @@ describe('SimulationClient', () => {
     client.step(2000)
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     await expect(client.merge('A', id)).resolves.toBe('A')
     expect(received.every((m) => m.type === 'progress' || m.type === 'branched')).toBe(true)

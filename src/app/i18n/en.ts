@@ -120,6 +120,7 @@ export const en = {
   'sector.industry': 'Industry',
   'sector.research': 'Research',
   'sector.conservation': 'Conservation',
+  'sector.works': 'Works',
   'metric.foodSecurity': 'Food security',
   'metric.crowding': 'Crowding',
   'metric.energyRatio': 'Energy supply',

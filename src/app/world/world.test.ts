@@ -43,15 +43,30 @@ import { toSavedWorld } from './library.ts'
 import { parseRoute } from './route.ts'
 import { seedFromText } from './seed.ts'
 
-const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
-const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+const starved: Allocation = {
+  agriculture: 5,
+  industry: 45,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
+const balanced: Allocation = {
+  agriculture: 40,
+  industry: 25,
+  research: 20,
+  conservation: 10,
+  works: 5,
+}
 const sample: WorldLink = {
   version: MODEL_VERSION,
   seed: 482913,
   tick: 320,
   decisions: [
     { tick: 100, allocation: starved },
-    { tick: 250, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    {
+      tick: 250,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
   ],
 }
 
@@ -60,10 +75,17 @@ const allocation = fc
     fc.integer({ min: 0, max: 100 }),
     fc.integer({ min: 0, max: 100 }),
     fc.integer({ min: 0, max: 100 }),
+    fc.integer({ min: 0, max: 100 }),
   )
   .map((cuts): Allocation => {
-    const [a, b, c] = [...cuts].sort((x, y) => x - y) as [number, number, number]
-    return { agriculture: a, industry: b - a, research: c - b, conservation: 100 - c }
+    const [a, b, c, d] = [...cuts].sort((x, y) => x - y) as [number, number, number, number]
+    return {
+      agriculture: a,
+      industry: b - a,
+      research: c - b,
+      conservation: d - c,
+      works: 100 - d,
+    }
   })
 
 const link = fc
@@ -181,8 +203,8 @@ describe('world link', () => {
     expect(isValidLink({ ...sample, tick: HORIZON + 1 })).toBe(false)
   })
 
-  it('trusts every version that opens the same world', () => {
-    expect(isCompatibleVersion(1)).toBe(true)
+  it('refuses every link written before the works existed', () => {
+    for (const version of [1, 2, 3]) expect(isCompatibleVersion(version)).toBe(false)
     expect(isCompatibleVersion(MODEL_VERSION)).toBe(true)
     expect(isCompatibleVersion(SEAMED_VERSION)).toBe(true)
     expect(isCompatibleVersion(0)).toBe(false)
@@ -341,13 +363,15 @@ const crossed: MultiverseLink = {
   ],
 }
 
-// FEAT: gravado pelo escritor da versão 1, antes das travessias existirem
+// FEAT: gravado pelo escritor da versão 1, quando a alocação tinha quatro destinos
 const VERSION_1 = 'AQAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAA'
+// FEAT: e pelo escritor da versão 2, na mesma alocação de quatro destinos
+const VERSION_2 = 'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAAAAAA'
 
-// FEAT: os bytes que o escritor da versão 2 produzia antes da costura existir, copiados dele
-const SEAMLESS_TREE = 'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAAAAAA'
+// FEAT: os bytes que o escritor da versão 4 produz para uma árvore sem costura
+const SEAMLESS_TREE = 'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAA'
 const SEAMLESS_CROSSED =
-  'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUyKAUA'
+  'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUtKAUFAA'
 
 // FEAT: os nomes são posições no link: a raiz é A, o primeiro galho é B, o segundo é C
 const arrived: MergeSpec = { tick: 320, self: 'A', other: 'B', direction: 'in' }
@@ -374,11 +398,11 @@ describe('multiverse link', () => {
     expect(decodeMultiverse(encodeMultiverse(tree))).toEqual(tree)
   })
 
-  it('writes a multiverse without a seam on the very bytes it always wrote', () => {
+  it('writes a multiverse without a seam on the bytes of the fifth sector', () => {
     expect(encodeMultiverse(tree)).toBe(SEAMLESS_TREE)
     expect(encodeMultiverse(crossed)).toBe(SEAMLESS_CROSSED)
     expect(linkHash(tree)).toBe(`#/m/${SEAMLESS_TREE}`)
-    // FEAT: nenhum link já salvo muda de versão por causa de uma costura que ele não tem
+    // FEAT: um link sem costura fica na versão do modelo, porque não tem costura para carregar
     expect(decodeMultiverse(SEAMLESS_TREE)?.version).toBe(MODEL_VERSION)
     expect(decodeMultiverse(SEAMLESS_CROSSED)?.version).toBe(MODEL_VERSION)
   })
@@ -435,7 +459,10 @@ describe('multiverse link', () => {
   it('carries the circular flag, so a world that collapsed from a loop reopens collapsed', () => {
     // FEAT: pesquisa zerada nunca quita o presente, e o ciclo marca o paradoxo no ano zero
     const idle: Decision[] = [
-      { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+      {
+        tick: 0,
+        allocation: { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 },
+      },
     ]
     const plain: Crossing = {
       tick: 0,
@@ -485,13 +512,14 @@ describe('multiverse link', () => {
     )
   })
 
-  it('still reads a version 1 link', () => {
-    expect(decodeMultiverse(VERSION_1)).toEqual({ ...tree, version: 1 })
+  it('no longer reads a link written before the allocation grew', () => {
+    expect(decodeMultiverse(VERSION_1)).toBeNull()
+    expect(decodeMultiverse(VERSION_2)).toBeNull()
   })
 
   it('refuses trailing bytes', () => {
     expect(decodeMultiverse(withExtraByte(encodeMultiverse(crossed)))).toBeNull()
-    expect(decodeMultiverse(withExtraByte(VERSION_1))).toBeNull()
+    expect(decodeMultiverse(withExtraByte(SEAMLESS_TREE))).toBeNull()
   })
 
   it('refuses a corrupted crossing log without throwing', () => {

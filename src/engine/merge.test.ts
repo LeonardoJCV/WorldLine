@@ -34,15 +34,17 @@ function colony(overrides: Partial<Colony> = {}): Colony {
 
 const HOST_DOCTRINE: Allocation = {
   agriculture: 20,
-  industry: 40,
+  industry: 35,
   research: 30,
   conservation: 10,
+  works: 5,
 }
 const GUEST_DOCTRINE: Allocation = {
   agriculture: 60,
-  industry: 10,
+  industry: 5,
   research: 20,
   conservation: 10,
+  works: 5,
 }
 
 describe('mergeWeights', () => {

@@ -120,6 +120,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'sector.industry': 'Indústria',
   'sector.research': 'Pesquisa',
   'sector.conservation': 'Conservação',
+  'sector.works': 'Obras',
   'metric.foodSecurity': 'Segurança alimentar',
   'metric.crowding': 'Aglomeração',
   'metric.energyRatio': 'Oferta de energia',

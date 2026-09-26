@@ -170,7 +170,7 @@ describe('echoWindows', () => {
             kind: 'doctrine',
             tick: 70,
             amounts: [],
-            allocation: { agriculture: 1, industry: 0, research: 0, conservation: 0 },
+            allocation: { agriculture: 1, industry: 0, research: 0, conservation: 0, works: 0 },
           }),
           crossing({ kind: 'people', tick: 80, amounts: [5], direction: 'out' }),
         ],

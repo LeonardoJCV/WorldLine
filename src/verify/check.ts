@@ -36,7 +36,10 @@ export function runGoldenChecks(): GoldenResult[] {
 
 // FEAT: um presente de conhecimento que ninguém pesquisa nunca quita, e o ano é o do próprio colapso
 export const COLLAPSE_DECISIONS: readonly Decision[] = [
-  { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+  {
+    tick: 0,
+    allocation: { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 },
+  },
 ]
 export const COLLAPSE_CROSSINGS: readonly Crossing[] = [
   {
@@ -56,7 +59,7 @@ export interface CollapseCase {
   readonly hash: string
 }
 
-export const COLLAPSE_CASE: CollapseCase = { seed: 482913, year: 280, hash: '56b2e732' }
+export const COLLAPSE_CASE: CollapseCase = { seed: 482913, year: 280, hash: '6b856253' }
 
 export interface CollapseResult extends CollapseCase {
   readonly computed: string
