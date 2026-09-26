@@ -13,7 +13,17 @@ import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
 import { system } from '../../engine/system.ts'
 import { Worldline } from '../../engine/worldline.ts'
-import { toSnapshot, WORLDLINE_IDS, type MergeSpec } from '../../worker/protocol.ts'
+import { SimulationHost } from '../../worker/host.ts'
+import {
+  toSnapshot,
+  WORLDLINE_IDS,
+  type FromWorker,
+  type MergeSpec,
+  type WorldProgress,
+} from '../../worker/protocol.ts'
+import { FakeClock } from '../../worker/testing.ts'
+import type { WorldView } from '../sim/store.ts'
+import { currentLink } from './current.ts'
 import { parseWorldFile, serializeWorld } from './file.ts'
 import {
   decodeLink,
@@ -34,6 +44,7 @@ import { parseRoute } from './route.ts'
 import { seedFromText } from './seed.ts'
 
 const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
+const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
 const sample: WorldLink = {
   version: MODEL_VERSION,
   seed: 482913,
@@ -624,24 +635,21 @@ interface Sewn {
   readonly departed: Worldline
 }
 
-// FEAT: só o ano e os nomes vêm do link; o estado da história que deságua sai do replay dela
-function sew(
-  seed: number,
-  root: readonly Decision[],
-  fork: number,
-  own: readonly Decision[],
-  seam: MergeSpec,
-  away: MergeSpec,
-): Sewn {
-  const home = system(seed).find((body) => body.home)
-  if (!home) throw new Error(`world ${seed} has no home body`)
-  const survivor = new Worldline(seed, root, null, [])
+// FEAT: o consumidor em miniatura — nada além do que voltou do link entra nesta reconstrução
+function sew(link: MultiverseLink): Sewn {
+  const spec = link.branches[0]
+  const seam = link.merges?.[0]
+  const away = spec?.merges?.[0]
+  if (!spec || !seam || !away) throw new Error('the link dropped the confluence')
+  const home = system(link.seed).find((body) => body.home)
+  if (!home) throw new Error(`world ${link.seed} has no home body`)
+  const survivor = new Worldline(link.seed, link.decisions, null, link.crossings ?? [])
   survivor.advance(seam.tick)
   const departed = new Worldline(
-    seed,
-    [...root.filter((decision) => decision.tick < fork), ...own],
-    { parent: survivor, tick: fork },
-    [],
+    link.seed,
+    [...link.decisions.filter((decision) => decision.tick < spec.fork), ...spec.decisions],
+    { parent: survivor, tick: spec.fork },
+    spec.crossings ?? [],
   )
   departed.advance(away.tick)
   const leaving = departed.present
@@ -667,7 +675,48 @@ function sew(
     natal: home.index,
   })
   departed.advance(1)
+  survivor.advance(link.tick - seam.tick)
   return { survivor, departed }
+}
+
+// FEAT: o hospedeiro de verdade costura; o teste não tem opinião sobre o que uma costura carrega
+function sewnByTheHost(): { readonly worlds: WorldProgress[]; readonly now: number } {
+  const sent: FromWorker[] = []
+  const host = new SimulationHost((message) => sent.push(message), new FakeClock())
+  host.handle({ type: 'open', seed: sample.seed, tick: 0, root: [], branches: [] })
+  host.handle({ type: 'step', years: 300 })
+  host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: balanced })
+  host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 100, allocation: starved })
+  // FEAT: uma dívida com uma terceira história, que a costura precisa levar junto para a anfitriã
+  host.handle({
+    type: 'cross',
+    requestId: 3,
+    origin: 'C',
+    destination: 'B',
+    kind: 'knowledge',
+    dose: 1,
+  })
+  host.handle({ type: 'step', years: 1 })
+  host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'B' })
+  host.handle({ type: 'step', years: 5 })
+  const progress = sent.filter((message) => message.type === 'progress').at(-1)
+  if (!progress) throw new Error('the host reported nothing')
+  return { worlds: [...progress.worlds], now: progress.now }
+}
+
+function viewOf(world: WorldProgress): WorldView {
+  return {
+    info: world.info,
+    present: world.present,
+    events: [],
+    decisions: world.decisions,
+    crossings: world.crossings,
+    merges: world.merges,
+    debts: world.debts,
+    previousDebts: null,
+    paradox: world.paradox,
+    colonies: world.colonies,
+  }
 }
 
 describe('a link that carries a confluence', () => {
@@ -683,33 +732,36 @@ describe('a link that carries a confluence', () => {
     expect(decodeMultiverse(SEAMLESS_TREE)?.branches[0]?.merges).toBeUndefined()
   })
 
-  it('reopens the seam with the same fingerprint on the survivor and on the dead history', () => {
-    const back = decodeMultiverse(encodeMultiverse(confluence))
-    const branch = back?.branches[0]
-    const seam = back?.merges?.[0]
-    const away = branch?.merges?.[0]
-    if (!back || !branch || !seam || !away) throw new Error('the link dropped the confluence')
-    // FEAT: um lado vem dos literais da fixture, o outro só do que voltou do link
-    const sent = sew(
-      sample.seed,
-      sample.decisions,
-      100,
-      [{ tick: 100, allocation: starved }],
-      arrived,
-      flowed,
-    )
-    const opened = sew(back.seed, back.decisions, branch.fork, branch.decisions, seam, away)
-    sent.survivor.advance(60)
-    opened.survivor.advance(60)
-    expect(opened.survivor.present.tick).toBe(sent.survivor.present.tick)
-    expect(hashState(opened.survivor.present)).toBe(hashState(sent.survivor.present))
-    expect(opened.departed.present.status).toBe('merged')
-    expect(opened.departed.present.tick).toBe(sent.departed.present.tick)
-    expect(hashState(opened.departed.present)).toBe(hashState(sent.departed.present))
+  it('reopens, from the link alone, the confluence the host actually sewed', () => {
+    const { worlds, now } = sewnByTheHost()
+    const link = currentLink({ seed: sample.seed, now, worlds: worlds.map(viewOf) })
+    if (!link) throw new Error('the host gave no link')
+    const back = decodeMultiverse(encodeMultiverse(link))
+    expect(back).toEqual(link)
+    expect(back?.version).toBe(SEAMED_VERSION)
+    if (!back) throw new Error('the link did not survive')
 
-    // FIX: sem a costura a sobrevivente segue outra história, então o hash acima não passa de graça
-    const unseamed = new Worldline(sample.seed, sample.decisions, null, [])
-    unseamed.advance(arrived.tick + 60)
+    const host = { survivor: worlds[0], departed: worlds[1] }
+    if (!host.survivor || !host.departed) throw new Error('the host lost a history')
+    const opened = sew(back)
+    // FEAT: `previous` é a âncora que o hospedeiro guarda para a tela, não estado do modelo
+    expect(toSnapshot(opened.survivor.present)).toEqual({
+      ...host.survivor.present,
+      previous: null,
+    })
+    expect(toSnapshot(opened.departed.present)).toEqual({
+      ...host.departed.present,
+      previous: null,
+    })
+    expect(host.departed.present.status).toBe('merged')
+    // FEAT: o Snapshot não carrega o livro-razão, então a dívida herdada se confere à parte
+    expect(host.survivor.debts.map((debt) => debt.origin)).toEqual(['C'])
+    expect(opened.survivor.present.debts).toEqual(host.survivor.debts)
+
+    // FIX: sem a costura a sobrevivente segue outra história, então a igualdade acima não é de graça
+    const unseamed = new Worldline(link.seed, link.decisions, null, link.crossings ?? [])
+    unseamed.advance(link.tick)
+    expect(unseamed.present.tick).toBe(opened.survivor.present.tick)
     expect(hashState(unseamed.present)).not.toBe(hashState(opened.survivor.present))
   })
 
@@ -748,6 +800,16 @@ describe('a link that carries a confluence', () => {
     expect(
       isValidMultiverse({ ...confluence, merges: 'x' as unknown as readonly MergeSpec[] }),
     ).toBe(false)
+    // FIX: `self` que discorda do bloco faria `settleDebts` apagar dívida de uma história inocente
+    expect(isValidMultiverse({ ...confluence, merges: [{ ...arrived, self: 'C' }] })).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...confluence,
+        branches: [
+          { parent: 0, fork: 100, decisions: [], merges: [{ ...flowed, self: 'A', other: 'C' }] },
+        ],
+      }),
+    ).toBe(false)
     expect(
       isValidMultiverse({
         ...confluence,
@@ -768,13 +830,40 @@ describe('a link that carries a confluence', () => {
     ).toBeNull()
   })
 
+  it('refuses a seam in the last year of the horizon, which the engine throws on', () => {
+    const edge: MultiverseLink = {
+      version: SEAMED_VERSION,
+      seed: sample.seed,
+      tick: HORIZON,
+      decisions: [],
+      crossings: [],
+      branches: [],
+      merges: [{ tick: HORIZON, self: 'A', other: 'B', direction: 'in' }],
+    }
+    expect(isValidMultiverse(edge)).toBe(false)
+    expect(decodeMultiverse(encodeMultiverse(edge))).toBeNull()
+    // FEAT: sem a recusa o link reabriria e quem estouraria seria a engine, com o mundo já aberto
+    expect(
+      () =>
+        new Worldline(
+          sample.seed,
+          [],
+          null,
+          [],
+          [{ tick: HORIZON, self: 'A', other: 'B', direction: 'in', natal: 0 }],
+        ),
+    ).toThrow(RangeError)
+    const inside: MergeSpec = { tick: HORIZON - 1, self: 'A', other: 'B', direction: 'in' }
+    expect(isValidMultiverse({ ...edge, merges: [inside] })).toBe(true)
+  })
+
   it('keeps the lone survivor of a confluence on the long form, with the other world gone', () => {
     const lone: MultiverseLink = {
       ...sample,
       version: SEAMED_VERSION,
       crossings: [],
       branches: [],
-      // FEAT: a outra história já foi removida do multiverso, e o link diz isso com o nome vazio
+      // FEAT: o hospedeiro já não deixa remover a história nomeada, mas 255 segue lido como ausente
       merges: [{ tick: 320, self: 'A', other: '', direction: 'in' }],
     }
     expect(linkHash(lone)).toMatch(/^#\/m\//)

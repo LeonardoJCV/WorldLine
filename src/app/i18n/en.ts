@@ -219,6 +219,7 @@ export const en = {
   'worlds.origin': 'From worldline {id}, use as the crossing origin',
   'worlds.remove': 'Remove worldline {id}',
   'worlds.confirm': 'Remove {id} and every worldline that branched from it?',
+  'worlds.sewn': '{id} flowed together with {other}; a confluence cannot be undone.',
   'worlds.confirmYes': 'Remove',
   'worlds.cancel': 'Cancel',
   'graphics.label': 'Graphics',

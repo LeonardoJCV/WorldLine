@@ -577,12 +577,31 @@ export class SimulationHost {
     this.#send({ type: 'merged', requestId, world: survivorId })
   }
 
+  // FEAT: uma história que outra absorveu é passado dela agora, e passado não se apaga
+  #seamedTo(
+    doomed: ReadonlySet<string>,
+  ): { readonly gone: string; readonly keeper: string } | null {
+    for (const entry of this.#entries) {
+      if (doomed.has(entry.info.id)) continue
+      const seam = entry.worldline.merges.find((merge) => doomed.has(merge.other))
+      if (seam) return { gone: seam.other, keeper: entry.info.id }
+    }
+    return null
+  }
+
   #remove(id: WorldlineId): void {
     this.#entry(id)
     if (id === 'A') throw new RangeError('the original worldline cannot be removed')
-    const doomed = new Set<WorldlineId>([id])
+    const doomed = new Set<string>([id])
     for (const entry of this.#entries) {
       if (entry.info.parent !== null && doomed.has(entry.info.parent)) doomed.add(entry.info.id)
+    }
+    // FIX: sem a história nomeada a costura fica órfã, e a letra dela seria reusada por outra
+    const seamed = this.#seamedTo(doomed)
+    if (seamed) {
+      throw new RangeError(
+        `worldline ${seamed.gone} flowed together with worldline ${seamed.keeper}; a confluence cannot be undone`,
+      )
     }
     this.#entries = this.#entries.filter((entry) => !doomed.has(entry.info.id))
     this.#now = this.#latest()

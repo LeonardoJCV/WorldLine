@@ -87,7 +87,7 @@ function validCrossings(crossings: unknown, from: number): boolean {
 }
 
 // FIX: a engine recusa uma costura fora de ordem com RangeError; aqui isso vira um link inválido
-function validMerges(merges: unknown, from: number, until: number): boolean {
+function validMerges(merges: unknown, from: number, until: number, own: string): boolean {
   if (merges === undefined) return true
   if (!Array.isArray(merges) || merges.length > MAX_MERGES) return false
   // FEAT: a costura acontece no presente da worldline, então nunca depois do ano que o link guarda
@@ -97,7 +97,8 @@ function validMerges(merges: unknown, from: number, until: number): boolean {
   for (const value of merges as unknown[]) {
     if (typeof value !== 'object' || value === null) return false
     const { tick, self, other, direction } = value as Partial<MergeSpec>
-    if (typeof self !== 'string' || typeof other !== 'string' || self === other) return false
+    // FIX: o bloco já diz de quem é a costura, então um `self` que discorde dele é link corrompido
+    if (self !== own || typeof other !== 'string' || self === other) return false
     if (direction !== 'in' && direction !== 'out') return false
     if (!Number.isInteger(tick) || (tick ?? -1) <= previous || (tick ?? last + 1) > last) {
       return false
@@ -132,14 +133,14 @@ export function toMultiverse(link: WorldLink): MultiverseLink {
 export function isValidMultiverse(link: MultiverseLink): boolean {
   if (!isValidLink(link) || !Array.isArray(link.branches)) return false
   if (link.branches.length > MAX_WORLDLINES - 1) return false
-  if (!validMerges(link.merges, 0, link.tick)) return false
+  if (!validMerges(link.merges, 0, link.tick, WORLDLINE_IDS[0] ?? '')) return false
   return link.branches.every((branch, i) => {
     if (typeof branch !== 'object' || branch === null) return false
     const { parent, fork, decisions, crossings, merges } = branch
     if (!Number.isInteger(parent) || parent < 0 || parent > i) return false
     if (!Number.isInteger(fork) || fork < 0 || fork > link.tick) return false
     if (!validCrossings(crossings, fork)) return false
-    if (!validMerges(merges, fork, link.tick)) return false
+    if (!validMerges(merges, fork, link.tick, WORLDLINE_IDS[i + 1] ?? '')) return false
     return validDecisions(decisions, fork)
   })
 }

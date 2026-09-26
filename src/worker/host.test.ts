@@ -1091,6 +1091,40 @@ describe('SimulationHost: confluences', () => {
     expect(last(sent, 'progress')?.ended).toBe('merge')
   })
 
+  it('refuses to remove a history that a confluence names, so no seam is left pointing at nobody', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'remove', world: 'B' })
+    expect(last(sent, 'error')?.message).toBe(
+      'worldline B flowed together with worldline A; a confluence cannot be undone',
+    )
+    expect(last(sent, 'progress')?.worlds.map((w) => w.info.id)).toEqual(['A', 'B'])
+    expect(world(sent, 'A')?.merges).toMatchObject([{ self: 'A', other: 'B', direction: 'in' }])
+  })
+
+  it('never frees the letter of a history a confluence names, so no seam ever aliases another', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'remove', world: 'B' })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 100, allocation: balanced })
+    expect(last(sent, 'branched')?.world).toBe('C')
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    // FEAT: a regra é estreita: quem nenhuma costura nomeia continua removível
+    host.handle({ type: 'remove', world: 'C' })
+    expect(last(sent, 'progress')?.worlds.map((w) => w.info.id)).toEqual(['A', 'B'])
+  })
+
+  it('refuses to remove the history that received a confluence, from the side that flowed away', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 100, allocation: balanced })
+    host.handle({ type: 'merge', requestId: 3, survivor: 'C', other: 'B' })
+    host.handle({ type: 'remove', world: 'C' })
+    expect(last(sent, 'error')?.message).toBe(
+      'worldline C flowed together with worldline B; a confluence cannot be undone',
+    )
+    expect(last(sent, 'progress')?.worlds.map((w) => w.info.id)).toEqual(['A', 'B', 'C'])
+  })
+
   it('still names the horizon while the surviving history runs', () => {
     const { host, sent, clock } = pair()
     host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })

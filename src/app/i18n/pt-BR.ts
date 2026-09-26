@@ -219,6 +219,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'worlds.origin': 'Da realidade {id}, usar como origem da travessia',
   'worlds.remove': 'Remover a realidade {id}',
   'worlds.confirm': 'Remover {id} e todas as realidades que nasceram dela?',
+  'worlds.sewn': '{id} se juntou a {other}; uma confluência não se desfaz.',
   'worlds.confirmYes': 'Remover',
   'worlds.cancel': 'Cancelar',
   'graphics.label': 'Gráficos',
