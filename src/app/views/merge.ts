@@ -35,6 +35,7 @@ export function seamView(
   seamed: Snapshot,
   incoming: Snapshot,
   shock: number,
+  between: readonly [string, string],
 ): SeamView {
   const rows = VARIABLES.map((variable) => {
     const before = now.values[variable]
@@ -43,7 +44,9 @@ export function seamView(
     return { variable, now: before, next, kind: kindOf(before, next, arriving) }
   })
 
-  const debtIn = totalOwed(incoming.debts)
+  // FIX: o que vem junto é só o que sobrevive à costura — a dívida da outra com quem se costura
+  // se anula, e anunciá-la como "vem com ela" seria dizer um número que não chega a chegar
+  const debtIn = totalOwed(incoming.debts.filter((debt) => !between.includes(debt.origin)))
   const debtSettled = totalOwed(now.debts) + totalOwed(incoming.debts) - totalOwed(seamed.debts)
 
   return { rows, shock, debtIn, debtSettled }

@@ -329,7 +329,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'merge.from': 'Da história {id}',
   'merge.sum': '{now} + {incoming} → {next}',
   'merge.blend': '{now} e {incoming} → {next}',
-  'merge.shock': 'A estabilidade perde {shock} na costura',
+  'merge.shock': 'A costura tira {shock} da estabilidade, e o número acima já conta com isso',
   'merge.debtIn': '{value} de dívida vem com ela',
   'merge.debtSettled': '{value} se anula, porque as duas se deviam',
   'merge.homes': 'A história vai morar em {body}; {left} vira colônia',

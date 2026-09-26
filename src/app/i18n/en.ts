@@ -328,7 +328,7 @@ export const en = {
   'merge.from': 'From history {id}',
   'merge.sum': '{now} + {incoming} → {next}',
   'merge.blend': '{now} and {incoming} → {next}',
-  'merge.shock': 'Stability takes {shock} from the seam',
+  'merge.shock': 'The seam takes {shock} from stability, and the number above already counts it',
   'merge.debtIn': '{value} of debt comes with it',
   'merge.debtSettled': '{value} settles, because they owed each other',
   'merge.homes': 'The history will live on {body}; {left} becomes a colony',

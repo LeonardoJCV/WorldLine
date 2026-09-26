@@ -42,8 +42,20 @@ async function pairAtYearFive(page: Page) {
   await modeTab(page).click()
 }
 
+// FEAT: a tira e o painel oferecem a mesma escolha por dois botões diferentes; o nome acessível
+// mais longo é o da tira, e é por ele que se distingue um do outro
+function stripPick(page: Page, id: string) {
+  return page.getByRole('button', { name: `From history ${id}, let it flow into this one` })
+}
+
+function panelPick(page: Page, id: string) {
+  return page
+    .locator('.merge__group')
+    .getByRole('button', { name: `From history ${id}`, exact: true })
+}
+
 async function pickHistory(page: Page, id: string) {
-  await page.getByRole('button', { name: `From history ${id}, let it flow into this one` }).click()
+  await stripPick(page, id).click()
 }
 
 const SCALES: Readonly<Record<string, number>> = { K: 1e3, M: 1e6, B: 1e9, T: 1e12 }
@@ -70,7 +82,9 @@ test('opens the fourth mode, shows the seam, and sews the two histories into one
   await pickHistory(page, 'A')
   await expect(page.locator('.merge__pair')).toHaveText('Merge B with A')
   await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
-  await expect(page.locator('.merge__shock')).toHaveText(/^Stability takes [\d.]+ from the seam$/)
+  await expect(page.locator('.merge__shock')).toHaveText(
+    /^The seam takes [\d.]+ from stability, and the number above already counts it$/,
+  )
   await expect(page.locator('.merge__ends')).toHaveText('Both histories end here. B continues.')
   await expect(reason(page)).toHaveText('')
   await expect(confirm(page)).toBeEnabled()
@@ -125,6 +139,27 @@ test('shows the two histories exactly as their own states read them, and sums wh
     expect(shown.get(variable)?.kind).toBe('blend')
   }
   expect(shown.get('population')?.next).not.toBe(shown.get('population')?.now)
+})
+
+// FIX: todo o resto da suíte escolhe pela tira; sem isto o botão do próprio painel podia não
+// fazer nada e nenhum teste notaria
+test('chooses the history from the panel itself, and both offers agree on the choice', async ({
+  page,
+}) => {
+  test.slow()
+  await pairAtYearFive(page)
+  await expect(panelPick(page, 'A')).toHaveAttribute('aria-pressed', 'false')
+
+  await panelPick(page, 'A').click()
+
+  await expect(panelPick(page, 'A')).toHaveAttribute('aria-pressed', 'true')
+  await expect(stripPick(page, 'A')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.merge__pair')).toHaveText('Merge B with A')
+  await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
+  await expect(confirm(page)).toBeEnabled()
+
+  await confirm(page).click()
+  await expect(page.locator('.merge__status')).toHaveText('A flowed into B.')
 })
 
 // FIX: o instante da costura não é um estado de ninguém — o motor o aplica DENTRO do ano seguinte,
@@ -190,17 +225,66 @@ test('keeps the whole seam, the warning and the button inside the column that ho
   expect(fits).toEqual({ rows: true, shock: true, ends: true, confirm: true, seamWhole: true })
 })
 
-// FEAT: no celular os níveis voltam a uma coluna só, e nada empurra a tela de lado
-test('reads the seam on a phone without pushing the screen sideways', async ({ page }) => {
+// FIX: numa janela baixa o cartão não pode passar do pé da coluna; se passar, o botão de aceitar
+// sai da vista e só volta rolando a coluna inteira
+test('never lets the seam card grow past the column, however short the window', async ({
+  page,
+}) => {
+  test.slow()
+  await page.setViewportSize({ width: 1440, height: 640 })
+  await pairAtYearFive(page)
+  await pickHistory(page, 'A')
+  await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
+
+  const squeeze = await page.evaluate(() => {
+    const rail = document.querySelector('.hud__left')
+    const card = document.querySelector('.card--merge')
+    const seam = document.querySelector('.merge__seam')
+    if (!rail || !card || !seam) return null
+    return {
+      card: card.getBoundingClientRect().height,
+      rail: rail.clientHeight,
+      seamScrolls: seam.scrollHeight > seam.clientHeight,
+    }
+  })
+  if (!squeeze) throw new Error('the merge rail did not render')
+  expect(squeeze.card).toBeLessThanOrEqual(squeeze.rail + 1)
+  // FEAT: o aperto degrada para rolagem dos níveis, não para um cartão que transborda
+  expect(squeeze.seamScrolls).toBe(true)
+})
+
+// FEAT: no celular os níveis voltam a uma coluna só, e a costura cabe na largura que tem
+test('reads the seam on a phone without pushing anything sideways', async ({ page }) => {
   test.slow()
   await page.setViewportSize({ width: 390, height: 844 })
   await pairAtYearFive(page)
   await pickHistory(page, 'A')
   await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
-  const sideways = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  )
-  expect(sideways).toBe(0)
+
+  const narrow = await page.evaluate(() => {
+    const seam = document.querySelector('.merge__seam')
+    const rows = [...document.querySelectorAll('.merge__rows li')]
+    if (!seam) return null
+    const width = seam.clientWidth
+    const flows = [...document.querySelectorAll('.merge__flow')]
+    return {
+      page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      seamOverflow: seam.scrollWidth - seam.clientWidth,
+      wide: rows.filter((row) => row.getBoundingClientRect().width > width + 1).length,
+      // FEAT: numa coluna só, cada nível ocupa a largura inteira; em duas, metade dela
+      narrowed: rows.filter((row) => row.getBoundingClientRect().width < width * 0.9).length,
+      clipped: flows.filter((flow) => flow.scrollWidth > flow.clientWidth + 1).length,
+      width,
+    }
+  })
+  if (!narrow) throw new Error('the seam did not render')
+  expect(narrow.width).toBeGreaterThan(0)
+  // FEAT: legível é a costura caber no que se vê dela, não só a página não andar de lado
+  expect(narrow.seamOverflow).toBeLessThanOrEqual(0)
+  expect(narrow.wide).toBe(0)
+  expect(narrow.narrowed).toBe(0)
+  expect(narrow.clipped).toBe(0)
+  expect(narrow.page).toBe(0)
 })
 
 test('reproduces the confluence from the link alone', async ({ page }) => {
@@ -245,9 +329,8 @@ test('refuses a dead history, a second seam in the same year and a history that 
   await expect(page.locator('.merge__status')).toHaveText('A flowed into C.')
 
   // FEAT: a que desaguou não se oferece mais, e o ano já gastou a sua costura
-  await expect(
-    page.getByRole('button', { name: 'From history A, let it flow into this one' }),
-  ).toHaveCount(0)
+  await expect(stripPick(page, 'A')).toHaveCount(0)
+  await expect(panelPick(page, 'A')).toHaveCount(0)
   await pickHistory(page, 'B')
   await expect(reason(page)).toHaveText(
     'C already took a confluence in 0005, and a history takes one a year',
@@ -278,7 +361,7 @@ test('sews the two histories by keyboard alone, reading the cost before acceptin
   await tab.press('Enter')
   await expect(page.locator('.panel.merge')).toBeVisible()
 
-  const offer = page.getByRole('button', { name: 'From history A, let it flow into this one' })
+  const offer = stripPick(page, 'A')
   await offer.focus()
   await offer.press('Enter')
   await expect(offer).toHaveAttribute('aria-pressed', 'true')

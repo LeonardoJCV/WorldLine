@@ -44,9 +44,9 @@ export function MergePanel() {
   // FIX: a prévia só vale para o ano em que a costura acontece, que é o presente do hospedeiro
   const seamed = preview !== null && preview.seamed.tick === now ? preview : null
   const seam =
-    present !== null && incoming !== null && seamed !== null
+    present !== null && incoming !== null && seamed !== null && other !== null
       ? {
-          view: seamView(present, seamed.seamed, incoming, seamed.shock),
+          view: seamView(present, seamed.seamed, incoming, seamed.shock, [focus, other]),
           incoming,
           homes: homeChange(
             currentHome(seed, present.home),
