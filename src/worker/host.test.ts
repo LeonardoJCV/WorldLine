@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { crossingAmounts, crossingCost } from '../engine/crossing.ts'
-import { debtRatio } from '../engine/debt.ts'
+import { debtRatio, totalOwed } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
 import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../engine/golden.ts'
-import type { EventRecord } from '../engine/events.ts'
+import { EVENTS, type EventRecord } from '../engine/events.ts'
 import { mergeWeights } from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation, WorldState } from '../engine/state.ts'
+import { system } from '../engine/system.ts'
 import { Worldline } from '../engine/worldline.ts'
 import { SimulationHost } from './host.ts'
 import type { FromWorker, ToWorker, WorldlineId } from './protocol.ts'
@@ -958,6 +959,143 @@ describe('SimulationHost: confluences', () => {
     expect(last(sent, 'progress')?.now).toBe(2001)
   })
 
+  // FIX: o painel nomeia o abalo, que é o menor custo da costura; o maior é a comida, porque o
+  // celeiro soma e a colheita não — sem o número do motor a prévia leria a costura como ganho
+  it('reports the food per person the united history would live with, and the famine it brings', () => {
+    const famine = EVENTS.find((def) => def.id === 'famine')
+    const hungry = famine?.trigger.find((c) => c.metric === 'foodSecurity')?.value
+    expect(hungry).toBeGreaterThan(0)
+    const { host, sent } = pair()
+
+    host.handle({ type: 'mergePreview', requestId: 2, survivor: 'A', other: 'B' })
+    const kept = last(sent, 'mergePreview')
+    host.handle({ type: 'mergePreview', requestId: 3, survivor: 'B', other: 'A' })
+    const leaving = last(sent, 'mergePreview')
+    // FEAT: as duas se alimentam de sobra hoje, cada uma medida no próprio estado
+    expect(kept?.food.now).toBeGreaterThan(1)
+    expect(leaving?.food.now).toBeGreaterThan(1)
+    // FEAT: e unidas não se alimentam — o número previsto já está abaixo da linha da fome do motor
+    expect(kept?.food.next).toBeLessThan(hungry ?? 0)
+    expect(kept?.food.next).toBeLessThan(Math.min(kept?.food.now ?? 0, leaving?.food.now ?? 0))
+
+    host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 2 })
+    // FEAT: a prévia não exagerou: a fome que ela anuncia é a que o motor vive no ano seguinte
+    expect(causesOf(sent, 'A', 'famine')).not.toEqual([])
+  })
+
+  // FIX: sem o paradoxo no recibo o observador lavaria um colapso, que é o que a §5.3 proíbe: a
+  // dívida a terceiros ainda viajaria, mas o prazo voltaria a contar do ano da costura
+  it('carries the paradox of the departing history, deadline and all, so no collapse is laundered', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 300 })
+    for (let i = 1; i <= 4; i++) {
+      host.handle({ type: 'branch', requestId: i, parent: 'A', tick: 100, allocation: balanced })
+    }
+    // FEAT: uma B que nunca pesquisa nunca quita, e um presente deste tamanho a joga no paradoxo
+    host.handle({
+      type: 'decide',
+      world: 'B',
+      allocation: { agriculture: 45, industry: 55, research: 0, conservation: 0 },
+    })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({
+      type: 'cross',
+      requestId: 20,
+      origin: 'C',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 3,
+    })
+    host.handle({ type: 'step', years: 20 })
+    const doomed = world(sent, 'B')?.paradox
+    expect(doomed).toMatchObject({ kind: 'leap' })
+    expect(world(sent, 'A')?.paradox).toBeNull()
+
+    host.handle({ type: 'merge', requestId: 21, survivor: 'A', other: 'B' })
+    expect(world(sent, 'A')?.merges.at(-1)?.paradox).toEqual(doomed)
+    host.handle({ type: 'step', years: 1 })
+    // FEAT: o prazo da que chegou é o prazo da unida; um paradoxo novo começaria a contar de agora
+    expect(world(sent, 'A')?.paradox).toEqual(doomed)
+  })
+
+  // FIX: sem o lar no recibo as duas se leem no mesmo corpo, a gente soma em vez de se conservar e
+  // o corpo abandonado desaparece em silêncio — é o inverso do erro que a §5.4 nomeia
+  it('carries the home of the departing history, so two homes are read as two', () => {
+    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: INHERITANCE_CASE.seed,
+      tick: 2290,
+      root: plan.decisions,
+      branches: [],
+      crossings: plan.crossings,
+    })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: balanced })
+    // FEAT: A herdou a colônia do corpo 1 quando o natal caiu; B nunca saiu do natal
+    const away = world(sent, 'A')?.present
+    const stays = world(sent, 'B')?.present
+    expect(away?.home).toBe(1)
+    expect(stays?.home).toBeNull()
+    const people = (away?.values.population ?? 0) + (stays?.values.population ?? 0)
+
+    host.handle({ type: 'merge', requestId: 2, survivor: 'B', other: 'A' })
+    expect(world(sent, 'B')?.merges.at(-1)?.home).toBe(1)
+    host.handle({ type: 'step', years: 1 })
+    // FEAT: a gente se conserva, não soma: a mais leve perde a casa, e a casa dela vira colônia
+    expect(world(sent, 'B')?.present.values.population).toBeLessThan(people * 0.95)
+    expect(world(sent, 'B')?.colonies.map((colony) => colony.body)).toEqual([1])
+  })
+
+  // FIX: o corpo natal do recibo é do hospedeiro, e um índice errado faria `mergeStates` resolver os
+  // dois lares para corpos que não existem, tudo em silêncio porque a saída grava `home: null`
+  it('stamps the natal body of the seed on the receipt, and reads a null home as that body', () => {
+    const natal = system(SEED).find((body) => body.home)?.index
+    expect(natal).toBeGreaterThanOrEqual(0)
+    const { host, sent } = pair()
+    const a = world(sent, 'A')?.present
+    const b = world(sent, 'B')?.present
+    expect(a?.home).toBeNull()
+    expect(b?.home).toBeNull()
+
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    expect(world(sent, 'A')?.merges.at(-1)?.natal).toBe(natal)
+    host.handle({ type: 'step', years: 1 })
+    // FEAT: duas com `home: null` moram no mesmo corpo, então a gente soma e nenhuma colônia nasce
+    expect(world(sent, 'A')?.present.values.population).toBeGreaterThan(
+      1.8 * Math.max(a?.values.population ?? 0, b?.values.population ?? 0),
+    )
+    expect(world(sent, 'A')?.colonies).toEqual([])
+  })
+
+  // FIX: nada na API pública deixa duas vivas em anos diferentes, então o espião abaixo é o que
+  // torna a precaução alcançável; sem ela a sobrevivente gravaria a chegada e a outra estouraria
+  // depois, deixando meia costura — um recibo 'in' sem o 'out' do outro lado
+  it('refuses a confluence whose two ends are not in the same year, and writes neither', () => {
+    const { host, sent } = pair()
+    const real = Worldline.prototype.advance
+    vi.spyOn(Worldline.prototype, 'advance').mockImplementation(function (
+      this: Worldline,
+      years: number,
+    ) {
+      return this.lineage === null ? real.call(this, years) : 0
+    })
+    host.handle({ type: 'step', years: 1 })
+    expect(last(sent, 'progress')?.now).toBe(2001)
+    expect(world(sent, 'B')?.present.tick).toBe(2000)
+
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 2 })
+    expect(last(sent, 'error')?.message).toMatch(/year 2001 applied to the departing/)
+    expect(all(sent, 'merged')).toEqual([])
+    host.handle({ type: 'step', years: 0 })
+    // FEAT: e nenhuma das duas guardou nada — meia costura não se escreve
+    expect(world(sent, 'A')?.merges).toEqual([])
+    expect(world(sent, 'B')?.merges).toEqual([])
+  })
+
   it('refuses a confluence with itself, with an unknown letter, and with a dead history', () => {
     const { host, sent, open } = setup()
     open()
@@ -1118,6 +1256,13 @@ describe('SimulationHost: confluences', () => {
     expect(reply).toMatchObject({ type: 'mergePreview', requestId: 5 })
     // FEAT: a dívida com quem se costuraria já vira interna na prévia; a de fora, C, permanece
     expect(reply?.seamed.debts).toMatchObject([{ kind: 'knowledge', origin: 'C' }])
+    // FIX: as duas contas de dívida saem daqui, onde a regra do motor mora, e não da tela: a que
+    // chega é a que sobrevive à anulação, e A não devia nada, então ela é o livro-razão da unida
+    expect(totalOwed(a?.debts ?? [])).toBe(0)
+    expect(reply?.debtIn).toBeCloseTo(totalOwed(reply?.seamed.debts ?? []))
+    expect(reply?.debtIn).toBeLessThan(totalOwed(b?.debts ?? []))
+    expect(reply?.debtSettled).toBeCloseTo(totalOwed(b?.debts ?? []) - (reply?.debtIn ?? 0))
+    expect(reply?.debtSettled).toBeGreaterThan(0)
     // FIX: comida sempre soma, sem condição nenhuma — prova que a prévia leu as duas pontas certas
     expect(reply?.seamed.values.food).toBeCloseTo(
       (a?.present.values.food ?? 0) + (b?.present.values.food ?? 0),

@@ -830,6 +830,43 @@ describe('a link that carries a confluence', () => {
     ).toBeNull()
   })
 
+  // FIX: a propriedade é pura do link — duas costuras do lado que parte — e a ruling do `other: ''`
+  // manda recusar isso na porta, senão o link decodifica, o mundo abre e a engine estoura depois
+  it('refuses a link where the history that flowed away flows again', () => {
+    const twice: MultiverseLink = {
+      ...confluence,
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: starved }],
+          crossings: [],
+          // FEAT: dois deságues de B em anos crescentes; só o guarda de `away` os separa
+          merges: [{ ...flowed, tick: 300 }, flowed],
+        },
+        { parent: 1, fork: 200, decisions: [], crossings: [] },
+      ],
+    }
+    expect(isValidMultiverse(twice)).toBe(false)
+    expect(decodeMultiverse(encodeMultiverse(twice))).toBeNull()
+    // FEAT: a recusa é estreita — um deságue só, no mesmo ano, segue passando
+    expect(isValidMultiverse(confluence)).toBe(true)
+    // FEAT: e é a engine quem confirma que o segundo nunca teria volta
+    expect(
+      () =>
+        new Worldline(
+          sample.seed,
+          [],
+          null,
+          [],
+          [
+            { tick: 300, self: 'B', other: 'A', direction: 'out', natal: 0 },
+            { tick: 320, self: 'B', other: 'A', direction: 'out', natal: 0 },
+          ],
+        ),
+    ).toThrow(/flowed away/)
+  })
+
   it('refuses a seam in the last year of the horizon, which the engine throws on', () => {
     const edge: MultiverseLink = {
       version: SEAMED_VERSION,
