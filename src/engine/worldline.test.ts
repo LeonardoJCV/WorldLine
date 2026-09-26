@@ -590,14 +590,53 @@ describe('a commissioned work', () => {
     expect(line.commissions).toEqual([{ tick: ORDERED, work: 'granary' }])
   })
 
-  it('refuses a work that is not in the catalogue, and one made after the worldline ended', () => {
+  it('refuses a work that is not in the catalogue', () => {
     const line = new Worldline(SEED)
     line.advance(100)
     expect(() => line.commission('pyramid' as WorkId)).toThrow(RangeError)
     expect(line.commissions).toEqual([])
+  })
+
+  // FIX: o portão é o do fim da história, não o do horizonte — num mundo que colapsa antes dele a
+  // validação de forma ainda aceitaria o ano, então é aqui que o portão se prova
+  it('refuses a commission on a history that ended long before the horizon', () => {
+    const unresearched = { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 }
+    const ruinous: Crossing = {
+      tick: 0,
+      kind: 'knowledge',
+      dose: 3,
+      amounts: [200],
+      origin: { world: 'B', tick: 0 },
+      cost: 18,
+      direction: 'in',
+    }
+    const line = new Worldline(SEED, [{ tick: 0, allocation: unresearched }], null, [ruinous])
     line.advance(HORIZON)
-    expect(line.ended).toBe(true)
+    expect(line.present.status).toBe('collapsed')
+    expect(line.present.tick).toBeLessThan(HORIZON)
     expect(() => line.commission('irrigation')).toThrow(Error)
+    expect(line.commissions).toEqual([])
+  })
+
+  it('refuses a commission while a scheduled one is still pending', () => {
+    const scheduled: readonly Commission[] = [{ tick: 500, work: 'irrigation' }]
+    const line = new Worldline(SEED, [], null, [], [], scheduled)
+    line.advance(100)
+    expect(() => line.commission('granary')).toThrow(Error)
+    expect(line.commissions).toEqual(scheduled)
+  })
+
+  // FEAT: o motor aceita o gesto que o ano não pode honrar, porque é o painel que evita o gesto
+  // inútil e a tolerância do motor é o que deixa um link reabrir; um portão aqui mataria isso
+  it('records a commission the present year cannot honour, instead of gating it', () => {
+    const line = new Worldline(SEED)
+    line.advance(50)
+    expect(hasEra(line.present, Era.agricultural)).toBe(false)
+    expect(line.commission('irrigation')).toEqual({ tick: 50, work: 'irrigation' })
+    expect(line.commissions).toHaveLength(1)
+    line.advance(50)
+    expect(line.present.building).toBeNull()
+    expect(line.present.works).toEqual([])
   })
 
   it('rejects a malformed commission log', () => {

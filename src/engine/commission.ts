@@ -19,7 +19,6 @@ export interface Commission {
 // para que dez mil anos de crescimento não achatem os custos das últimas obras
 export function progressWork(s: WorldState, mods: WorkMods = workMods(s.works)): number {
   const share = s.allocation.works / 100
-  if (share === 0) return 0
   return K.workRate * share * s.economy * Math.sqrt(s.population / 1e6) * mods.production
 }
 

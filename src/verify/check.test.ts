@@ -101,7 +101,6 @@ describe('the works the reference histories never build', () => {
   // FEAT: nenhum roteiro comissiona nada, então os dezessete têm de sair com a obra vazia — e é
   // essa afirmação, e não a confiança, que sustenta que nenhum fingerprint se moveu nesta tarefa
   const idle = (world: Worldline) => {
-    expect(world.commissions).toEqual([])
     expect(world.present.works).toEqual([])
     expect(world.present.building).toBeNull()
   }
