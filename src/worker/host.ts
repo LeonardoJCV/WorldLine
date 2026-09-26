@@ -246,6 +246,22 @@ export class SimulationHost {
     return queue
   }
 
+  // FEAT: uma filha pode sair de um ano ANTERIOR ao da própria mãe, porque antes do fork da mãe a
+  // história dela é a da avó; então a filha nasce no ano da mãe, e a mãe nunca nasce depois da filha
+  #born(branches: readonly BranchSpec[]): readonly number[] {
+    const born: number[] = []
+    for (const spec of branches) {
+      if (spec.parent === 0) {
+        born.push(spec.fork)
+        continue
+      }
+      const mother = born[spec.parent - 1]
+      if (mother === undefined) throw new RangeError('unknown parent worldline')
+      born.push(Math.max(spec.fork, mother))
+    }
+    return born
+  }
+
   // FEAT: leva ao ano pedido quem ainda corre; quem terminou fica no ano em que parou
   #reach(slots: readonly (Entry | undefined)[], year: number): void {
     for (const slot of slots) {
@@ -285,14 +301,13 @@ export class SimulationHost {
         .filter((seam) => seam.direction === 'out')
         .map((seam) => `${seam.tick}:${seam.self}:${seam.other}`),
     )
-    const years = [
-      ...new Set([...branches.map((branch) => branch.fork), ...queue.map((seam) => seam.tick)]),
-    ].sort((a, b) => a - b)
+    const born = this.#born(branches)
+    const years = [...new Set([...born, ...queue.map((seam) => seam.tick)])].sort((a, b) => a - b)
     for (const year of years) {
       // FIX: um fork além do ano do link não adianta o multiverso; quem o recusa é `#grow`
       this.#reach(slots, Math.min(year, tick))
       branches.forEach((spec, index) => {
-        if (spec.fork !== year) return
+        if (born[index] !== year) return
         const parent = slots[spec.parent]
         if (!parent) throw new RangeError('unknown parent worldline')
         const id = WORLDLINE_IDS[index + 1]

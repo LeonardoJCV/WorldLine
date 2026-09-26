@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { crossingAmounts, crossingCost } from '../engine/crossing.ts'
 import { debtRatio } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../engine/golden.ts'
 import type { EventRecord } from '../engine/events.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation, WorldState } from '../engine/state.ts'
@@ -1374,5 +1375,215 @@ describe('SimulationHost: reopening a seamed multiverse', () => {
       ],
     })
     expect(last(sent, 'error')?.message).toBe('unknown departing worldline F')
+  })
+})
+
+describe('SimulationHost: reopening a branch older than its own parent', () => {
+  function told(sent: readonly FromWorker[], id: WorldlineId) {
+    const latest = world(sent, id)
+    if (!latest) throw new Error(`the host never reported worldline ${id}`)
+    return {
+      info: latest.info,
+      present: latest.present,
+      decisions: latest.decisions,
+      crossings: latest.crossings,
+      merges: latest.merges,
+      debts: latest.debts,
+      colonies: latest.colonies,
+    }
+  }
+
+  // FEAT: antes do fork da mãe a história da filha é a da avó, então a filha pode sair de um ano
+  // anterior ao da mãe; um link versão 2 já compartilhado pode ter exatamente essa forma
+  it('reopens a seamless link whose branch forks before its own parent forked', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 300 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 200,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'branch', requestId: 2, parent: 'B', tick: 50, allocation: starved })
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      branches: [
+        { parent: 0, fork: 200, decisions: [{ tick: 200, allocation: balanced }] },
+        { parent: 1, fork: 50, decisions: [{ tick: 50, allocation: starved }] },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'C')?.info).toMatchObject({ parent: 'B', fork: 50 })
+    for (const id of ['A', 'B', 'C'] as const) {
+      expect(told(sent, id)).toEqual(told(lived.sent, id))
+    }
+  })
+
+  it('reopens a branch older than its parent when the parent grew from a seamed history', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 200 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    lived.host.handle({ type: 'step', years: 1 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 3,
+      parent: 'A',
+      tick: 201,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'branch', requestId: 4, parent: 'C', tick: 150, allocation: starved })
+    lived.host.handle({ type: 'step', years: 99 })
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      merges: [{ tick: 200, self: 'A', other: 'B', direction: 'in' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 200, self: 'B', other: 'A', direction: 'out' }],
+        },
+        { parent: 0, fork: 201, decisions: [{ tick: 201, allocation: balanced }] },
+        { parent: 2, fork: 150, decisions: [{ tick: 150, allocation: starved }] },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    for (const id of ['A', 'B', 'C', 'D'] as const) {
+      expect(told(sent, id)).toEqual(told(lived.sent, id))
+    }
+    // FEAT: D sai de C no ano 150, antes da costura do ano 200, então D nunca a recebe
+    expect(world(sent, 'D')?.merges).toEqual([])
+    expect(world(sent, 'C')?.merges).toMatchObject([{ tick: 200, self: 'A', other: 'B' }])
+  })
+})
+
+describe('SimulationHost: what the arrival record carries', () => {
+  const gift = {
+    tick: 0,
+    kind: 'knowledge',
+    dose: 3,
+    amounts: [10],
+    origin: { world: 'A', tick: 0 },
+    cost: 9,
+    direction: 'in',
+  } as const
+  const idle: Allocation = { agriculture: 40, industry: 60, research: 0, conservation: 0 }
+
+  // FEAT: uma história que não pesquisa nunca quita o presente, então carrega a tensão ano a ano
+  const strained: Extract<ToWorker, { type: 'open' }> = {
+    type: 'open',
+    seed: SEED,
+    tick: 40,
+    root: [],
+    branches: [
+      { parent: 0, fork: 0, decisions: [{ tick: 0, allocation: idle }], crossings: [gift] },
+    ],
+  }
+
+  it('carries the strain of the departing history, and the link brings it back', () => {
+    const lived = setup()
+    lived.host.handle(strained)
+    lived.host.handle({ type: 'merge', requestId: 1, survivor: 'A', other: 'B' })
+    lived.host.handle({ type: 'step', years: 5 })
+    // FIX: um `strain` inventado ou perdido no recibo não move nada que este teste veja sem isto
+    expect(world(lived.sent, 'A')?.merges).toMatchObject([
+      { tick: 40, self: 'A', other: 'B', direction: 'in', strain: 40 },
+    ])
+    expect(world(lived.sent, 'A')?.merges[0]?.debts).toMatchObject([{ kind: 'knowledge' }])
+
+    const { host, sent } = setup()
+    host.handle({
+      ...strained,
+      tick: 45,
+      merges: [{ tick: 40, self: 'A', other: 'B', direction: 'in' }],
+      branches: [
+        {
+          ...(strained.branches[0] ?? { parent: 0, fork: 0, decisions: [] }),
+          merges: [{ tick: 40, self: 'B', other: 'A', direction: 'out' }],
+        },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'A')?.merges).toEqual(world(lived.sent, 'A')?.merges)
+    expect(world(sent, 'A')?.present).toEqual(world(lived.sent, 'A')?.present)
+    expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
+  })
+
+  it('carries the colonies of the departing history, and the link brings them back', () => {
+    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const lived = setup()
+    lived.host.handle({
+      type: 'open',
+      seed: INHERITANCE_CASE.seed,
+      tick: 1810,
+      root: plan.decisions,
+      branches: [],
+      crossings: plan.crossings,
+    })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'merge', requestId: 2, survivor: 'B', other: 'A' })
+    lived.host.handle({ type: 'step', years: 2 })
+    // FIX: `colonies: []` no recibo passava por todos os testes; a colônia da que deságua pinça isso
+    expect(world(lived.sent, 'B')?.merges).toMatchObject([
+      {
+        tick: 1810,
+        self: 'B',
+        other: 'A',
+        direction: 'in',
+        colonies: [{ body: 1, founded: INHERITANCE_CASE.founded }],
+      },
+    ])
+    expect(world(lived.sent, 'B')?.colonies).toMatchObject([
+      { body: 1, founded: INHERITANCE_CASE.founded },
+    ])
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: INHERITANCE_CASE.seed,
+      tick: 1812,
+      root: plan.decisions,
+      crossings: plan.crossings,
+      merges: [{ tick: 1810, self: 'A', other: 'B', direction: 'out' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 1810, self: 'B', other: 'A', direction: 'in' }],
+        },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'B')?.merges).toEqual(world(lived.sent, 'B')?.merges)
+    expect(world(sent, 'B')?.colonies).toEqual(world(lived.sent, 'B')?.colonies)
+    expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
+    expect(world(sent, 'A')?.present.status).toBe('merged')
   })
 })

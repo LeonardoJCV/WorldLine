@@ -837,7 +837,8 @@ describe('a link that carries a confluence', () => {
       tick: HORIZON,
       decisions: [],
       crossings: [],
-      branches: [],
+      // FEAT: a costura nomeia B, então o link tem de carregar B para ela ser remontável
+      branches: [{ parent: 0, fork: 0, decisions: [], crossings: [] }],
       merges: [{ tick: HORIZON, self: 'A', other: 'B', direction: 'in' }],
     }
     expect(isValidMultiverse(edge)).toBe(false)
@@ -857,17 +858,29 @@ describe('a link that carries a confluence', () => {
     expect(isValidMultiverse({ ...edge, merges: [inside] })).toBe(true)
   })
 
-  it('keeps the lone survivor of a confluence on the long form, with the other world gone', () => {
+  it('refuses a confluence that names a history the link does not carry', () => {
     const lone: MultiverseLink = {
       ...sample,
       version: SEAMED_VERSION,
       crossings: [],
       branches: [],
-      // FEAT: o hospedeiro já não deixa remover a história nomeada, mas 255 segue lido como ausente
+      // FEAT: 255 segue lido como ausente, e o byte continua legível; o que não existe é o mundo
       merges: [{ tick: 320, self: 'A', other: '', direction: 'in' }],
     }
+    // FEAT: a costura ainda vai e volta pelos bytes, e a forma longa segue sendo a dela
     expect(linkHash(lone)).toMatch(/^#\/m\//)
-    expect(decodeMultiverse(encodeMultiverse(lone))).toEqual(lone)
+    // FIX: sem a outra história o hospedeiro não remonta o recibo, então o link não reabre mundo
+    expect(isValidMultiverse(lone)).toBe(false)
+    expect(decodeMultiverse(encodeMultiverse(lone))).toBeNull()
+    expect(isValidMultiverse({ ...lone, merges: [{ ...arrived, other: 'C' }] })).toBe(false)
+    // FEAT: a recusa é estreita: com a história no link a mesma costura passa
+    const pair: MultiverseLink = {
+      ...lone,
+      branches: [{ parent: 0, fork: 0, decisions: [], crossings: [], merges: [flowed] }],
+      merges: [arrived],
+    }
+    expect(isValidMultiverse(pair)).toBe(true)
+    expect(decodeMultiverse(encodeMultiverse(pair))).toEqual(pair)
   })
 })
 
