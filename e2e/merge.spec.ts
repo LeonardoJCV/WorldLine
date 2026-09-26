@@ -405,6 +405,10 @@ async function announced(page: Page): Promise<number> {
 
 const notice = (page: Page) => page.locator('.confluence')
 
+// FEAT: os dois relógios da tela — o do aviso do painel e o tempo de leitura do anúncio
+const TOAST_MS = 6000
+const READING_MS = 15000
+
 test('announces that two histories became one, in a live region, once and in the seam year', async ({
   page,
 }) => {
@@ -426,30 +430,62 @@ test('announces that two histories became one, in a live region, once and in the
   // FEAT: cumprida a promessa, quem fala da união é o anúncio, e a promessa sai da tela
   await expect(page.locator('.merge__turns')).toHaveCount(0)
 
-  // FEAT: e não se repete a cada ano: a região viva não muda mais depois de ter falado
-  await watchAnnouncements(page)
-  const spoken = await page.locator('.notices').innerHTML()
-  for (let i = 0; i < 3; i++) {
-    await page.getByRole('button', { name: 'Advance one year' }).click()
-    await expect(page.getByTestId('year')).toHaveText(`000${6 + i + 1}`)
-  }
-  await expect(notice(page)).toBeVisible()
-  expect(await announced(page)).toBe(0)
-  expect(await page.locator('.notices').innerHTML()).toBe(spoken)
-
-  // FEAT: o ano que o anúncio diz é o da costura, não o do relógio, que já andou três anos
-  await expect(page.locator('.confluence__when')).toHaveText('✧Year 0005')
-  await expect(page.locator('.confluence__joined')).toHaveText(
-    /^A flowed into B\. [\d.]+[KMBT]? live on together\.$/,
-  )
-  await expect(page.locator('.confluence__kept')).toHaveText('Two histories, one from here on.')
-
   // FEAT: o anúncio é lido por região viva, a mesma em que o paradoxo e a herança falam
   const live = await page.evaluate(() => {
     const section = document.querySelector('.confluence')
     return section?.closest('[role="status"], [aria-live]')?.getAttribute('role') ?? null
   })
   expect(live).toBe('status')
+
+  // FIX: três anos não mexem no número arredondado; séculos mexem, e é com eles que se prova que
+  // um anúncio recontado a cada ano reescreveria diante dos olhos de quem o lê
+  await watchAnnouncements(page)
+  const spoken = await page.locator('.confluence').innerHTML()
+  const said = compact(/([\d.]+[KMBT]?) live on together/.exec(spoken)?.[1] ?? '0')
+  await page.getByRole('button', { name: '×64' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(READING_MS / 2)
+  await page.getByRole('button', { name: 'Pause' }).click()
+
+  // FEAT: a premissa do teste, medida e não suposta: a gente de agora já não é a que se anunciou
+  expect(compact(await stateValue(page, 'population'))).not.toBe(said)
+  await expect(notice(page)).toBeVisible()
+  await expect(page.locator('.confluence__when')).toHaveText('✧Year 0005')
+  await expect(page.locator('.confluence__joined')).toHaveText(
+    /^A flowed into B\. [\d.]+[KMBT]? live on together\.$/,
+  )
+  await expect(page.locator('.confluence__kept')).toHaveText('Two histories, one from here on.')
+  expect(await page.locator('.confluence').innerHTML()).toBe(spoken)
+  expect(await announced(page)).toBe(0)
+
+  // FEAT: e passado o tempo de leitura ele vai embora e não volta, por mais anos que corram
+  await page.getByRole('button', { name: 'Play' }).click()
+  await page.waitForTimeout(READING_MS)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(notice(page)).toHaveCount(0)
+})
+
+// FIX: a promessa não é torrada de aviso: ela vale enquanto a costura estiver pendente, e estar
+// pendente não tem prazo — quem a apagasse antes devolveria o silêncio que ela existe para tapar
+test('keeps the promise on screen for as long as the seam waits for the year', async ({ page }) => {
+  test.slow()
+  await pairAtYearFive(page)
+  await pickHistory(page, 'A')
+  await expect(confirm(page)).toBeEnabled()
+  await confirm(page).click()
+  await expect(page.locator('.merge__turns')).toBeVisible()
+
+  await page.waitForTimeout(TOAST_MS + 1000)
+  await expect(page.getByTestId('year')).toHaveText('0005')
+  await expect(page.locator('.merge__status')).toHaveText('A flowed into B.')
+  await expect(page.locator('.merge__turns')).toHaveText(
+    'The seam is written; it takes effect as the year turns.',
+  )
+  await expect(notice(page)).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Advance one year' }).click()
+  await expect(notice(page)).toBeVisible()
+  await expect(page.locator('.merge__turns')).toHaveCount(0)
 })
 
 // FEAT: desaguar não é fracassar, e a tira tem de dizer isso sem depender de cor nenhuma

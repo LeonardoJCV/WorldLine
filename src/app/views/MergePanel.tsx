@@ -37,11 +37,12 @@ export function MergePanel() {
   const other = partner?.info.id ?? null
   const incoming = partner?.present ?? null
 
+  // FIX: enquanto a costura está pendente o aviso não tem relógio; só depois do ano virado ele conta
   useEffect(() => {
-    if (done === null) return
+    if (done === null || now <= done.year) return
     const timer = setTimeout(() => setDone(null), CONFIRMATION)
     return () => clearTimeout(timer)
-  }, [done])
+  }, [done, now])
 
   // FIX: virado o ano, quem fala da união é o anúncio; dizer aqui que ela ainda espera seria falso
   const written = done !== null && now <= done.year ? done : null
