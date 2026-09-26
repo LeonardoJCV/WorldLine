@@ -3,6 +3,7 @@ import type { Allocation, Decision } from '../../engine/state.ts'
 import type {
   BranchSpec,
   FromWorker,
+  MergeSpec,
   Series,
   Snapshot,
   Speed,
@@ -65,8 +66,9 @@ export class SimulationClient {
     root: readonly Decision[],
     branches: readonly BranchSpec[],
     crossings: readonly Crossing[] = [],
+    merges: readonly MergeSpec[] = [],
   ): void {
-    this.#port.send({ type: 'open', seed, tick, root, branches, crossings })
+    this.#port.send({ type: 'open', seed, tick, root, branches, crossings, merges })
   }
 
   play(speed: Speed): void {

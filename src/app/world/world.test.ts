@@ -870,3 +870,150 @@ describe('a link that carries a confluence', () => {
     expect(decodeMultiverse(encodeMultiverse(lone))).toEqual(lone)
   })
 })
+
+// FEAT: o último relatório de uma história, que é onde o mundo reaberto tem de bater com o vivido
+function told(world: WorldProgress) {
+  return {
+    info: world.info,
+    present: world.present,
+    decisions: world.decisions,
+    crossings: world.crossings,
+    merges: world.merges,
+    debts: world.debts,
+    paradox: world.paradox,
+    colonies: world.colonies,
+  }
+}
+
+// FEAT: a história do costurador e, depois da costura, uma filha que tem de nascer já costurada
+function sewnThenBranched() {
+  const sent: FromWorker[] = []
+  const host = new SimulationHost((message) => sent.push(message), new FakeClock())
+  host.handle({ type: 'open', seed: sample.seed, tick: 0, root: [], branches: [] })
+  host.handle({ type: 'step', years: 300 })
+  host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: balanced })
+  host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 100, allocation: starved })
+  host.handle({
+    type: 'cross',
+    requestId: 3,
+    origin: 'C',
+    destination: 'B',
+    kind: 'knowledge',
+    dose: 1,
+  })
+  host.handle({ type: 'step', years: 1 })
+  host.handle({ type: 'merge', requestId: 4, survivor: 'A', other: 'B' })
+  host.handle({ type: 'step', years: 1 })
+  host.handle({ type: 'branch', requestId: 5, parent: 'A', tick: 302, allocation: balanced })
+  host.handle({ type: 'step', years: 5 })
+  const progress = sent.filter((message) => message.type === 'progress').at(-1)
+  if (!progress) throw new Error('the host reported nothing')
+  return { worlds: [...progress.worlds], now: progress.now, credit: progress.credit }
+}
+
+// FEAT: o hospedeiro de verdade reabrindo, sem nada além do que voltou do link
+function reopen(link: MultiverseLink) {
+  const sent: FromWorker[] = []
+  const host = new SimulationHost((message) => sent.push(message), new FakeClock())
+  host.handle({
+    type: 'open',
+    seed: link.seed,
+    tick: link.tick,
+    root: link.decisions,
+    branches: link.branches,
+    crossings: link.crossings ?? [],
+    merges: link.merges ?? [],
+  })
+  const failure = sent.find((message) => message.type === 'error')
+  if (failure) throw new Error(failure.type === 'error' ? failure.message : 'the host failed')
+  const progress = sent.filter((message) => message.type === 'progress').at(-1)
+  if (!progress) throw new Error('the reopened host reported nothing')
+  return { worlds: [...progress.worlds], now: progress.now, credit: progress.credit }
+}
+
+describe('a seamed multiverse reopened from its own link', () => {
+  it('brings every history back the way it was lived, the branch after the seam included', () => {
+    const lived = sewnThenBranched()
+    const link = currentLink({
+      seed: sample.seed,
+      now: lived.now,
+      worlds: lived.worlds.map(viewOf),
+    })
+    if (!link) throw new Error('the host gave no link')
+    const back = decodeMultiverse(encodeMultiverse(link))
+    if (!back) throw new Error('the link did not survive')
+    expect(back).toEqual(link)
+    expect(back.version).toBe(SEAMED_VERSION)
+
+    const again = reopen(back)
+    expect(again.now).toBe(lived.now)
+    expect(again.credit).toBe(lived.credit)
+    expect(again.worlds.map(told)).toEqual(lived.worlds.map(told))
+    expect(again.worlds.map((world) => world.present.status)).toEqual([
+      'running',
+      'merged',
+      'running',
+      'running',
+    ])
+
+    // FEAT: a sobrevivente reaberta é o estado cuja impressão digital o consumidor em miniatura nomeia
+    const reference = sew(back).survivor
+    expect(toSnapshot(reference.present)).toEqual({
+      ...(again.worlds[0]?.present ?? null),
+      previous: null,
+    })
+    const unseamed = new Worldline(back.seed, back.decisions, null, back.crossings ?? [])
+    unseamed.advance(back.tick)
+    expect(hashState(unseamed.present)).not.toBe(hashState(reference.present))
+  })
+
+  it('reopens the same multiverse from the world file as from the link', () => {
+    const lived = sewnThenBranched()
+    const link = currentLink({
+      seed: sample.seed,
+      now: lived.now,
+      worlds: lived.worlds.map(viewOf),
+    })
+    if (!link) throw new Error('the host gave no link')
+    const file = parseWorldFile(serializeWorld({ name: 'Confluence', link }))
+    if (!file) throw new Error('the file did not survive')
+    expect(file.link).toEqual(link)
+    expect(reopen(file.link).worlds.map(told)).toEqual(lived.worlds.map(told))
+  })
+
+  it('reopens a link without a seam exactly as it always did', () => {
+    const plain = decodeMultiverse(SEAMLESS_TREE)
+    if (!plain) throw new Error('the seamless link did not decode')
+    expect(plain.version).toBe(MODEL_VERSION)
+    expect(plain.merges).toBeUndefined()
+    const again = reopen(plain)
+    expect(again.worlds.map((world) => world.info.id)).toEqual(['A', 'B', 'C'])
+    expect(again.worlds.every((world) => world.merges.length === 0)).toBe(true)
+    expect(again.now).toBe(plain.tick)
+  })
+})
+
+describe('a world file that carries a confluence', () => {
+  it('writes the seam and a version that describes what it wrote', () => {
+    const text = serializeWorld({ name: 'Confluence', link: confluence })
+    expect(JSON.parse(text)).toMatchObject({ version: SEAMED_VERSION, merges: [arrived] })
+    expect(parseWorldFile(text)).toEqual({ name: 'Confluence', link: confluence })
+    // FIX: sem as costuras no arquivo o mundo reabria sem elas, e a versão 3 mentia sobre isso
+    const dropped = text.replace(/"merges": \[[^\]]*\]/g, '"merges": []')
+    expect(parseWorldFile(dropped)?.link.merges).toBeUndefined()
+    expect(parseWorldFile(dropped)?.link).not.toEqual(confluence)
+    // FIX: a versão vinha copiada do link, então um mundo sem costura nenhuma se dizia costurado
+    const plain = serializeWorld({ name: 'Plain', link: { ...tree, version: SEAMED_VERSION } })
+    expect(JSON.parse(plain).version).toBe(MODEL_VERSION)
+    expect(parseWorldFile(plain)?.link).toEqual(tree)
+  })
+
+  it('refuses a confluence in a file that the link rules refuse', () => {
+    const text = serializeWorld({ name: 'Confluence', link: confluence })
+    // FIX: `parseWorldFile` nunca extraía `merges`, então nesta porta a recusa da T3 era inerte
+    expect(parseWorldFile(text.replace('"self": "A"', '"self": "C"'))).toBeNull()
+    expect(parseWorldFile(text.replace('"direction": "in"', '"direction": "sideways"'))).toBeNull()
+    expect(parseWorldFile(text.replace('"other": "B"', '"other": "A"'))).toBeNull()
+    expect(parseWorldFile(text.replace('"merges": [', '"merges": "none", "spare": ['))).toBeNull()
+  })
+})

@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { crossingAmounts, crossingCost } from '../engine/crossing.ts'
 import { debtRatio } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
+import type { EventRecord } from '../engine/events.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation, WorldState } from '../engine/state.ts'
 import { Worldline } from '../engine/worldline.ts'
 import { SimulationHost } from './host.ts'
-import type { FromWorker, WorldlineId } from './protocol.ts'
+import type { FromWorker, ToWorker, WorldlineId } from './protocol.ts'
 import { FakeClock } from './testing.ts'
 
 const SEED = 482913
@@ -1133,5 +1134,245 @@ describe('SimulationHost: confluences', () => {
     expect(world(sent, 'A')?.present.status).toBe('running')
     expect(last(sent, 'progress')?.now).toBe(HORIZON)
     expect(last(sent, 'progress')?.ended).toBe('horizon')
+  })
+})
+
+describe('SimulationHost: reopening a seamed multiverse', () => {
+  // FEAT: tudo o que o worker já contou de uma história; não há mais nada para comparar dois mundos
+  function history(sent: readonly FromWorker[], id: WorldlineId) {
+    const records: EventRecord[] = []
+    for (const progress of all(sent, 'progress')) {
+      const update = progress.worlds.find((w) => w.info.id === id)
+      for (const event of update?.events ?? []) records[event.index] = event.record
+    }
+    const latest = world(sent, id)
+    if (!latest) throw new Error(`the host never reported worldline ${id}`)
+    return {
+      info: latest.info,
+      present: latest.present,
+      decisions: latest.decisions,
+      crossings: latest.crossings,
+      merges: latest.merges,
+      debts: latest.debts,
+      paradox: latest.paradox,
+      colonies: latest.colonies,
+      records,
+    }
+  }
+
+  function valuesAt(
+    sent: readonly FromWorker[],
+    host: SimulationHost,
+    id: WorldlineId,
+    tick: number,
+  ) {
+    host.handle({ type: 'inspect', requestId: 90, world: id, tick })
+    return last(sent, 'inspect')?.snapshot.values
+  }
+
+  // FEAT: a raiz costura a filha no ano 200, e no 201 sai dela uma neta que já nasce costurada
+  function livedWithASeamAndABranchAfterIt() {
+    const { host, sent } = setup()
+    host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    host.handle({ type: 'step', years: 200 })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: balanced })
+    host.handle({ type: 'merge', requestId: 2, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 201, allocation: balanced })
+    host.handle({ type: 'step', years: 99 })
+    return { host, sent }
+  }
+
+  const seamedLink: Extract<ToWorker, { type: 'open' }> = {
+    type: 'open',
+    seed: SEED,
+    tick: 300,
+    root: [],
+    merges: [{ tick: 200, self: 'A', other: 'B', direction: 'in' }],
+    branches: [
+      {
+        parent: 0,
+        fork: 100,
+        decisions: [{ tick: 100, allocation: balanced }],
+        merges: [{ tick: 200, self: 'B', other: 'A', direction: 'out' }],
+      },
+      { parent: 0, fork: 201, decisions: [{ tick: 201, allocation: balanced }] },
+    ],
+  }
+
+  it('brings every history of a seamed multiverse back exactly as it was lived', () => {
+    const lived = livedWithASeamAndABranchAfterIt()
+    const { host, sent } = setup()
+    host.handle(seamedLink)
+    expect(last(sent, 'progress')?.now).toBe(300)
+    for (const id of ['A', 'B', 'C'] as const) {
+      expect(history(sent, id)).toEqual(history(lived.sent, id))
+    }
+    // FIX: sem a costura a sobrevivente seguiria outra história, então a igualdade não é de graça
+    const unseamed = setup()
+    unseamed.host.handle({
+      ...seamedLink,
+      merges: [],
+      branches: seamedLink.branches.map((branch) => ({ ...branch, merges: [] })),
+    })
+    expect(world(unseamed.sent, 'A')?.present.values.population).not.toBe(
+      world(sent, 'A')?.present.values.population,
+    )
+  })
+
+  it('reopens the history that flowed away as merged, in the year of the seam, and not living', () => {
+    const { host, sent } = setup()
+    host.handle(seamedLink)
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    expect(world(sent, 'B')?.present.tick).toBe(200)
+    expect(world(sent, 'B')?.merges).toMatchObject([
+      { tick: 200, self: 'B', other: 'A', direction: 'out' },
+    ])
+    expect(
+      last(sent, 'progress')?.worlds.filter((w) => w.present.status === 'running'),
+    ).toHaveLength(2)
+  })
+
+  // FIX: este é o teste da ordem: uma filha crescida de uma mãe ainda sem costura nasce menor que ela
+  it('grows a branch forked after a seam from a parent that is already seamed', () => {
+    const lived = livedWithASeamAndABranchAfterIt()
+    const { host, sent } = setup()
+    host.handle(seamedLink)
+    const mother = valuesAt(sent, host, 'A', 201)
+    const daughter = valuesAt(sent, host, 'C', 201)
+    expect(daughter?.population).toBeGreaterThan(0)
+    expect(daughter).toEqual(mother)
+    expect(daughter).toEqual(valuesAt(lived.sent, lived.host, 'C', 201))
+    expect(world(sent, 'C')?.present).toEqual(world(lived.sent, 'C')?.present)
+  })
+
+  it('carries a seam in the root and a seam in a branch in the same open', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 200 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 150, allocation: starved })
+    lived.host.handle({ type: 'merge', requestId: 3, survivor: 'C', other: 'B' })
+    lived.host.handle({ type: 'step', years: 1 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 4,
+      parent: 'C',
+      tick: 201,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'merge', requestId: 5, survivor: 'A', other: 'D' })
+    lived.host.handle({ type: 'step', years: 99 })
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      merges: [{ tick: 201, self: 'A', other: 'D', direction: 'in' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 200, self: 'B', other: 'C', direction: 'out' }],
+        },
+        {
+          parent: 0,
+          fork: 150,
+          decisions: [{ tick: 150, allocation: starved }],
+          merges: [{ tick: 200, self: 'C', other: 'B', direction: 'in' }],
+        },
+        {
+          parent: 2,
+          fork: 201,
+          decisions: [{ tick: 201, allocation: balanced }],
+          merges: [{ tick: 201, self: 'D', other: 'A', direction: 'out' }],
+        },
+      ],
+    })
+    for (const id of ['A', 'B', 'C', 'D'] as const) {
+      expect(history(sent, id)).toEqual(history(lived.sent, id))
+    }
+    expect(world(sent, 'B')?.present.status).toBe('merged')
+    expect(world(sent, 'D')?.present.status).toBe('merged')
+    expect(world(sent, 'D')?.present.tick).toBe(201)
+  })
+
+  it('reopens a multiverse without any seam exactly as it always did', () => {
+    const lived = setup()
+    lived.host.handle({ type: 'open', seed: SEED, tick: 0, root: [], branches: [] })
+    lived.host.handle({ type: 'step', years: 300 })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'branch', requestId: 2, parent: 'B', tick: 200, allocation: starved })
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 300,
+      root: [],
+      branches: [
+        { parent: 0, fork: 100, decisions: [{ tick: 100, allocation: balanced }] },
+        { parent: 1, fork: 200, decisions: [{ tick: 200, allocation: starved }] },
+      ],
+    })
+    for (const id of ['A', 'B', 'C'] as const) {
+      expect(history(sent, id)).toEqual(history(lived.sent, id))
+    }
+    expect(world(sent, 'A')?.merges).toEqual([])
+  })
+
+  it('refuses a seam whose other side never recorded flowing away', () => {
+    const { host, sent } = setup()
+    host.handle({ ...seamedLink, branches: seamedLink.branches.map((b) => ({ ...b, merges: [] })) })
+    expect(last(sent, 'error')?.message).toBe('worldline B has no record of flowing into A')
+    host.handle({ ...seamedLink, merges: [] })
+    expect(last(sent, 'error')?.message).toBe(
+      'a confluence flows into a history that never received it',
+    )
+    host.handle({ type: 'range', requestId: 1, world: 'A', from: 0, to: 1, buckets: 1 })
+    expect(last(sent, 'error')?.message).toBe('no worldline created')
+  })
+
+  it('refuses a seam in a year the shared history never reached', () => {
+    const { host, sent } = setup()
+    host.handle({
+      ...seamedLink,
+      merges: [{ tick: 400, self: 'A', other: 'B', direction: 'in' }],
+    })
+    expect(last(sent, 'error')?.message).toBe(
+      'a confluence in year 400 is outside the shared history',
+    )
+  })
+
+  it('refuses a seam that names a history the link never carried', () => {
+    const { host, sent } = setup()
+    host.handle({
+      ...seamedLink,
+      merges: [{ tick: 200, self: 'A', other: 'F', direction: 'in' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 200, self: 'F', other: 'A', direction: 'out' }],
+        },
+      ],
+    })
+    expect(last(sent, 'error')?.message).toBe('unknown departing worldline F')
   })
 })

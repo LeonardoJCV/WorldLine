@@ -31,6 +31,7 @@ import {
   type EndReason,
   type EventUpdate,
   type FromWorker,
+  type MergeSpec,
   type Snapshot,
   type Speed,
   type ToWorker,
@@ -87,6 +88,7 @@ export class SimulationHost {
             message.root,
             message.branches,
             message.crossings ?? [],
+            message.merges ?? [],
           )
           break
         case 'play':
@@ -229,30 +231,97 @@ export class SimulationHost {
     return this.#now - before
   }
 
+  // FEAT: cada bloco do link traz as costuras da própria história; aqui elas voltam a ser uma fila só
+  #queue(
+    tick: number,
+    merges: readonly MergeSpec[],
+    branches: readonly BranchSpec[],
+  ): readonly MergeSpec[] {
+    const queue = [merges, ...branches.map((branch) => branch.merges ?? [])].flat()
+    for (const seam of queue) {
+      if (!Number.isInteger(seam.tick) || seam.tick < 0 || seam.tick > tick) {
+        throw new RangeError(`a confluence in year ${seam.tick} is outside the shared history`)
+      }
+    }
+    return queue
+  }
+
+  // FEAT: leva ao ano pedido quem ainda corre; quem terminou fica no ano em que parou
+  #reach(slots: readonly (Entry | undefined)[], year: number): void {
+    for (const slot of slots) {
+      const line = slot?.worldline
+      if (line && !line.ended && line.present.tick < year) line.advance(year - line.present.tick)
+    }
+  }
+
+  #named(slots: readonly (Entry | undefined)[], name: string, role: string): Entry {
+    const entry = slots.find((slot) => slot?.info.id === name)
+    if (!entry) throw new RangeError(`unknown ${role} worldline ${name}`)
+    return entry
+  }
+
   // FIX: só troca o estado após validar todo o multiverso
+  // FEAT: bifurcar e costurar se intercalam, então a reconstrução caminha ano a ano: uma filha que
+  // sai depois de uma costura tem de crescer de uma mãe já costurada, senão nasce discordando dela
   #open(
     seed: number,
     tick: number,
     root: readonly Decision[],
     branches: readonly BranchSpec[],
     crossings: readonly Crossing[],
+    merges: readonly MergeSpec[],
   ): void {
     this.#stop()
     if (branches.length >= MAX_WORLDLINES) throw new RangeError('worldline limit reached')
-    const origin = new Worldline(seed, root, null, crossings)
-    origin.advance(tick)
-    let generation = this.#generation
-    const entries: Entry[] = [this.#make(++generation, 'A', null, 0, origin)]
-    for (const spec of branches) {
-      const parent = entries[spec.parent]
-      if (!parent) throw new RangeError('unknown parent worldline')
-      const line = this.#grow(seed, parent, spec.fork, spec.decisions, tick, spec.crossings ?? [])
-      const id = this.#freeId(entries)
-      entries.push(this.#make(++generation, id, parent.info.id, spec.fork, line))
+    const base = this.#generation
+    const slots: (Entry | undefined)[] = [
+      this.#make(base + 1, 'A', null, 0, new Worldline(seed, root, null, crossings)),
+      ...branches.map(() => undefined),
+    ]
+    const queue = this.#queue(tick, merges, branches)
+    // FEAT: o recibo do lado que deságua é o que prova que aquela história não volta viva
+    const away = new Set(
+      queue
+        .filter((seam) => seam.direction === 'out')
+        .map((seam) => `${seam.tick}:${seam.self}:${seam.other}`),
+    )
+    const years = [
+      ...new Set([...branches.map((branch) => branch.fork), ...queue.map((seam) => seam.tick)]),
+    ].sort((a, b) => a - b)
+    for (const year of years) {
+      // FIX: um fork além do ano do link não adianta o multiverso; quem o recusa é `#grow`
+      this.#reach(slots, Math.min(year, tick))
+      branches.forEach((spec, index) => {
+        if (spec.fork !== year) return
+        const parent = slots[spec.parent]
+        if (!parent) throw new RangeError('unknown parent worldline')
+        const id = WORLDLINE_IDS[index + 1]
+        if (!id) throw new RangeError('worldline limit reached')
+        const own = spec.crossings ?? []
+        const line = this.#grow(seed, parent, spec.fork, spec.decisions, spec.fork, own)
+        slots[index + 1] = this.#make(base + 2 + index, id, parent.info.id, spec.fork, line)
+      })
+      for (const seam of queue) {
+        if (seam.tick !== year || seam.direction !== 'in') continue
+        if (!away.delete(`${year}:${seam.other}:${seam.self}`)) {
+          throw new RangeError(`worldline ${seam.other} has no record of flowing into ${seam.self}`)
+        }
+        const survivor = this.#named(slots, seam.self, 'surviving')
+        this.#seam(survivor, this.#named(slots, seam.other, 'departing'), year, seed)
+      }
+    }
+    if (away.size > 0) {
+      throw new RangeError('a confluence flows into a history that never received it')
+    }
+    this.#reach(slots, tick)
+    const entries: Entry[] = []
+    for (const slot of slots) {
+      if (!slot) throw new RangeError('fork outside the parent history')
+      entries.push(slot)
     }
     this.#seed = seed
     this.#entries = entries
-    this.#generation = generation
+    this.#generation = base + entries.length
     this.#now = this.#latest()
     this.#report()
   }
@@ -516,9 +585,9 @@ export class SimulationHost {
   }
 
   // FEAT: o corpo natal vem da semente, que é do hospedeiro; a engine nunca resolve o outro lado
-  #natal(): number {
-    const home = system(this.#seed).find((body) => body.home)
-    if (!home) throw new Error(`world ${this.#seed} has no home body`)
+  #natal(seed: number): number {
+    const home = system(seed).find((body) => body.home)
+    if (!home) throw new Error(`world ${seed} has no home body`)
     return home.index
   }
 
@@ -542,19 +611,14 @@ export class SimulationHost {
   }
 
   // FEAT: duas histórias viram uma: a sobrevivente recebe os números da outra, e a outra deságua
-  #merge(requestId: number, survivorId: WorldlineId, otherId: WorldlineId): void {
-    const survivor = this.#entry(survivorId)
-    const other = this.#entry(otherId)
-    if (survivorId === otherId) {
-      throw new RangeError('the surviving and the departing worldline are the same')
-    }
-    const tick = this.#now
-    const natal = this.#natal()
+  // FEAT: o conteúdo do recibo sai do presente da outra história, e é a única montagem que existe
+  #seam(survivor: Entry, other: Entry, tick: number, seed: number): void {
+    const natal = this.#natal(seed)
     const leaving = other.worldline.present
     const arrival: Merge = {
       tick,
-      self: survivorId,
-      other: otherId,
+      self: survivor.info.id,
+      other: other.info.id,
       direction: 'in',
       natal,
       values: toSnapshot(leaving).values,
@@ -565,14 +629,28 @@ export class SimulationHost {
       colonies: leaving.colonies,
       home: leaving.home,
     }
-    const departure: Merge = { tick, self: otherId, other: survivorId, direction: 'out', natal }
+    const departure: Merge = {
+      tick,
+      self: other.info.id,
+      other: survivor.info.id,
+      direction: 'out',
+      natal,
+    }
     this.#ensureSeamable(survivor, arrival, 'surviving')
     this.#ensureSeamable(other, departure, 'departing')
     survivor.worldline.merge(arrival)
     other.worldline.merge(departure)
     // FEAT: o deságue é imediato e não vive o ano da costura, como uma extinção para onde parou
     other.worldline.advance(1)
+  }
 
+  #merge(requestId: number, survivorId: WorldlineId, otherId: WorldlineId): void {
+    const survivor = this.#entry(survivorId)
+    const other = this.#entry(otherId)
+    if (survivorId === otherId) {
+      throw new RangeError('the surviving and the departing worldline are the same')
+    }
+    this.#seam(survivor, other, this.#now, this.#seed)
     this.#report()
     this.#send({ type: 'merged', requestId, world: survivorId })
   }

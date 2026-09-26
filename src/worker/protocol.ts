@@ -84,6 +84,8 @@ export type ToWorker =
       readonly root: readonly Decision[]
       readonly branches: readonly BranchSpec[]
       readonly crossings?: readonly Crossing[]
+      // FEAT: as costuras da raiz, no mesmo formato que cada galho carrega as suas
+      readonly merges?: readonly MergeSpec[]
     }
   | { readonly type: 'play'; readonly speed: Speed }
   | { readonly type: 'pause' }

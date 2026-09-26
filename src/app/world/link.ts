@@ -344,11 +344,16 @@ function readMerges(view: DataView, at: number): { merges: MergeSpec[]; next: nu
   return { merges, next: cursor }
 }
 
-export function encodeMultiverse(link: MultiverseLink): string {
+// FEAT: a versão descreve o que o formato carrega, e sobe só quando há costura para carregar, para
+// um mundo já compartilhado sair byte a byte igual — a mesma regra vale para o link e para o arquivo
+export function formatVersion(link: MultiverseLink): number {
   const seams =
     (link.merges?.length ?? 0) + link.branches.reduce((sum, b) => sum + (b.merges?.length ?? 0), 0)
-  // FEAT: a versão sobe só quando há costura, para um link já compartilhado sair byte a byte igual
-  const version = seams === 0 ? CROSSED_VERSION : SEAMED_VERSION
+  return seams === 0 ? CROSSED_VERSION : SEAMED_VERSION
+}
+
+export function encodeMultiverse(link: MultiverseLink): string {
+  const version = formatVersion(link)
   const size =
     7 +
     2 +
