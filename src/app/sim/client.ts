@@ -149,6 +149,13 @@ export class SimulationClient {
     this.#port.send({ type: 'remove', world })
   }
 
+  async merge(survivor: WorldlineId, other: WorldlineId): Promise<WorldlineId> {
+    const requestId = this.#nextId++
+    const reply = await this.#request(requestId, { type: 'merge', requestId, survivor, other })
+    if (reply.type !== 'merged') throw new Error(`unexpected ${reply.type} reply`)
+    return reply.world
+  }
+
   async mergePreview(survivor: WorldlineId, other: WorldlineId): Promise<SeamPreview> {
     const requestId = this.#nextId++
     const reply = await this.#request(requestId, {
@@ -228,6 +235,7 @@ export class SimulationClient {
       (message.type === 'range' ||
         message.type === 'inspect' ||
         message.type === 'branched' ||
+        message.type === 'merged' ||
         message.type === 'crossed' ||
         message.type === 'distance' ||
         message.type === 'mergePreview' ||

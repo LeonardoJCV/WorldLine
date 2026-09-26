@@ -150,6 +150,32 @@ describe('SimulationClient', () => {
     expect(received.every((m) => m.type === 'progress' || m.type === 'branched')).toBe(true)
   })
 
+  // FIX: sem 'merged' no roteamento de #receive esta promessa nunca resolve, e o teste estoura
+  it('resolves a merge request with the surviving worldline', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const received: FromWorker[] = []
+    client.subscribe((message) => received.push(message))
+    client.open(482913, 0, [], [])
+    client.step(2000)
+    const id = await client.branch('A', 100, {
+      agriculture: 40,
+      industry: 30,
+      research: 20,
+      conservation: 10,
+    })
+    await expect(client.merge('A', id)).resolves.toBe('A')
+    expect(received.every((m) => m.type === 'progress' || m.type === 'branched')).toBe(true)
+  })
+
+  it('rejects a merge the worker refuses', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    client.open(482913, 0, [], [])
+    client.step(10)
+    await expect(client.merge('A', 'A')).rejects.toThrow(/same/)
+  })
+
   it('rejects a mergePreview the worker refuses', async () => {
     const { port } = connectInProcess()
     const client = new SimulationClient(port)

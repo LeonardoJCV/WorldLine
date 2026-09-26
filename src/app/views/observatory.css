@@ -458,7 +458,8 @@
 
 /* FIX: o painel do modo pede mais largura que o de estado, e só ele estica a coluna */
 .hud:has(.card--allocation),
-.hud:has(.card--cross) {
+.hud:has(.card--cross),
+.hud:has(.card--merge) {
   --hud-left: 34rem;
   grid-template-columns: minmax(280px, var(--hud-left)) minmax(80px, 1fr) minmax(230px, 21rem);
 }
@@ -512,9 +513,18 @@
   flex-shrink: 0;
 }
 
+/* FIX: na confluência os dois cartões cedem: o estado rola por dentro e a costura também, mas
+   nenhum dos dois passa do pé da coluna, que é onde o botão de aceitar tem de continuar visível */
+.hud__left > .card--merge {
+  flex-shrink: 0;
+  min-height: 112px;
+  max-height: 100%;
+}
+
 /* FEAT: o painel do modo chega com um leve desvanecer, não de um só golpe */
 .card--allocation,
-.card--cross {
+.card--cross,
+.card--merge {
   animation: card-in var(--motion-slow) var(--ease) both;
 }
 
@@ -527,7 +537,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .card--allocation,
-  .card--cross {
+  .card--cross,
+  .card--merge {
     animation: none;
   }
 }
@@ -1186,7 +1197,9 @@ button.causal__node:hover {
 }
 
 .cross__group button,
-.cross__actions button {
+.cross__actions button,
+.merge__group button,
+.merge__actions button {
   padding: var(--space-2) var(--space-4);
   background: transparent;
   border: 1px solid var(--haze);
@@ -1196,18 +1209,22 @@ button.causal__node:hover {
 }
 
 .cross__group button:hover:not(:disabled),
-.cross__actions button:hover:not(:disabled) {
+.cross__actions button:hover:not(:disabled),
+.merge__group button:hover:not(:disabled),
+.merge__actions button:hover:not(:disabled) {
   border-color: var(--dim);
 }
 
-.cross__group button[aria-pressed='true'] {
+.cross__group button[aria-pressed='true'],
+.merge__group button[aria-pressed='true'] {
   border-color: var(--starlight);
   background: var(--nebula);
   font-weight: 600;
 }
 
 .cross__group button:disabled,
-.cross__actions button:disabled {
+.cross__actions button:disabled,
+.merge__actions button:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -1260,6 +1277,140 @@ button.causal__node:hover {
 .cross__status {
   max-width: 48ch;
   margin-top: var(--space-3);
+}
+
+/* FIX: dentro do cartão só os níveis rolam; o aviso do fim e o botão nunca saem da vista */
+.hud__left > .card--merge > .panel.merge {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hud__left > .card--merge .merge__seam {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--haze) transparent;
+}
+
+.merge__row,
+.merge__ends,
+.merge__footer,
+.merge__status {
+  flex: none;
+}
+
+.merge__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  max-width: 640px;
+}
+
+.merge__label {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.merge__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.merge__seam {
+  max-width: 640px;
+  margin-top: var(--space-4);
+}
+
+.merge__pair {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-stretch: 87%;
+}
+
+.merge__rows {
+  display: grid;
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* FEAT: na coluna larga os sete níveis se leem em quatro linhas, e a costura inteira cabe na tela */
+@media (min-width: 901px) {
+  .hud:not(.hud--sheet) .merge__rows {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+}
+
+.merge__rows li {
+  display: grid;
+  grid-template-columns: minmax(7ch, 11ch) 1fr;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.merge__name {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+/* FEAT: números tabulares, para as parcelas não dançarem de uma linha para a outra */
+.merge__flow {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.merge__shock {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+}
+
+.merge__note {
+  max-width: 48ch;
+  margin: var(--space-1) 0 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+/* FEAT: o aviso de que as duas histórias acabam aqui tem o peso de uma frase à parte, não de uma nota */
+.merge__ends {
+  max-width: 48ch;
+  margin: var(--space-4) 0 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--starlight);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.merge__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  max-width: 640px;
+  margin-top: var(--space-4);
+}
+
+.merge__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.merge__confirm:not(:disabled) {
+  background: var(--nebula);
+  border-color: var(--starlight);
+  font-weight: 600;
+}
+
+.merge__status {
+  max-width: 48ch;
+  margin: var(--space-3) 0 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
 }
 
 /* FEAT: o zoom mora em cima da ponta esquerda do minimapa, porque os dois mandam na mesma janela de tempo */

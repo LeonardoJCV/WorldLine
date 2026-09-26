@@ -17,7 +17,7 @@ import type {
 import type { MultiverseLink } from '../world/link.ts'
 import type { SeamPreview, SimulationClient } from './client.ts'
 
-export type Mode = 'observe' | 'intervene' | 'cross'
+export type Mode = 'observe' | 'intervene' | 'cross' | 'merge'
 
 export interface View {
   readonly span: number
@@ -60,6 +60,8 @@ export interface SimulationState {
   readonly mergePreview: SeamPreview | null
   readonly mode: Mode
   readonly crossOrigin: WorldlineId | null
+  // FEAT: a história escolhida para desaguar nesta, como crossOrigin é a escolhida para atravessar
+  readonly mergeOther: WorldlineId | null
   readonly selected: number | null
   readonly decisions: readonly Decision[]
   readonly view: View | null
@@ -74,6 +76,7 @@ export interface SimulationState {
   setCursor(tick: number | null): void
   setMode(mode: Mode): void
   setCrossOrigin(id: WorldlineId | null): void
+  setMergeOther(id: WorldlineId | null): void
   select(index: number | null): void
   decide(allocation: Allocation): void
   branch(allocation: Allocation): void
@@ -82,6 +85,7 @@ export interface SimulationState {
   setFocus(id: WorldlineId): void
   setView(view: View | null): void
   previewMerge(other: WorldlineId): void
+  merge(other: WorldlineId): Promise<void>
 }
 
 export type SimulationStore = StoreApi<SimulationState>
@@ -171,6 +175,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     mergePreview: null,
     mode: 'observe',
     crossOrigin: null,
+    mergeOther: null,
     selected: null,
     decisions: [],
     view: null,
@@ -201,6 +206,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         mergePreview: null,
         mode: 'observe',
         crossOrigin: null,
+        mergeOther: null,
         selected: null,
         decisions: [],
         view: null,
@@ -264,10 +270,19 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       )
     },
     setMode(mode) {
-      set({ mode, ...(mode === 'cross' ? {} : { crossOrigin: null }) })
+      set({
+        mode,
+        ...(mode === 'cross' ? {} : { crossOrigin: null }),
+        // FIX: sair do modo leva a escolha e a prévia; nenhuma costura fica prometida fora dele
+        ...(mode === 'merge' ? {} : { mergeOther: null, mergePreview: null }),
+      })
     },
     setCrossOrigin(id) {
       set({ crossOrigin: id })
+    },
+    // FIX: a prévia guardada é sempre do par escolhido; trocar de par apaga a anterior antes de pedir outra
+    setMergeOther(id) {
+      set({ mergeOther: id, mergePreview: null })
     },
     select(index) {
       set({ selected: index })
@@ -322,6 +337,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     },
     remove(id) {
       if (get().crossOrigin === id) set({ crossOrigin: null })
+      if (get().mergeOther === id) set({ mergeOther: null })
       client.remove(id)
     },
     setFocus(id) {
@@ -330,6 +346,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
       set({
         focus: id,
         ...(get().crossOrigin === id ? { crossOrigin: null } : {}),
+        ...(get().mergeOther === id ? { mergeOther: null } : {}),
         selected: null,
         inspected: null,
         inspectedOrigin: null,
@@ -359,6 +376,20 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         },
         (error: unknown) => {
           if (!stale()) set({ error: messageOf(error) })
+        },
+      )
+    },
+    // FEAT: quem chama só sabe que a costura existe quando o worker a grava nas duas pontas
+    merge(other) {
+      return client.merge(get().focus, other).then(
+        () => {
+          // FIX: a prévia morre com a costura que ela previa, senão ficaria falando de um par que já não há
+          set({ mergeOther: null, mergePreview: null, error: null })
+        },
+        (error: unknown) => {
+          const failure = asError(error)
+          set({ error: failure.message })
+          return Promise.reject(failure)
         },
       )
     },
@@ -393,9 +424,11 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         })
         const current = store.getState().focus
         const focus = worlds.some((world) => world.info.id === current) ? current : 'A'
-        // FIX: remover uma realidade leva junto as que nasceram dela, e a origem escolhida pode ser uma delas
+        // FIX: remover uma realidade leva junto as que nasceram dela, e a escolhida pode ser uma delas
         const chosen = store.getState().crossOrigin
         const kept = chosen !== null && worlds.some((world) => world.info.id === chosen)
+        const other = store.getState().mergeOther
+        const keptOther = other !== null && worlds.some((world) => world.info.id === other)
         store.setState({
           now: message.now,
           credit: message.credit,
@@ -405,6 +438,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
           focus,
           ...focused(worlds, focus),
           ...(kept ? {} : { crossOrigin: null }),
+          ...(keptOther ? {} : { mergeOther: null }),
           ...(focus === current
             ? {}
             : { selected: null, cursor: null, inspected: null, inspectedOrigin: null }),

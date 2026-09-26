@@ -24,6 +24,7 @@ import { EventsPanel } from './EventsPanel.tsx'
 import { sheetReserve } from './hud.ts'
 import { useSheet } from './hudStore.ts'
 import { InheritanceNotice } from './InheritanceNotice.tsx'
+import { MergePanel } from './MergePanel.tsx'
 import { PanelCard } from './PanelCard.tsx'
 import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
@@ -133,6 +134,11 @@ export function Observatory({
         {mode === 'cross' && (
           <PanelCard id="cross" title={t('cross.title', { id: worldFocus })}>
             <CrossPanel key={remount} />
+          </PanelCard>
+        )}
+        {mode === 'merge' && (
+          <PanelCard id="merge" title={t('mode.merge')}>
+            <MergePanel />
           </PanelCard>
         )}
       </div>
