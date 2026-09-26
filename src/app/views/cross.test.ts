@@ -40,6 +40,7 @@ function snapshot(
     allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 },
     status,
     home: null,
+    debts: [],
   }
 }
 

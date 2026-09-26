@@ -29,6 +29,8 @@ export interface Snapshot {
   readonly status: Status
   // FEAT: o corpo onde a história mora hoje; null enquanto ela nunca saiu do planeta natal
   readonly home: number | null
+  // FEAT: a prévia de uma costura precisa da dívida das três pontas, e só o snapshot chega até ela
+  readonly debts: readonly Debt[]
 }
 
 export interface EventUpdate {
@@ -121,6 +123,12 @@ export type ToWorker =
       readonly survivor: WorldlineId
       readonly other: WorldlineId
     }
+  | {
+      readonly type: 'mergePreview'
+      readonly requestId: number
+      readonly survivor: WorldlineId
+      readonly other: WorldlineId
+    }
   | { readonly type: 'remove'; readonly world: WorldlineId }
   | {
       readonly type: 'range'
@@ -165,6 +173,7 @@ export type FromWorker =
   | { readonly type: 'inspect'; readonly requestId: number; readonly snapshot: Snapshot }
   | { readonly type: 'branched'; readonly requestId: number; readonly world: WorldlineId }
   | { readonly type: 'merged'; readonly requestId: number; readonly world: WorldlineId }
+  | { readonly type: 'mergePreview'; readonly requestId: number; readonly seamed: Snapshot }
   | {
       readonly type: 'crossed'
       readonly requestId: number
@@ -198,5 +207,6 @@ export function toSnapshot(
     allocation: state.allocation,
     status: state.status,
     home: state.home,
+    debts: state.debts,
   }
 }

@@ -11,7 +11,7 @@ import {
 } from '../engine/crossing.ts'
 import { bearsDebt, circularParadox, debtRatio, type Debt } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
-import { validateMerge, type Merge } from '../engine/merge.ts'
+import { mergeStates, validateMerge, type Merge } from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import {
   VARIABLES,
@@ -127,6 +127,9 @@ export class SimulationHost {
           break
         case 'merge':
           this.#merge(message.requestId, message.survivor, message.other)
+          break
+        case 'mergePreview':
+          this.#mergePreview(message.requestId, message.survivor, message.other)
           break
         case 'remove':
           this.#remove(message.world)
@@ -642,17 +645,16 @@ export class SimulationHost {
     validateMerge(seam)
   }
 
-  // FEAT: duas histórias viram uma: a sobrevivente recebe os números da outra, e a outra deságua
+  // FEAT: o mesmo registro 'in' alimenta a costura real e a prévia, para as duas nunca discordarem
   // FEAT: o conteúdo do recibo sai do presente da outra história, e é a única montagem que existe
-  #seam(survivor: Entry, other: Entry, tick: number, seed: number): void {
-    const natal = this.#natal(seed)
+  #arrival(survivor: Entry, other: Entry, tick: number, seed: number): Merge {
     const leaving = other.worldline.present
-    const arrival: Merge = {
+    return {
       tick,
       self: survivor.info.id,
       other: other.info.id,
       direction: 'in',
-      natal,
+      natal: this.#natal(seed),
       values: toSnapshot(leaving).values,
       debts: leaving.debts,
       echoes: leaving.echoes,
@@ -661,12 +663,17 @@ export class SimulationHost {
       colonies: leaving.colonies,
       home: leaving.home,
     }
+  }
+
+  // FEAT: duas histórias viram uma: a sobrevivente recebe os números da outra, e a outra deságua
+  #seam(survivor: Entry, other: Entry, tick: number, seed: number): void {
+    const arrival = this.#arrival(survivor, other, tick, seed)
     const departure: Merge = {
       tick,
       self: other.info.id,
       other: survivor.info.id,
       direction: 'out',
-      natal,
+      natal: arrival.natal,
     }
     this.#ensureSeamable(survivor, arrival, 'surviving')
     this.#ensureSeamable(other, departure, 'departing')
@@ -685,6 +692,21 @@ export class SimulationHost {
     this.#seam(survivor, other, this.#now, this.#seed)
     this.#report()
     this.#send({ type: 'merged', requestId, world: survivorId })
+  }
+
+  // FEAT: a tela nunca calcula uma costura; aqui ela roda especulativamente, sobre uma cópia, e
+  // nunca pela Worldline — nada se grava, e por isso nenhum 'progress' novo sai desta consulta
+  #mergePreview(requestId: number, survivorId: WorldlineId, otherId: WorldlineId): void {
+    const survivor = this.#entry(survivorId)
+    const other = this.#entry(otherId)
+    if (survivorId === otherId) {
+      throw new RangeError('the surviving and the departing worldline are the same')
+    }
+    this.#living(survivor, 'surviving')
+    this.#living(other, 'departing')
+    const arrival = this.#arrival(survivor, other, this.#now, this.#seed)
+    const seamed = mergeStates(survivor.worldline.present, arrival)
+    this.#send({ type: 'mergePreview', requestId, seamed: this.#snapshot(survivor, seamed) })
   }
 
   // FEAT: uma história que outra absorveu é passado dela agora, e passado não se apaga

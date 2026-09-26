@@ -27,6 +27,7 @@ function snapshot(
     status: extra.status ?? 'running',
     previous: null,
     home: null,
+    debts: [],
   }
 }
 

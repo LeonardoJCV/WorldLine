@@ -1062,6 +1062,97 @@ describe('SimulationHost: confluences', () => {
     expect(world(sent, 'A')?.debts).toMatchObject([{ kind: 'knowledge', origin: 'C' }])
   })
 
+  // FIX: 'events' é uma entrega incremental (só o que é novo desde o último 'progress'), então
+  // comparar dois relatórios diferentes por ela sempre divergiria mesmo sem nenhuma mudança real
+  // FIX: 'merges' e outros campos vêm por referência da Worldline; sem clonar, uma mutação in-place
+  // (como um `.push`) nunca apareceria comparando o "antes" com o "depois" — os dois apontam ao mesmo array
+  function frozen(entry: ReturnType<typeof world>) {
+    if (!entry) return entry
+    const { info, present, decisions, crossings, merges, debts, paradox, colonies } = entry
+    return structuredClone({
+      info,
+      present,
+      decisions,
+      crossings,
+      merges,
+      debts,
+      paradox,
+      colonies,
+    })
+  }
+
+  it('previews the exact ledger a confluence would settle, without touching either worldline', () => {
+    const { host, sent } = pair()
+    host.handle({ type: 'branch', requestId: 2, parent: 'A', tick: 200, allocation: balanced })
+    host.handle({ type: 'decide', world: 'A', allocation: starved })
+    host.handle({ type: 'step', years: 1 })
+    host.handle({
+      type: 'cross',
+      requestId: 3,
+      origin: 'A',
+      destination: 'B',
+      kind: 'doctrine',
+      dose: 1,
+    })
+    host.handle({
+      type: 'cross',
+      requestId: 4,
+      origin: 'C',
+      destination: 'B',
+      kind: 'knowledge',
+      dose: 1,
+    })
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'B')?.debts).toMatchObject([
+      { kind: 'doctrine', origin: 'A', allocation: starved },
+      { kind: 'knowledge', origin: 'C' },
+    ])
+
+    const a = frozen(world(sent, 'A'))
+    const b = frozen(world(sent, 'B'))
+    const progressBefore = all(sent, 'progress').length
+
+    host.handle({ type: 'mergePreview', requestId: 5, survivor: 'A', other: 'B' })
+    const reply = last(sent, 'mergePreview')
+    expect(reply).toMatchObject({ type: 'mergePreview', requestId: 5 })
+    // FEAT: a dívida com quem se costuraria já vira interna na prévia; a de fora, C, permanece
+    expect(reply?.seamed.debts).toMatchObject([{ kind: 'knowledge', origin: 'C' }])
+    // FIX: comida sempre soma, sem condição nenhuma — prova que a prévia leu as duas pontas certas
+    expect(reply?.seamed.values.food).toBeCloseTo(
+      (a?.present.values.food ?? 0) + (b?.present.values.food ?? 0),
+    )
+
+    // FIX: nenhum 'progress' novo é a prova de que a prévia não mexeu em nada
+    expect(all(sent, 'progress')).toHaveLength(progressBefore)
+    // FEAT: uma leitura genuína depois da prévia confirma que nenhuma das duas se moveu
+    host.handle({ type: 'step', years: 0 })
+    expect(frozen(world(sent, 'A'))).toEqual(a)
+    expect(frozen(world(sent, 'B'))).toEqual(b)
+
+    // FEAT: a costura de verdade, feita depois, mostra que a prévia não veio de outro universo
+    host.handle({ type: 'merge', requestId: 6, survivor: 'A', other: 'B' })
+    host.handle({ type: 'step', years: 1 })
+    expect(world(sent, 'A')?.debts).toMatchObject([{ kind: 'knowledge', origin: 'C' }])
+  })
+
+  it('refuses to preview a confluence with itself, an unknown letter, or a dead history', () => {
+    const { host, sent, open } = setup()
+    open()
+    host.handle({ type: 'step', years: 10 })
+    host.handle({ type: 'mergePreview', requestId: 1, survivor: 'A', other: 'A' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 1 })
+    expect(last(sent, 'error')?.message).toMatch(/same/)
+    host.handle({ type: 'mergePreview', requestId: 2, survivor: 'A', other: 'F' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 2, message: 'unknown worldline F' })
+    host.handle({ type: 'branch', requestId: 3, parent: 'A', tick: 0, allocation: industrial })
+    host.handle({ type: 'step', years: 2000 })
+    expect(world(sent, 'B')?.present.status).toBe('extinct')
+    host.handle({ type: 'mergePreview', requestId: 4, survivor: 'A', other: 'B' })
+    expect(last(sent, 'error')).toMatchObject({ requestId: 4 })
+    expect(last(sent, 'error')?.message).toMatch(/extinct/)
+    expect(all(sent, 'mergePreview')).toEqual([])
+  })
+
   it('takes six histories down to one living, five confluences later', () => {
     const { host, sent, open } = setup()
     open()

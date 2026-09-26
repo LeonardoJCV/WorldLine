@@ -56,6 +56,8 @@ export interface SimulationState {
   readonly cursor: number | null
   readonly inspected: Snapshot | null
   readonly inspectedOrigin: Snapshot | null
+  // FEAT: a costura que o hospedeiro previu, sem gravar nada — desaparece quando o foco muda
+  readonly mergePreview: Snapshot | null
   readonly mode: Mode
   readonly crossOrigin: WorldlineId | null
   readonly selected: number | null
@@ -79,6 +81,7 @@ export interface SimulationState {
   remove(id: WorldlineId): void
   setFocus(id: WorldlineId): void
   setView(view: View | null): void
+  previewMerge(other: WorldlineId): void
 }
 
 export type SimulationStore = StoreApi<SimulationState>
@@ -157,6 +160,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     cursor: null,
     inspected: null,
     inspectedOrigin: null,
+    mergePreview: null,
     mode: 'observe',
     crossOrigin: null,
     selected: null,
@@ -186,6 +190,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         cursor: null,
         inspected: null,
         inspectedOrigin: null,
+        mergePreview: null,
         mode: 'observe',
         crossOrigin: null,
         selected: null,
@@ -320,12 +325,23 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         selected: null,
         inspected: null,
         inspectedOrigin: null,
+        mergePreview: null,
         ...focused(worlds, id),
       })
       if (cursor !== null) get().setCursor(cursor)
     },
     setView(view) {
       set({ view })
+    },
+    // FEAT: pede ao hospedeiro o mesmo cálculo que uma costura real faria, sem gravar nada
+    previewMerge(other) {
+      const { focus } = get()
+      client.mergePreview(focus, other).then(
+        (seamed) => {
+          if (get().focus === focus) set({ mergePreview: seamed })
+        },
+        (error: unknown) => set({ error: messageOf(error) }),
+      )
     },
   }))
 
