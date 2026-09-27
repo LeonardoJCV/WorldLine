@@ -15,7 +15,8 @@ import { CAUSAL_WINDOW } from './params.ts'
 import { NEUTRAL_MODIFIERS, derive, integrate } from './rules.ts'
 import { Era, NEVER, type Work, type WorldState } from './state.ts'
 import { TEST_WORLD, makeMetrics, makeState } from './testing.ts'
-import { WORKS, workIndex } from './work.ts'
+import { WORKS, isCommissionable, workIndex } from './work.ts'
+import { Worldline } from './worldline.ts'
 
 const shortage: EventDef = {
   id: 'famine',
@@ -570,9 +571,23 @@ describe('the works in the causal chain', () => {
     expect(named(works, makeMetrics({ population: 500 }), 'extinction')).toBe(0)
   })
 
-  it('never blames the shipyard for the energy crisis: it lowered the price of the fleet', () => {
+  // FIX: a razão de energia multiplica o alvo no denominador enquanto o nível ainda é o velho —
+  // construir o reator abre a falta, e a frase verdadeira é "você o ergueu e não tinha como enchê-lo"
+  const short = makeMetrics({ energyRatio: 0.5, economyTrend: 0.95 })
+
+  it('names the reactor for the shortfall its own grid could not yet feed', () => {
+    const works = [{ def: workIndex('reactor'), done: 40, record: 12 }]
+    expect(named(works, short, 'energy_crisis')).toBe(1)
+  })
+
+  it('names the shipyard for it too, because a cheaper fleet raises the same target', () => {
     const works = [{ def: workIndex('shipyard'), done: 40, record: 12 }]
-    const short = makeMetrics({ energyRatio: 0.5, economyTrend: 0.95 })
+    expect(named(works, short, 'energy_crisis')).toBe(1)
+  })
+
+  it('never names a work that leaves the energy ratio alone', () => {
+    const quiet = ['irrigation', 'granary', 'writing', 'medicine'] as const
+    const works = quiet.map((id, i) => ({ def: workIndex(id), done: 40, record: 12 + i }))
     expect(named(works, short, 'energy_crisis')).toBe(0)
   })
 
@@ -589,6 +604,37 @@ describe('the works in the causal chain', () => {
     expect(named(works, fed, 'agricultural_revolution')).toBe(1)
   })
 
+  // FEAT: a frase, medida numa história de verdade em vez de num mapa: o mundo fecha o reator e a
+  // crise de energia do ano seguinte nomeia o reator, e nenhuma fome da mesma história nomeia obra
+  it('names the reactor in a history that built it and then ran short of energy', () => {
+    const w = new Worldline(1)
+    for (let year = 0; year < 2800 && !w.ended; year++) {
+      const next = w.present.building
+        ? undefined
+        : WORKS.find((_, def) => isCommissionable(w.present, def))
+      if (next) w.commission(next.id)
+      w.advance(1)
+    }
+    const reactor = w.present.works.find((work) => WORKS[work.def]?.id === 'reactor')
+    if (!reactor) throw new Error('the history must build the reactor')
+    const crisis = w.records.find((r) => r.event === 'energy_crisis' && r.start > reactor.done)
+    expect(crisis?.start).toBe(reactor.done + 1)
+    expect(crisis?.causes).toContainEqual({ kind: 'event', record: reactor.record })
+
+    const built = new Set(w.present.works.map((work) => work.record))
+    const lies = ['famine', 'extinction', 'collapse', 'epidemic', 'civil_unrest'] as const
+    let counted = 0
+    for (const record of w.records) {
+      if (!lies.some((event) => event === record.event)) continue
+      counted++
+      expect(
+        record.causes.some((c) => c.kind === 'event' && built.has(c.record)),
+        record.event,
+      ).toBe(false)
+    }
+    expect(counted).toBeGreaterThan(10)
+  })
+
   // FEAT: a obra que fechou neste ano só move coeficiente no ano seguinte, então não é causa hoje
   it('never names a work finished this very year', () => {
     const today = world(EVENTS, { works: [{ def: chemistry, done: 100, record: 12 }] })
@@ -599,7 +645,7 @@ describe('the works in the causal chain', () => {
   })
 
   // FEAT: o teto, com as vinte e cinco obras de pé: a era espacial nomeia as quinze que empurraram
-  // os três portões dela para cima, e nenhuma crise nomeia obra nenhuma
+  // os três portões dela para cima, e as mentiras seguem valendo zero
   it('bounds how many works one record can ever name', () => {
     const all = WORKS.map((_, def) => ({ def, done: 40, record: 100 + def }))
     const climbed = Era.agricultural | Era.classical | Era.industrial | Era.electric
@@ -615,7 +661,10 @@ describe('the works in the causal chain', () => {
     expect(era?.causes.filter((cause) => cause.kind === 'event')).toHaveLength(15)
     expect(era?.causes).toHaveLength(18)
 
-    for (const event of ['famine', 'extinction', 'energy_crisis', 'recession'] as const) {
+    // FEAT: as quatro que movem a razão de energia respondem pela falta, e mais nenhuma
+    expect(named(all, short, 'energy_crisis')).toBe(4)
+
+    for (const event of ['famine', 'extinction', 'recession', 'civil_unrest'] as const) {
       const def = EVENTS.find((d) => d.id === event)
       if (!def) throw new Error(`missing ${event}`)
       const breached = { ...makeMetrics() } as Record<Metric, number>

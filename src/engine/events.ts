@@ -88,11 +88,15 @@ const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly WorkPush[]>> = {
   production: [up('food'), up('foodSecurity'), up('economy'), up('economyTrend')],
   research: [up('technology')],
   // FIX: energia empurra o ambiente porque a poluição é proporcional a ela, como a fatia de
-  // indústria já declarava pelo mesmo caminho; a razão de energia move um alvo, não um nível
-  energy: [up('energy'), down('environment'), blind('energyRatio')],
+  // indústria já declarava pelo mesmo caminho
+  // FIX: e empurra a razão de energia para BAIXO, porque ela multiplica o alvo no denominador
+  // enquanto o nível ainda é o velho: o reator abre a falta que a rede dele ainda não enche
+  energy: [up('energy'), down('environment'), down('energyRatio')],
   economy: [up('economy'), up('economyTrend')],
   capacity: [down('crowding')],
-  colonyCost: [down('energy'), blind('energyRatio')],
+  // FEAT: custo de frota mais alto derruba o alvo, então levanta a razão — e o estaleiro, que o
+  // baixa, derruba a razão pelo mesmo caminho do reator
+  colonyCost: [down('energy'), up('energyRatio')],
   mortality: [down('population')],
   spoil: [down('food'), down('foodSecurity')],
   // FEAT: variância não tem lado: ela alarga o ano, então toca sem nunca apontar direção
