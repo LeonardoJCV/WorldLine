@@ -508,9 +508,9 @@ describe('space calibration', () => {
     }
   })
 
-  // FEAT: a razão da E8 — antes de a subida ser partida o foguete era uma barra de progresso de seis
-  // séculos, e a única obra da era dele que o jogador podia abrir; agora são quatro conquistas
-  it('never leaves the conductor two centuries on one rung of the climb', () => {
+  // FEAT: a razão da E8 — o foguete era uma barra de progresso de seis séculos, e a única obra da era
+  // dele que o jogador podia abrir; agora são quatro conquistas, e as quatro levam o mesmo tempo
+  it('gives the four rungs of the climb the same handful of decades each', () => {
     for (const seed of SPACE_SEEDS) {
       const run = conduct(seed, WORKS_PATH)
       const label = `seed ${seed}`
@@ -523,24 +523,28 @@ describe('space calibration', () => {
       const opened = climb[0] ?? 0
       const before = Math.max(...[...run.done.values()].filter((year) => year < opened))
       const rungs = climb.map((year, rung) => year - (rung === 0 ? before : (climb[rung - 1] ?? 0)))
-      expect(Math.max(...rungs), `${label} rungs ${rungs.join()}`).toBeLessThan(200)
+      const spread = `${label} rungs ${rungs.join()}`
+      expect(Math.max(...rungs), spread).toBeLessThan(150)
+      // FEAT: e nenhum degrau é o dobro do vizinho mais curto — é o tempo que é igual, não o preço
+      expect(Math.max(...rungs) - Math.min(...rungs), spread).toBeLessThan(25)
       // FEAT: e a subida inteira segue custando séculos, senão o céu teria ficado barato
       expect((climb.at(-1) ?? 0) - before, label).toBeGreaterThan(300)
     }
   })
 
-  // FEAT: o foguete deixou de ser vinte vezes qualquer outra obra, mas a subida inteira ainda pesa
-  it('prices the rocket at the scale of its era, and the whole climb at what it used to cost', () => {
+  // FEAT: o preço de cada degrau é medido contra o tempo que ele custa, não contra o preço do vizinho:
+  // o ritmo de obra cresce com o mundo, então tempos iguais pedem preços crescentes
+  it('prices the climb as a rising ladder, and the whole of it at what the rocket used to cost', () => {
     const climb = CLIMB.map((def) => WORKS[def]?.cost ?? 0)
     expect(climb.reduce((sum, cost) => sum + cost, 0)).toBe(2_400_000)
-    const era = WORKS.filter(
-      (work) => work.era === Era.space && !CLIMB.includes(workIndex(work.id)),
-    )
-    expect(WORKS[ROCKET]?.cost).toBeLessThan(2 * Math.max(...era.map((work) => work.cost)))
-    // FEAT: e nenhum degrau é mais caro que o anterior, então a parede não voltou disfarçada
     for (let rung = 1; rung < climb.length; rung++) {
-      expect(climb[rung]).toBeLessThan(climb[rung - 1] ?? 0)
+      expect(climb[rung], `rung ${rung}`).toBeGreaterThan(climb[rung - 1] ?? 0)
     }
+    // FEAT: e o foguete é o degrau mais caro dos quatro, porque é o que a escada toda tem por nome
+    expect(WORKS[ROCKET]?.cost).toBe(Math.max(...climb))
+    // FEAT: mas deixou de ser vinte vezes qualquer outra obra do catálogo
+    const others = WORKS.filter((_, def) => def !== ROCKET).map((work) => work.cost)
+    expect(WORKS[ROCKET]?.cost).toBeLessThan(2 * Math.max(...others))
   })
 
   // FEAT: a folga que explica por que preço de obra nenhum alcança os dezessete fingerprints — os

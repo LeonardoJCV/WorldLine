@@ -193,7 +193,7 @@ export const WORKS: readonly WorkDef[] = [
     effect: { research: 1.5 },
   },
   // FEAT: efeito vazio de propósito — o foguete não move coeficiente, só habilita orbit e shipyard
-  { id: 'rocket', era: Era.space, needs: ['propellant'], cost: 150000, effect: {} },
+  { id: 'rocket', era: Era.space, needs: ['propellant'], cost: 760000, effect: {} },
   {
     id: 'orbit',
     era: Era.space,
@@ -252,27 +252,27 @@ export const WORKS: readonly WorkDef[] = [
     cost: 120000,
     effect: { smoke: 0.7 },
   },
-  // FEAT: a subida ao céu, apendada ao fim mas encaixada ANTES do foguete na árvore — os efeitos são
-  // modestos de propósito, porque a escada é onde a civilização gasta e não onde ela lucra
+  // FEAT: a subida, apendada ao fim mas encaixada ANTES do foguete, gasta sem lucrar — e o custo sobe
+  // a cada degrau porque o ritmo de obra sobe com o mundo, e é assim que os quatro levam o mesmo tempo
   {
     id: 'launchpad',
     era: Era.space,
     needs: ['computer'],
-    cost: 1000000,
+    cost: 460000,
     effect: { production: 1.08 },
   },
   {
     id: 'telemetry',
     era: Era.space,
     needs: ['launchpad'],
-    cost: 750000,
+    cost: 580000,
     effect: { research: 1.15 },
   },
   {
     id: 'propellant',
     era: Era.space,
     needs: ['telemetry'],
-    cost: 500000,
+    cost: 600000,
     effect: { production: 1.08 },
   },
 ]
