@@ -675,6 +675,7 @@ export class SimulationHost {
       strain: leaving.strain,
       colonies: leaving.colonies,
       home: leaving.home,
+      works: leaving.works,
     }
     const departure: Merge = {
       tick,

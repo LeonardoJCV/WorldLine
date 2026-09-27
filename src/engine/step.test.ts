@@ -21,7 +21,7 @@ import {
   PARAMS,
 } from './params.ts'
 import { step } from './step.ts'
-import { Era, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
+import { Era, NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
 import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
 
@@ -679,6 +679,22 @@ describe('step, with a merge', () => {
   function mergeOut(rest: Partial<Merge> = {}): Merge {
     return { tick: 0, self: 'A', other: 'B', direction: 'out', natal: 0, ...rest }
   }
+
+  // FEAT: e o ano corre já sobre a árvore unida — a obra que só a outra tinha vale neste mesmo ano
+  it('lets the year run on the united work list, and keeps its own site', () => {
+    const site = { def: 3, progress: 200, since: 0 }
+    const result = step(
+      running({ works: [{ def: 0, done: 0, record: 1 }], building: site }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({ population: 1_000_000 }, { works: [{ def: 2, done: 0, record: 8 }] }),
+    )
+    expect(result.state.works.map((work) => work.def)).toEqual([0, 2])
+    expect(result.state.works.find((work) => work.def === 2)?.record).toBe(NEVER)
+    expect(result.state.building?.def).toBe(site.def)
+  })
 
   it('seams the other history in and keeps running', () => {
     const result = step(

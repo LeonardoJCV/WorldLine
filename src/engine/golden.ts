@@ -213,6 +213,7 @@ export function mergeSeam(guest: WorldState): Seam {
       strain: guest.strain,
       colonies: guest.colonies,
       home: guest.home,
+      works: guest.works,
     },
     departs: { tick, self: MERGE_CASE.guest, other: host, direction: 'out', natal },
   }

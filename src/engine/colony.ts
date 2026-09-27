@@ -180,6 +180,9 @@ export function inherit(s: WorldState, colony: Colony, body: Body | undefined): 
     debts: [],
     paradox: null,
     strain: 0,
+    // FEAT: as obras prontas atravessam com `technology`, porque são conhecimento; o canteiro que
+    // ficou pela metade era do planeta que caiu, e morre com ele
+    building: null,
     status: 'running',
   }
 }

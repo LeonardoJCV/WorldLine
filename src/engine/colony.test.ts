@@ -32,7 +32,7 @@ import {
 } from './params.ts'
 import type { Body, BodyKind } from './system.ts'
 import { makeState } from './testing.ts'
-import { workIndex } from './work.ts'
+import { workIndex, workMods } from './work.ts'
 
 function body(index: number, kind: BodyKind, habitability: number, home = false): Body {
   return { index, kind, distance: 1 + index, habitability, home }
@@ -402,6 +402,11 @@ describe('inherit', () => {
     paradox: { kind: 'debt', since: 2030, deadline: 2230 },
     strain: 200,
     status: 'extinct',
+    works: [
+      { def: workIndex('irrigation'), done: 300, record: 1 },
+      { def: workIndex('rocket'), done: 2100, record: 9 },
+    ],
+    building: { def: workIndex('orbit'), progress: 4000, since: 2200 },
   })
   const moved = inherit(
     dead,
@@ -418,6 +423,15 @@ describe('inherit', () => {
     expect(moved.technology).toBe(dead.technology)
     expect(moved.eras).toBe(dead.eras)
     expect(moved.allocation).toEqual(dead.allocation)
+  })
+
+  // FEAT: obra pronta é conhecimento e atravessa com a tecnologia; canteiro aberto é conta do
+  // planeta que caiu, e o herdeiro leva o conhecimento e não as contas
+  it('carries the works to the heir, and drops the work under way', () => {
+    expect(moved.works).toEqual(dead.works)
+    expect(workMods(moved.works).harvest).toBe(workMods(dead.works).harvest)
+    expect(moved.building).toBeNull()
+    expect(dead.building).not.toBeNull()
   })
 
   it('restarts the stores small', () => {

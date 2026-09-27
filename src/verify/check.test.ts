@@ -147,4 +147,16 @@ describe('the works the reference histories never build', () => {
     idle(departs)
     expect(receives.hashAt(MERGE_CASE.year)).toBe(MERGE_CASE.hash)
   })
+
+  // FEAT: o recibo carrega as obras da que deságua, e é por isso que a costura pode uni-las; com os
+  // roteiros de referência ela carrega uma lista vazia, e é por isso que o hash da confluência parou
+  it('stamps the works of the departing history on the receipt, empty or not', () => {
+    const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
+    const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+    departs.advance(MERGE_CASE.tick)
+    expect(mergeSeam(departs.present).receives.works).toEqual([])
+
+    const built = [{ def: 0, done: 300, record: 2 }]
+    expect(mergeSeam({ ...departs.present, works: built }).receives.works).toEqual(built)
+  })
 })

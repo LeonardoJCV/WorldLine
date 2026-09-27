@@ -4,6 +4,7 @@ import type { Echo } from './echo.ts'
 import { clamp } from './math.ts'
 import { MERGE_SHOCK } from './params.ts'
 import { NEVER, isValidAllocation, type Variable, type WorldState } from './state.ts'
+import { WORKS, type Work } from './work.ts'
 
 export interface Merge {
   readonly tick: number
@@ -20,6 +21,7 @@ export interface Merge {
   readonly strain?: number
   readonly colonies?: readonly Colony[]
   readonly home?: number | null
+  readonly works?: readonly Work[]
 }
 
 // FEAT: sem alocação uma dívida de doutrina nunca se quita, então nenhuma costura entra sem ela
@@ -29,6 +31,11 @@ export function validateMerge(merge: Merge): Merge {
     if (debt.allocation === undefined || !isValidAllocation(debt.allocation)) {
       throw new RangeError('a doctrine debt in a confluence carries an allocation')
     }
+  }
+  // FEAT: uma obra que não está no catálogo não moveria coeficiente nenhum, e entraria calada
+  for (const work of merge.works ?? []) {
+    if (!WORKS[work.def])
+      throw new RangeError('a work in a confluence names a work of the catalogue')
   }
   return merge
 }
@@ -94,6 +101,27 @@ export function mergeColonies(
   return [...byBody.values()].sort((a, b) => a.body - b.body)
 }
 
+// FEAT: uma obra concluída em qualquer das duas existe na sobrevivente, com o ano mais antigo dos
+// dois, e a lista sai ordenada por `def` para não depender de qual história era qual
+export function mergeWorks(own: readonly Work[], incoming: readonly Work[]): readonly Work[] {
+  const byDef = new Map<number, Work>(own.map((work) => [work.def, work]))
+  for (const work of incoming) {
+    const there = byDef.get(work.def)
+    if (there === undefined) {
+      // FEAT: sem par do lado nativo, o record cruza sozinho; vira NEVER, não a causa de outra história
+      byDef.set(work.def, { def: work.def, done: work.done, record: NEVER })
+      continue
+    }
+    const ownOlder = there.done <= work.done
+    byDef.set(work.def, {
+      def: work.def,
+      done: ownOlder ? there.done : work.done,
+      record: ownOlder ? there.record : NEVER,
+    })
+  }
+  return [...byDef.values()].sort((a, b) => a.def - b.def)
+}
+
 export function mergeStates(s: WorldState, incoming: Merge): WorldState {
   const value = (variable: Variable): number => incoming.values?.[variable] ?? 0
   const weights = mergeWeights(s.population, value('population'))
@@ -152,5 +180,7 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
     echoes: [...s.echoes, ...(incoming.echoes ?? [])],
     paradox: nearerParadox(s.paradox, incoming.paradox ?? null),
     strain: Math.max(s.strain, incoming.strain ?? 0),
+    // FEAT: as duas listas se unem, mas o canteiro é da sobrevivente: `building` vem do espalhamento
+    works: mergeWorks(s.works, incoming.works ?? []),
   }
 }
