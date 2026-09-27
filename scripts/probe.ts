@@ -14,7 +14,7 @@ import { GOLDEN_SCRIPTS } from '../src/engine/golden.ts'
 import { PARADOX_RATIO } from '../src/engine/params.ts'
 import { step } from '../src/engine/step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from '../src/engine/state.ts'
-import { WORKS, isCommissionable } from '../src/engine/work.ts'
+import { PRESENTATION_ORDER, WORKS, isCommissionable } from '../src/engine/work.ts'
 import { Worldline } from '../src/engine/worldline.ts'
 
 const STRATEGIES: Record<string, Allocation> = {
@@ -671,13 +671,6 @@ function spaceProbe(): void {
 const WORKS_SEEDS = [1, 2, 3, 7, 11, 42, 101, 777]
 const WORKS_HORIZON = 10_000
 const BY_INDEX: readonly number[] = WORKS.map((_, def) => def)
-// FEAT: a ordem da árvore, não a do catálogo: o índice é contrato de hash, a era é o desenho
-const BY_ERA: readonly number[] = [...BY_INDEX].sort((a, b) => {
-  const left = WORKS[a]
-  const right = WORKS[b]
-  if (!left || !right) return 0
-  return left.era === right.era ? a - b : left.era - right.era
-})
 const WORKS_PLANS: Record<string, Allocation> = {
   balanced: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   spendthrift: { agriculture: 40, industry: 25, research: 25, conservation: 0, works: 10 },
@@ -702,7 +695,7 @@ function worksProbe(): void {
   for (const [plan, allocation] of Object.entries(WORKS_PLANS)) {
     for (const [name, order] of [
       ['catalogue', BY_INDEX],
-      ['era', BY_ERA],
+      ['era', PRESENTATION_ORDER],
     ] as const) {
       console.log(`\n-- ${plan} / ${name} order --`)
       let worse = 0

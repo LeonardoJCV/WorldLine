@@ -249,6 +249,15 @@ export const WORKS: readonly WorkDef[] = [
   },
 ]
 
+// FEAT: a ordem de ARMAZENAMENTO é contrato de hash e a de APRESENTAÇÃO é escolha de produto, e é
+// por isso que as duas diferem: a obra nova entra no fim do array e no meio da árvore
+export const PRESENTATION_ORDER: readonly number[] = WORKS.map((work, def) => ({
+  def,
+  era: work.era,
+}))
+  .sort((a, b) => (a.era === b.era ? a.def - b.def : a.era - b.era))
+  .map((entry) => entry.def)
+
 export const NEUTRAL_MODS: WorkMods = (() => {
   const mods = {} as Record<WorkKey, number>
   for (const key of FACTOR_KEYS) mods[key] = 1

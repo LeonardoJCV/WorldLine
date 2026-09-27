@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FACTOR_KEYS,
   NEUTRAL_MODS,
+  PRESENTATION_ORDER,
   TERM_KEYS,
   WORKS,
   findWork,
@@ -162,6 +163,29 @@ describe('the works catalogue', () => {
     for (const id of ['steam', 'electrification', 'reactor'] as const) {
       expect(findWork(id).effect.energy).toBeGreaterThan(1)
     }
+  })
+
+  // FEAT: armazenamento e apresentação são duas ordens diferentes de propósito — a primeira é
+  // contrato de hash e append-only, a segunda é a árvore que o observador lê
+  it('presents the catalogue by era, which is not the order it is stored in', () => {
+    expect([...PRESENTATION_ORDER].sort((a, b) => a - b)).toEqual(WORKS.map((_, def) => def))
+    expect(PRESENTATION_ORDER).not.toEqual(WORKS.map((_, def) => def))
+    let era = 0
+    let previous = -1
+    for (const def of PRESENTATION_ORDER) {
+      const work = WORKS[def]
+      if (!work) throw new Error(`the presentation order points nowhere at ${def}`)
+      if (work.era !== era) {
+        expect(work.era).toBeGreaterThan(era)
+        era = work.era
+        previous = -1
+      }
+      expect(def).toBeGreaterThan(previous)
+      previous = def
+    }
+    // FEAT: e a escada de mitigação deixa de vir toda no fim: cada degrau cai na era dele
+    const shown = PRESENTATION_ORDER.map((def) => WORKS[def]?.id)
+    expect(shown.indexOf('filters')).toBeLessThan(shown.indexOf('electrification'))
   })
 
   // FEAT: uma chave que nenhuma obra move é uma chave morta na camada permanente
