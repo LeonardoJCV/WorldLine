@@ -630,10 +630,12 @@ describe('the works in the causal chain', () => {
   })
 
   // FEAT: a frase, medida numa história de verdade em vez de num mapa: o mundo fecha o reator e a
-  // crise de energia do ano seguinte nomeia o reator, e nenhuma fome da mesma história nomeia obra
+  // crise de energia que vem atrás nomeia o reator, e nenhuma fome da mesma história nomeia obra
   it('names the reactor in a history that built it and then ran short of energy', () => {
     const w = new Worldline(1)
-    for (let year = 0; year < 2800 && !w.ended; year++) {
+    // FIX: cinco mil anos porque o foguete agora custa séculos, e nesta alocação o reator só fecha
+    // em 4845 — o horizonte antigo de 2.800 parava a história antes da obra que a frase mede
+    for (let year = 0; year < 5000 && !w.ended; year++) {
       const next = w.present.building
         ? undefined
         : WORKS.find((_, def) => isCommissionable(w.present, def))
@@ -643,7 +645,9 @@ describe('the works in the causal chain', () => {
     const reactor = w.present.works.find((work) => WORKS[work.def]?.id === 'reactor')
     if (!reactor) throw new Error('the history must build the reactor')
     const crisis = w.records.find((r) => r.event === 'energy_crisis' && r.start > reactor.done)
-    expect(crisis?.start).toBe(reactor.done + 1)
+    // FIX: dois anos, não um: a razão de energia cai no ano seguinte ao reator, mas a crise tem duas
+    // condições e a economia só vira no ano depois — o ano exato era coincidência das duas, não a lei
+    expect(crisis?.start).toBe(reactor.done + 2)
     expect(crisis?.causes).toContainEqual({ kind: 'event', record: reactor.record })
 
     const built = new Set(w.present.works.map((work) => work.record))

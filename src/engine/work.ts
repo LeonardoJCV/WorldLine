@@ -188,7 +188,9 @@ export const WORKS: readonly WorkDef[] = [
     effect: { research: 1.5 },
   },
   // FEAT: efeito vazio de propósito — o foguete abre o portão da colonização, não empurra coeficiente
-  { id: 'rocket', era: Era.space, needs: ['computer'], cost: 60000, effect: {} },
+  // FEAT: o primeiro a sair do planeta custa séculos da obra pública inteira, e é só por isso que o
+  // céu fica no terceiro milênio: a era espacial já abriu séculos antes dele, e o resto dela é barato
+  { id: 'rocket', era: Era.space, needs: ['computer'], cost: 2400000, effect: {} },
   {
     id: 'orbit',
     era: Era.space,

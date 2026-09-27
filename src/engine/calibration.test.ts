@@ -11,7 +11,6 @@ import { debtRatio, totalOwed, worldSize } from './debt.ts'
 import { causalDistance } from './distance.ts'
 import { worldMetrics, type EventId } from './events.ts'
 import { genesis } from './genesis.ts'
-import { GOLDEN_SCRIPTS, type GoldenScript } from './golden.ts'
 import {
   DEFAULT_ALLOCATION,
   HORIZON,
@@ -21,7 +20,7 @@ import {
 } from './params.ts'
 import { step } from './step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from './state.ts'
-import { PRESENTATION_ORDER, WORKS, isCommissionable } from './work.ts'
+import { PRESENTATION_ORDER, WORKS, isCommissionable, workIndex } from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const balanced: Allocation = {
@@ -376,7 +375,6 @@ interface Left {
   // FEAT: a superlotação de cada ano, porque o alívio da migração é um momento, não um fim de linha
   readonly crowdings: readonly number[]
   readonly population: number
-  readonly peakEnergy: number
 }
 
 function leave(
@@ -394,7 +392,6 @@ function leave(
   let founded = 0
   let lost = 0
   let selfAt = -1
-  let peakEnergy = 0
   let fleet = new Set<string>()
   const crowdings: number[] = []
   while (s.tick < SPACE_HORIZON && s.status === 'running') {
@@ -417,7 +414,6 @@ function leave(
     records += result.started.length
     s = result.state
     if (eraAt < 0 && (s.eras & Era.space) !== 0) eraAt = s.tick
-    if (s.energy > peakEnergy) peakEnergy = s.energy
     const now = new Set(s.colonies.map((c) => `${c.body}:${c.founded}`))
     for (const old of fleet) if (!now.has(old)) lost++
     for (const fresh of now) if (!fleet.has(fresh)) founded++
@@ -433,22 +429,78 @@ function leave(
     crowding: worldMetrics(s, origin.world).crowding,
     crowdings,
     population: s.population,
-    peakEnergy,
+  }
+}
+
+// FEAT: a mesma condução nas duas alocações, porque a única diferença medida tem de ser a fatia
+const WORKS_PATH: Allocation = {
+  agriculture: 25,
+  industry: 25,
+  research: 20,
+  conservation: 5,
+  works: 25,
+}
+const NO_WORKS: Allocation = {
+  agriculture: 40,
+  industry: 30,
+  research: 20,
+  conservation: 10,
+  works: 0,
+}
+const ROCKET = workIndex('rocket')
+
+interface Conducted {
+  // FEAT: o ano de conclusão de cada obra, porque um mundo sem obra nenhuma é uma lista vazia
+  readonly works: readonly number[]
+  readonly rocketAt: number
+  readonly founded: number
+  readonly alive: boolean
+}
+
+// FEAT: conduzir é abrir a próxima obra possível em todo ano de canteiro livre, na ordem em que o
+// jogo as apresenta — que é a ordem mais pessimista, porque o foguete vem antes de tudo que o barato
+function conduct(seed: number, allocation: Allocation): Conducted {
+  const w = new Worldline(seed, [{ tick: 0, allocation }])
+  let founded = 0
+  let fleet = 0
+  for (let year = 0; year < SPACE_HORIZON && !w.ended; year++) {
+    if (!w.present.building) {
+      const next = PRESENTATION_ORDER.find((def) => isCommissionable(w.present, def))
+      const work = next === undefined ? undefined : WORKS[next]
+      if (work) w.commission(work.id)
+    }
+    w.advance(1)
+    if (w.present.colonies.length > fleet) founded += w.present.colonies.length - fleet
+    fleet = w.present.colonies.length
+  }
+  return {
+    works: w.present.works.map((done) => done.done),
+    rocketAt: w.present.works.find((done) => done.def === ROCKET)?.done ?? -1,
+    founded,
+    alive: w.present.status === 'running',
   }
 }
 
 describe('space calibration', () => {
-  it('no reference script ever reaches the space era, on any seed', () => {
-    // FEAT: a regra dura do plano — os doze fingerprints dependem de o portão nunca abrir aqui
-    for (const script of ['steady', 'shifting', 'crossed'] as readonly GoldenScript[]) {
-      const plan = GOLDEN_SCRIPTS[script]
-      for (const seed of SPACE_SEEDS) {
-        const run = leave(seed, plan.decisions, plan.crossings)
-        expect(run.eraAt).toBe(-1)
-        expect(run.founded).toBe(0)
-        // FEAT: o pico das referências é 8,99 contra um portão de 12 — a folga medida no plano
-        expect(run.peakEnergy).toBeLessThan(10)
-      }
+  // FEAT: a razão nova, que substitui a regra de o portão nunca abrir: o MVP inteiro existe para o
+  // céu ser alcançável, e o preço do foguete é o que decide em que milênio ele é alcançado
+  it('a history conducted for works finishes the rocket between year 2000 and 3000', () => {
+    const runs = SPACE_SEEDS.map((seed) => conduct(seed, WORKS_PATH))
+    const arrived = runs.filter((run) => run.rocketAt >= 0)
+    expect(arrived.length).toBeGreaterThanOrEqual(6)
+    for (const run of arrived) {
+      expect(run.rocketAt).toBeGreaterThan(2000)
+      expect(run.rocketAt).toBeLessThan(3000)
+      expect(run.alive).toBe(true)
+    }
+  })
+
+  it('a history that allocates nothing to works never finishes one, and never leaves', () => {
+    for (const seed of SPACE_SEEDS) {
+      const run = conduct(seed, NO_WORKS)
+      expect(run.works, `seed ${seed}`).toHaveLength(0)
+      expect(run.rocketAt, `seed ${seed}`).toBe(-1)
+      expect(run.founded, `seed ${seed}`).toBe(0)
     }
   })
 
