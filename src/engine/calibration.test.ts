@@ -466,7 +466,7 @@ interface Conducted {
 }
 
 // FEAT: conduzir é abrir a próxima obra possível em todo ano de canteiro livre, na ordem que o jogo
-// apresenta — ainda a mais pessimista, porque ela oferece o foguete antes do propelente que o abre
+// apresenta — e é ela, não a ordem do catálogo, porque é a que um observador de fato veria
 function conduct(seed: number, allocation: Allocation): Conducted {
   const w = new Worldline(seed, [{ tick: 0, allocation }])
   let founded = 0

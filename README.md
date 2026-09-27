@@ -31,7 +31,7 @@ It is not a game with a win condition and it is not a dashboard. It is an instru
 
   ![A lit city at night on the planet surface, roads leading out of it](docs/images/surface.png)
 
-- **Share and keep** worlds: the address bar always holds a link with the seed, the decisions and the year; worlds can be saved in the browser or exported as JSON files.
+- **Share and keep** worlds: the address bar always holds a link with the seed, the year and everything the history received; worlds can be saved in the browser or exported as JSON files.
 
 ## Determinism
 
@@ -47,7 +47,7 @@ The same seed and the same decisions always produce the same history, in every b
 
 A world is six stocks (population, food reserve, energy, technology, economy and environment) and a stability index with memory, together with what the civilization has permanently built: the eras it has opened, the public works that stand, and the one still on the site. Each year a fixed pipeline applies the current decision, spends that year's share of production on the work under way, derives quantities such as food security and pollution, updates every stock from the start-of-year state, and evaluates events. Causes always precede effects: an event triggered this year changes the world from next year on.
 
-Events open eras — agricultural, classical, industrial, electric, space — and an era is what puts a work within reach. A work costs years of production, needs the works it rests on, and once finished changes a coefficient of the world for good: harvests, energy, mortality, the price of settling another body. Unlike an event, that change never expires, which is why the year 3000 does not come out like the year 300. The catalogue answers itself: every rung of the energy climb has a work that holds back the smoke it makes, and the rocket that opens colonisation sits at the top of a launch climb a world has to finish first.
+Events open eras — agricultural, classical, industrial, electric, space — and an era is what puts a work within reach. A work costs years of production and needs the works it rests on. Most change a coefficient of the world for good — harvests, energy, mortality, the price of settling another body — and a few open something instead of changing a number. Unlike an event, what a work changes never expires, which is why the year 3000 does not come out like the year 300. The catalogue answers itself: every rung of the energy climb has a work that holds back the smoke it makes, and the rocket that opens colonisation sits at the top of a launch climb a world has to finish first.
 
 The rules are few and coupled, so behaviour comes from feedback loops rather than scripted outcomes:
 
