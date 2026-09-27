@@ -75,7 +75,8 @@ export function hashState(s: WorldState): string {
     h = feed(h, s.paradox.since)
     h = feed(h, s.paradox.deadline)
   }
-  // FEAT: sem era espacial não há colônia; o bloco só entra quando há alguma, no mesmo padrão
+  // FEAT: o bloco só entra quando há alguma colônia, e o portão dela é o foguete pronto, não a era:
+  // a costura pode entregar o foguete, ou a frota inteira, a um mundo que nunca abriu a era espacial
   if (s.colonies.length > 0) {
     h = feed(h, s.colonies.length)
     for (const colony of s.colonies) {

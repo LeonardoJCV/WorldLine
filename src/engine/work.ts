@@ -277,14 +277,29 @@ export const WORKS: readonly WorkDef[] = [
   },
 ]
 
-// FEAT: a ordem de ARMAZENAMENTO é contrato de hash e a de APRESENTAÇÃO é escolha de produto, e é
-// por isso que as duas diferem: a obra nova entra no fim do array e no meio da árvore
-export const PRESENTATION_ORDER: readonly number[] = WORKS.map((work, def) => ({
-  def,
-  era: work.era,
-}))
-  .sort((a, b) => (a.era === b.era ? a.def - b.def : a.era - b.era))
-  .map((entry) => entry.def)
+// FEAT: a ordem de ARMAZENAMENTO é contrato de hash e append-only, e a de APRESENTAÇÃO é escolha de
+// produto: a obra nova entra no fim do array, e aqui ela entra na era dela e depois do que ela pede
+export const PRESENTATION_ORDER: readonly number[] = (() => {
+  const queued = WORKS.map((work, def) => ({ def, era: work.era })).sort((a, b) =>
+    a.era === b.era ? a.def - b.def : a.era - b.era,
+  )
+  const at = new Map(WORKS.map((work, def) => [work.id, def]))
+  const shown: number[] = []
+  const standing = new Set<number>()
+  // FIX: ordenar por era e índice apresentava o foguete antes dos três degraus que o destrancam,
+  // então a próxima é a menor obra cujos pré-requisitos já estão apresentados, não a menor obra
+  while (shown.length < queued.length) {
+    const next = queued.find(
+      (entry) =>
+        !standing.has(entry.def) &&
+        (WORKS[entry.def]?.needs ?? []).every((need) => standing.has(at.get(need) ?? -1)),
+    )
+    if (next === undefined) throw new Error('the work catalogue has a cycle')
+    shown.push(next.def)
+    standing.add(next.def)
+  }
+  return shown
+})()
 
 export const NEUTRAL_MODS: WorkMods = (() => {
   const mods = {} as Record<WorkKey, number>

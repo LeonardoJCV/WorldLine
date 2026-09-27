@@ -222,12 +222,28 @@ describe('the works catalogue', () => {
         era = work.era
         previous = -1
       }
-      expect(def).toBeGreaterThan(previous)
+      // FEAT: dentro da era o índice cresce, e só um pré-requisito de índice maior o faz recuar
+      const forced = work.needs.some((need) => workIndex(need) > def)
+      if (def < previous) expect(forced, work.id).toBe(true)
       previous = def
     }
     // FEAT: e a escada de mitigação deixa de vir toda no fim: cada degrau cai na era dele
     const shown = PRESENTATION_ORDER.map((def) => WORKS[def]?.id)
     expect(shown.indexOf('filters')).toBeLessThan(shown.indexOf('electrification'))
+  })
+
+  // FEAT: esta ordem existe para ser lida de cima para baixo, e a era espacial abria num foguete
+  // trancado para sempre, com os três degraus que o destrancam no fim da lista
+  it('never presents a work before a prerequisite of it', () => {
+    const shown = new Set<number>()
+    for (const def of PRESENTATION_ORDER) {
+      for (const need of WORKS[def]?.needs ?? []) {
+        expect(shown.has(workIndex(need)), `${WORKS[def]?.id} needs ${need}`).toBe(true)
+      }
+      shown.add(def)
+    }
+    const order = PRESENTATION_ORDER.map((def) => WORKS[def]?.id)
+    expect(order.indexOf('propellant')).toBeLessThan(order.indexOf('rocket'))
   })
 
   // FEAT: uma chave que nenhuma obra move é uma chave morta na camada permanente

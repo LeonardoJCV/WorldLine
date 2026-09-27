@@ -276,6 +276,8 @@ export class Worldline {
     if (seamed === -1) seamed = this.#merges.length
     let ordered = this.#commissions.findIndex((c) => c.tick >= base)
     if (ordered === -1) ordered = this.#commissions.length
+    // FIX: esta é a segunda cópia do laço do ano, e toda entrada que o laço de `advance` ganhar tem
+    // de entrar aqui também, senão reviver um ano gravado devolve outra história
     while (state.tick < tick) {
       const due = this.#dueDecision(index, state.tick)
       if (due) index++
