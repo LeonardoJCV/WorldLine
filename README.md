@@ -96,11 +96,13 @@ npm run probe      # calibration report
 
 ## Roadmap
 
-Worldlines can already be branched, compared and explored down to their surface. Each worldline still evolves alone; what comes next is what happens when they touch.
+Worldlines can be branched, compared, explored down to their surface, crossed, driven into paradox and reconciled into one, and a civilization can now build its way off its own planet. What comes next is putting that in the observer's hands, and giving the other worlds something to arrive at.
 
-1. **Crossline**: let information, resources or decisions cross from one worldline into another, under conditions set by the worlds themselves.
-2. **Causal debt and paradoxes**: track what a world receives that its own history could not have produced.
-3. **Merge and collapse**: reconcile two histories into a coherent new one, or watch an inconsistent one fall apart.
+1. **Choosing the work**: a share of the year can already be set aside for building, but not yet spent on anything in particular. What is missing is the tree to choose from, what each work will cost in years at the civilization's current pace, and the dated chronicle of what it has finished.
+2. **Cities the engine knows about**: the towns, ports and factories on the surface are drawn from population alone. They should be the works and the people that made them.
+3. **A voyage, not an arrival**: a colony appears in the year it is founded. Distance should cost years, and a launch should be something in flight.
+4. **Ground of their own**: every body in the system wears the home world's terrain. Each should have its own to land on.
+5. **Tongues that drift**: a colony that loses contact should, over centuries, stop speaking its parent's language.
 
 ## License
 
