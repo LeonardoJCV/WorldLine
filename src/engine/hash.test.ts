@@ -202,6 +202,19 @@ describe('hashState', () => {
     expect(a).not.toBe(differentSince)
   })
 
+  // FIX: um canteiro recém-aberto tem progresso zero, e um mundo com a fatia de obras em zero o
+  // carrega assim para sempre — se o bloco pedisse progresso, duas histórias sairiam com um hash só
+  it('separates two worlds by a site that has not advanced a single unit yet', () => {
+    const empty = { ...state, works: [] }
+    const base = hashState({ ...empty, building: null })
+    const opened = hashState({ ...empty, building: { def: 5, progress: 0, since: 100 } })
+    const other = hashState({ ...empty, building: { def: 6, progress: 0, since: 100 } })
+    const later = hashState({ ...empty, building: { def: 5, progress: 0, since: 101 } })
+    expect(opened).not.toBe(base)
+    expect(opened).not.toBe(other)
+    expect(opened).not.toBe(later)
+  })
+
   it('ignores a new event that never fired, but reacts once one has', () => {
     // FIX: os cinco eventos da dívida (Tarefa 4) só entram no hash depois que dispararam uma vez;
     // um mundo que nunca cruzou nada tem lastEnded[11..] sempre em NEVER e reproduz o fingerprint antigo

@@ -24,7 +24,7 @@ import { step } from './step.ts'
 import { Era, NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
 import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
-import { WORKS, type Work } from './work.ts'
+import { WORKS, findWork, workIndex, type Work } from './work.ts'
 
 const { world, state } = genesis(482913)
 const shift = { agriculture: 20, industry: 45, research: 20, conservation: 10, works: 5 }
@@ -710,6 +710,67 @@ describe('step, with a merge', () => {
     expect(result.state.works.map((work) => work.def)).toEqual([0, 2])
     expect(result.state.works.find((work) => work.def === 2)?.record).toBe(NEVER)
     expect(result.state.building?.def).toBe(site.def)
+  })
+
+  // FIX: a lista de saída não diz sobre qual lista a ARITMÉTICA do ano correu, e o ano lê a camada
+  // das obras em dois lugares — uma costura que só traz obra separa os dois, um coeficiente por vez
+  it('runs the arithmetic of the seam year on the united list, in both places that read it', () => {
+    const before = running({ works: [{ def: 0, done: 0, record: 1 }] })
+    const seam = (works: readonly Work[]) =>
+      step(before, config, 0, undefined, [], mergeIn({}, { works })).state
+    const bare = seam([])
+    const moved = (works: readonly Work[]) => {
+      const after = seam(works)
+      return VARIABLES.filter((variable) => after[variable] !== bare[variable])
+    }
+    // FEAT: o celeiro só move `spoil`, que é coeficiente do derive e de mais nada
+    expect(moved([{ def: workIndex('granary'), done: 0, record: 8 }])).toEqual(['food'])
+    // FEAT: a cerâmica só move `economy`, que o derive não lê: ela entra na integração e em mais nada
+    expect(moved([{ def: workIndex('pottery'), done: 0, record: 8 }])).toEqual(['economy'])
+  })
+
+  // FIX: a obra que fecha no ano da costura sobe pelo pré-requisito que a costura trouxe; ele não
+  // tem registro nesta história e sobe como NEVER, que é lacuna do leitor e não causa de outro
+  it('names the prerequisite the seam brought when the same year closes the work that needed it', () => {
+    const plough = workIndex('plough')
+    const nearly = { def: plough, progress: findWork('plough').cost - 1, since: 0 }
+    const result = step(
+      running({ works: [], building: nearly, population: 4e6, economy: 9 }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({}, { works: [{ def: workIndex('irrigation'), done: -5, record: 8 }] }),
+    )
+    expect(result.state.works.map((work) => work.def)).toEqual([0, plough])
+    const done = result.started.find((record) => record.event === 'work_done')
+    expect(done?.causes).toEqual([{ kind: 'event', record: NEVER }])
+  })
+
+  // FIX: o portão da colônia é o foguete pronto, não a era, e a costura o entrega a quem nunca abriu
+  // a era espacial: a fundação sai com a lista de causas VAZIA, e aqui isso é resultado, não acidente
+  it('founds a colony with no cause at all when the seam is what handed it the rocket', () => {
+    const grounded = running({
+      eras: Era.agricultural | Era.classical | Era.industrial | Era.electric,
+      energy: 14,
+      technology: 60,
+      economy: 9,
+      population: 4_000_000,
+      food: 8_000_000,
+    })
+    const result = step(
+      grounded,
+      config,
+      7,
+      undefined,
+      [],
+      mergeIn({}, { works: [{ def: ROCKET, done: -5, record: 3 }] }),
+    )
+    expect(result.state.eras & Era.space).toBe(0)
+    expect(result.state.works.map((work) => work.def)).toEqual([ROCKET])
+    expect(result.state.works[0]?.record).toBe(NEVER)
+    expect(result.state.colonies).toHaveLength(1)
+    expect(result.started.find((record) => record.event === 'colony_founded')?.causes).toEqual([])
   })
 
   it('seams the other history in and keeps running', () => {

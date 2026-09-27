@@ -10,7 +10,7 @@ import {
   mergeSeam,
 } from '../engine/golden.ts'
 import { hashState } from '../engine/hash.ts'
-import { CAUSAL_WINDOW } from '../engine/params.ts'
+import { CAUSAL_WINDOW, CHECKPOINT_INTERVAL } from '../engine/params.ts'
 import { WORKS } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
@@ -136,6 +136,23 @@ describe('runWorksCheck', () => {
     expect(hashState({ ...present, works: [], building: null })).not.toBe(WORKS_CASE.hash)
   })
 
+  // FEAT: as dezoito verificações param no ano fixado, e ali `stateAt` devolve o presente sem
+  // reviver nada; aqui o ano fixado é revivido do checkpoint, com duas comissões na mesma janela
+  it('reproduces the pinned year by reliving it from the checkpoint, not by standing on it', () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const world = goldenWorld(WORKS_CASE.seed, plan)
+    world.advance(WORKS_CASE.year + CHECKPOINT_INTERVAL)
+    expect(world.present.tick).toBeGreaterThan(WORKS_CASE.year)
+    // FEAT: uma comissão por janela nunca separa o cursor do replay do cursor do ano corrido, então
+    // a guarda vale só enquanto o roteiro tiver duas dentro da janela do ano fixado
+    const base = WORKS_CASE.year - (WORKS_CASE.year % CHECKPOINT_INTERVAL)
+    const window = plan.commissions.filter(
+      (ordered) => ordered.tick >= base && ordered.tick <= WORKS_CASE.year,
+    )
+    expect(window.length).toBeGreaterThan(1)
+    expect(world.hashAt(WORKS_CASE.year)).toBe(WORKS_CASE.hash)
+  })
+
   it('stands every work the script ordered except the one it left on the site', () => {
     const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
     const world = goldenWorld(WORKS_CASE.seed, plan)
@@ -198,8 +215,8 @@ describe('the works the reference histories build, and the ones they never do', 
     const heir = goldenWorld(INHERITANCE_CASE.seed, plan)
     heir.advance(INHERITANCE_CASE.year)
     expect(heir.present.works).toHaveLength(WORKS.length)
-    // FEAT: uma comissão num ano de canteiro ocupado é ignorada em silêncio, então a guarda é que
-    // toda obra que o roteiro encomenda esteja de pé, não que a lista tenha o tamanho do catálogo
+    // FEAT: uma comissão num ano de canteiro ocupado substitui a obra em curso e joga fora o
+    // progresso dela, então a guarda é que toda obra encomendada esteja de pé, não quantas estão
     const standing = new Set(heir.present.works.map((done) => WORKS[done.def]?.id))
     expect(plan.commissions.filter((ordered) => !standing.has(ordered.work))).toEqual([])
     const rocket = heir.present.works.find((work) => work.def === ROCKET)

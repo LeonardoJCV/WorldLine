@@ -365,8 +365,8 @@ describe('a history that leaves a sister behind', () => {
     line.records.filter((record) => record.event === event).map((record) => record.start)
 
   it('builds the whole climb, founds both sisters, loses one and settles the body again', () => {
-    // FIX: contar as comissões do roteiro só repetia uma constante; a guarda é que toda obra que
-    // ele encomenda tenha ficado de pé, porque uma comissão de canteiro ocupado é perdida em silêncio
+    // FIX: contar as comissões só repetia uma constante; a guarda é que toda obra encomendada tenha
+    // ficado de pé, porque uma comissão num canteiro ocupado substitui a obra em curso e a perde
     const standing = new Set(line.present.works.map((done) => WORKS[done.def]?.id))
     expect(SIBLING_CASE.plan.commissions.filter((ordered) => !standing.has(ordered.work))).toEqual(
       [],

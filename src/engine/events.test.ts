@@ -539,6 +539,14 @@ describe('the works in the causal chain', () => {
     expect(crisis(s)).toContainEqual({ kind: 'event', record: 12 })
   })
 
+  // FIX: uma obra que a confluência trouxe não tem registro nesta história, e o que sobe é NEVER —
+  // lacuna que o leitor não resolve, jamais o registro 0, que é um acontecimento de verdade e outro
+  it('carries the record of a work the seam brought as it is, never as record zero', () => {
+    const s = world(EVENTS, { works: [{ def: chemistry, done: 40, record: NEVER }] })
+    expect(crisis(s)).toContainEqual({ kind: 'event', record: NEVER })
+    expect(crisis(s)).not.toContainEqual({ kind: 'event', record: 0 })
+  })
+
   // FEAT: a marca da obra não expira, então ela não tem janela causal como a decisão tem
   it('still names the work a thousand years after it was finished', () => {
     const s = world(EVENTS, { tick: 3000, works: [{ def: chemistry, done: 40, record: 12 }] })
@@ -633,8 +641,8 @@ describe('the works in the causal chain', () => {
   // crise de energia que vem atrás nomeia o reator, e nenhuma fome da mesma história nomeia obra
   it('names the reactor in a history that built it and then ran short of energy', () => {
     const w = new Worldline(1)
-    // FIX: cinco mil anos porque o foguete agora custa séculos, e nesta alocação o reator só fecha
-    // em 4845 — o horizonte antigo de 2.800 parava a história antes da obra que a frase mede
+    // FIX: cinco mil anos não pelo reator, que fecha em 2439: é para a varredura de mentiras abaixo
+    // correr com o catálogo INTEIRO de pé, e nesta alocação a última obra só fecha em 4013
     for (let year = 0; year < 5000 && !w.ended; year++) {
       const next = w.present.building
         ? undefined

@@ -668,9 +668,9 @@ describe('the mitigation ladder', () => {
     }
   })
 
-  // FEAT: e a resposta não depende de quem despeja em conservação: com a fatia em ZERO a escada
-  // ainda salva nesta permutação — mas medido, ordem alguma salva um construtor pesado aqui, e a
-  // escada é o que segura este caso, não a ordem
+  // FEAT: com a fatia de conservação em ZERO as DUAS sustentam o caso, a escada e a ordem: medido,
+  // esta ordem sem a escada extingue as oito sementes, a escada na ordem do catálogo extingue as
+  // oito, e uma ordem sorteada, cerca de um terço das corridas
   it('still saves a world that puts nothing at all into conservation', () => {
     const spendthrift: Allocation = {
       agriculture: 40,
