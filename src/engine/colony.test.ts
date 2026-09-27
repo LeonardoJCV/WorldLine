@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  SPACE_ERA,
+  ROCKET,
+  canColonise,
   colonyCost,
   foundColony,
   heir,
@@ -30,9 +31,10 @@ import {
   INHERIT_ENVIRONMENT,
   INHERIT_SHOCK,
 } from './params.ts'
+import { Era } from './state.ts'
 import type { Body, BodyKind } from './system.ts'
 import { makeState } from './testing.ts'
-import { workIndex, workMods } from './work.ts'
+import { workIndex, workMods, type Work } from './work.ts'
 
 function body(index: number, kind: BodyKind, habitability: number, home = false): Body {
   return { index, kind, distance: 1 + index, habitability, home }
@@ -49,14 +51,16 @@ const BODIES: readonly Body[] = [
 // FEAT: o corpo 1 quase não dá sustento nenhum, mas ainda comporta gente
 const BARREN: readonly Body[] = [body(0, 'rocky', 0.95, true), body(1, 'ice', 0.05)]
 
+// FEAT: o foguete pronto é o portão, então toda frota deste arquivo parte de um mundo que o tem
+const FLOWN: readonly Work[] = [{ def: ROCKET, done: 2100, record: 0 }]
+
 function world(overrides: Partial<ColonisingWorld> = {}): ColonisingWorld {
   return {
-    eras: SPACE_ERA,
     energy: 14,
     population: 1e6,
     colonies: [],
     home: null,
-    works: [],
+    works: FLOWN,
     ...overrides,
   }
 }
@@ -66,9 +70,21 @@ function colony(overrides: Partial<Colony> = {}): Colony {
 }
 
 describe('foundColony', () => {
-  it('founds nothing before the space era', () => {
-    expect(foundColony(world({ eras: 0 }), BODIES, 2400, 7)).toBeNull()
-    expect(foundColony(world({ eras: 1 | 2 | 4 }), BODIES, 2400, 7)).toBeNull()
+  it('refuses to colonise in the space era with no rocket', () => {
+    expect(foundColony(world({ works: [] }), BODIES, 2400, 7)).toBeNull()
+    // FEAT: a subida inteira menos o último degrau ainda não leva ninguém a nenhum corpo
+    const climbing = (['launchpad', 'telemetry', 'propellant'] as const).map((id, record) => ({
+      def: workIndex(id),
+      done: 2000 + record,
+      record,
+    }))
+    expect(foundColony(world({ works: climbing }), BODIES, 2400, 7)).toBeNull()
+  })
+
+  it('colonises once the rocket is done', () => {
+    expect(canColonise([])).toBe(false)
+    expect(canColonise(FLOWN)).toBe(true)
+    expect(foundColony(world(), BODIES, 2400, 7)?.body).toBe(3)
   })
 
   it('founds nothing without energy to spare', () => {
@@ -262,7 +278,7 @@ describe('tickColonies', () => {
     expect(colonyCost([colony({ support: 0 })], 0.7)).toBeCloseTo(COLONY_UPKEEP * 0.7, 12)
     expect(colonyCost([], 0.7)).toBe(0)
 
-    const works = [{ def: workIndex('shipyard'), done: 100, record: 0 }]
+    const works = [...FLOWN, { def: workIndex('shipyard'), done: 100, record: 1 }]
     const tight = {
       energy: COLONY_ENERGY_BASE + COLONY_FOUND_COST + COLONY_UPKEEP * 0.8,
       colonies: [colony({ body: 2, support: 0 })],
@@ -395,7 +411,7 @@ describe('inherit', () => {
     food: 9e5,
     energy: 13,
     economy: 9,
-    eras: SPACE_ERA,
+    eras: Era.space,
     colonies: [colony({ body: 3, population: 2e5, support: 1, record: 4 })],
     echoes: [{ target: 'technology', remaining: 3 }],
     debts: [{ kind: 'knowledge', owed: 30, since: 1950, origin: 'B' }],
@@ -462,5 +478,13 @@ describe('inherit', () => {
   it('never inherits a negative crowd, whatever it is handed', () => {
     expect(inherit(dead, colony({ population: -5 }), undefined).population).toBe(0)
     expect(inherit(dead, colony({ population: -5 }), undefined).environment).toBe(0)
+  })
+
+  // FEAT: o portão é a obra, e a obra atravessa: o herdeiro chega no corpo novo já podendo partir
+  it('keeps colonising after an inheritance, because the works came along', () => {
+    expect(canColonise(moved.works)).toBe(true)
+    const heirWorld = { ...moved, energy: 14, population: 1e6 }
+    expect(foundColony(heirWorld, BODIES, 2400, 7)?.body).toBe(2)
+    expect(foundColony({ ...heirWorld, works: [] }, BODIES, 2400, 7)).toBeNull()
   })
 })

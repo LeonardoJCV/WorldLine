@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Colony } from '../../engine/colony.ts'
 import type { EventRecord } from '../../engine/events.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, goldenWorld } from '../../engine/golden.ts'
 import { COLONY_SEED_POP, COLONY_SELF } from '../../engine/params.ts'
 import { system } from '../../engine/system.ts'
-import { Worldline } from '../../engine/worldline.ts'
 import { toSnapshot } from '../../worker/protocol.ts'
 import {
   bodyName,
@@ -180,7 +179,7 @@ describe('inheritanceView', () => {
 describe('the snapshot carrying home', () => {
   // FEAT: o mesmo caminho que worldline.test.ts:289-294 usa para chegar ao mundo que mudou de casa
   const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-  const line = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+  const line = goldenWorld(INHERITANCE_CASE.seed, plan)
   line.advance(3000)
 
   it('carries the body the history lives on into the snapshot', () => {

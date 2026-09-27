@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colonyCost, type Colony } from './colony.ts'
+import { ROCKET, colonyCost, type Colony } from './colony.ts'
 import type { Crossing, CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
 import { EVENTS, worldMetrics } from './events.ts'
@@ -24,9 +24,12 @@ import { step } from './step.ts'
 import { Era, NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
 import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
+import { WORKS, type Work } from './work.ts'
 
 const { world, state } = genesis(482913)
 const shift = { agriculture: 20, industry: 45, research: 20, conservation: 10, works: 5 }
+// FEAT: o foguete pronto é o portão da colonização, e o efeito dele é vazio: só o portão muda
+const FLOWN: readonly Work[] = [{ def: ROCKET, done: 0, record: 0 }]
 
 describe('step', () => {
   it('advances one year deterministically', () => {
@@ -318,6 +321,7 @@ describe('colonies', () => {
   const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
     makeState({
       eras: Era.space,
+      works: FLOWN,
       energy: 14,
       technology: 95,
       economy: 9,
@@ -335,18 +339,25 @@ describe('colonies', () => {
     expect(result.state.colonies[0]?.body).toBe(best.index)
   })
 
-  it('founds nothing in the very year the era opens: the door comes first', () => {
-    const opening = step(spacefaring({ eras: 0 }), TEST_WORLD, 0)
-    expect(opening.started.map((r) => r.event)).toContain('space_era')
-    expect(opening.state.colonies).toEqual([])
-    expect(opening.state.eras & Era.space).toBe(Era.space)
+  it('founds nothing in the very year the rocket is done: the work comes first', () => {
+    const cost = WORKS[ROCKET]?.cost ?? 0
+    const nearly = spacefaring({
+      works: [],
+      building: { def: ROCKET, progress: cost - 50, since: 0 },
+    })
+    const landed = step(nearly, TEST_WORLD, 0)
+    expect(landed.started.map((r) => r.event)).toContain('work_done')
+    expect(landed.state.works.map((done) => done.def)).toEqual([ROCKET])
+    expect(landed.state.colonies).toEqual([])
+    // FEAT: a camada das colônias corre antes do ano de obra, então a frota parte no ano seguinte
+    expect(step(landed.state, TEST_WORLD, landed.started.length).state.colonies).toHaveLength(1)
   })
 
   it('runs the year exactly as a grounded world would when there is nothing to spare', () => {
-    const grounded = step({ ...state, eras: 0 }, world, 0)
-    const reached = step({ ...state, eras: Era.space }, world, 0)
-    expect(reached.state.colonies).toEqual([])
-    expect({ ...reached.state, eras: grounded.state.eras }).toEqual(grounded.state)
+    const grounded = step(state, world, 0)
+    const flown = step({ ...state, works: FLOWN }, world, 0)
+    expect(flown.state.colonies).toEqual([])
+    expect({ ...flown.state, works: grounded.state.works }).toEqual(grounded.state)
   })
 
   it('charges the home world a flow, not a hoard, for every colony that cannot support itself', () => {
@@ -388,11 +399,15 @@ describe('leaving the planet, end to end', () => {
 
   function run(grounded: boolean): { world: typeof world; state: WorldState } {
     const born = genesis(482913)
-    let current: WorldState = { ...born.state, allocation: SPACER }
+    // FEAT: o mundo preso é o mesmo mundo sem o foguete, porque é a obra que abre o portão
+    let current: WorldState = {
+      ...born.state,
+      allocation: SPACER,
+      works: grounded ? [] : FLOWN,
+    }
     let records = 0
     for (let year = 0; year < YEARS && current.status === 'running'; year++) {
-      const input = grounded ? { ...current, eras: current.eras & ~Era.space } : current
-      const result = step(input, born.world, records)
+      const result = step(current, born.world, records)
       records += result.started.length
       current = result.state
     }
@@ -426,6 +441,7 @@ describe('the events a colony writes', () => {
   const reached = (overrides: Partial<WorldState> = {}): WorldState =>
     makeState({
       eras: Era.space,
+      works: FLOWN,
       energy: 14,
       technology: 95,
       economy: 9,
@@ -466,7 +482,7 @@ describe('the events a colony writes', () => {
   })
 
   it('leaves both moments out of a world that never left the planet', () => {
-    const grounded = step({ ...state, eras: 0 }, world, 0)
+    const grounded = step({ ...state, works: [] }, world, 0)
     expect(grounded.started.map((record) => record.event)).not.toContain('colony_founded')
     expect(grounded.started.map((record) => record.event)).not.toContain('colony_lost')
   })
@@ -774,6 +790,7 @@ describe('step, with a merge', () => {
     const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
       makeState({
         eras: Era.agricultural | Era.classical | Era.industrial | Era.electric | Era.space,
+        works: FLOWN,
         energy: 14,
         technology: 95,
         economy: 9,

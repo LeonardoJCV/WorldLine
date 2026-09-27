@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Commission } from './commission.ts'
 import type { Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from './golden.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, goldenWorld } from './golden.ts'
 import { hashState } from './hash.ts'
 import type { Merge } from './merge.ts'
 import { DEFAULT_ALLOCATION, HORIZON, PARADOX_GRACE } from './params.ts'
@@ -294,7 +294,7 @@ describe('collapse', () => {
 describe('a worldline that outlives its world', () => {
   const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
   const heirWorld = (years: number) => {
-    const line = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+    const line = goldenWorld(INHERITANCE_CASE.seed, plan)
     line.advance(years)
     return line
   }

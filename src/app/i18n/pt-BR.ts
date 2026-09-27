@@ -198,14 +198,14 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'verify.collapse.passed': 'O colapso e sua impressão digital conferem neste navegador.',
   'verify.collapse.mismatch': 'O colapso ou sua impressão digital diferem neste navegador.',
   'verify.collapse.script': 'Uma dívida nunca quitada',
-  'verify.script.inherited': 'Indústria e pesquisa, uma chegada',
+  'verify.script.inherited': 'A subida inteira, uma chegada',
   'verify.inheritance.title': 'Uma história que sobrevive ao próprio mundo',
   'verify.inheritance.lead':
-    'Um mundo que gasta séculos em indústria e pesquisa consegue sair do planeta e ocupar outro corpo do próprio sistema. Se uma dessas colônias aprende a se bastar antes de o mundo natal cair, a história não acaba com o planeta: a gente passa a ser a da colônia, os estoques recomeçam pequenos, o céu é outro, e o conhecimento atravessa. Esta página refaz esse mundo aqui, no seu navegador: ele funda a colônia no ano {founded}, perde o planeta onde nasceu no ano {ended} e segue em outro lugar a partir do ano {year}. O ano da fundação, o ano da queda, o ano da casa nova e a impressão digital desse primeiro ano são todos conferidos com os valores registrados no repositório — prova de que sobreviver ao próprio mundo é tão reprodutível quanto morrer com ele.',
+    'Um mundo que gasta séculos construindo — plataforma, telemetria, propelente, foguete — consegue sair do planeta e ocupar outro corpo do próprio sistema. Se uma dessas colônias aprende a se bastar antes de o mundo natal cair, a história não acaba com o planeta: a gente passa a ser a da colônia, os estoques recomeçam pequenos, o céu é outro, e o conhecimento atravessa. Esta página refaz esse mundo aqui, no seu navegador: ele funda a colônia no ano {founded}, perde o planeta onde nasceu no ano {ended} e segue em outro lugar a partir do ano {year}. O ano da fundação, o ano da queda, o ano da casa nova e a impressão digital desse primeiro ano são todos conferidos com os valores registrados no repositório — prova de que sobreviver ao próprio mundo é tão reprodutível quanto morrer com ele.',
   'verify.inheritance.running': 'Executando o mundo que muda de casa…',
   'verify.inheritance.passed': 'A herança e sua impressão digital conferem neste navegador.',
   'verify.inheritance.mismatch': 'A herança ou sua impressão digital diferem neste navegador.',
-  'verify.inheritance.script': 'Indústria, pesquisa e uma dívida nunca quitada',
+  'verify.inheritance.script': 'A subida inteira e uma dívida nunca quitada',
   'verify.script.merged': 'Duas mudanças, uma confluência',
   'verify.merge.title': 'Duas histórias que viram uma',
   'verify.merge.lead':

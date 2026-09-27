@@ -1,4 +1,4 @@
-import { foundColony, heir, inherit, tickColonies, type Colony } from './colony.ts'
+import { canColonise, foundColony, heir, inherit, tickColonies, type Colony } from './colony.ts'
 import { tickWork, type Commission } from './commission.ts'
 import type { Crossing } from './crossing.ts'
 import {
@@ -26,7 +26,7 @@ import { mergeStates, type Merge } from './merge.ts'
 import { PARADOX_GRACE } from './params.ts'
 import { Channel, uniform } from './rng.ts'
 import { derive, integrate } from './rules.ts'
-import { Era, changedSectors, type Decision, type WorldConfig, type WorldState } from './state.ts'
+import { changedSectors, type Decision, type WorldConfig, type WorldState } from './state.ts'
 import { system } from './system.ts'
 import { WORKS } from './work.ts'
 
@@ -107,7 +107,7 @@ function spaceEra(s: WorldState): readonly Cause[] {
 
 // FEAT: a camada das colônias corre antes do derive: quem parte e a frota que o ano cobra mudam ele
 function colonise(s: WorldState, world: WorldConfig, nextRecord: number): Departure {
-  if ((s.eras & Era.space) === 0 && s.colonies.length === 0) {
+  if (!canColonise(s.works) && s.colonies.length === 0) {
     return { state: s, migrated: 0, started: NO_RECORDS }
   }
   const bodies = system(world.seed)

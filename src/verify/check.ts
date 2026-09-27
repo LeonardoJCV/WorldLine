@@ -5,6 +5,7 @@ import {
   GOLDEN_SCRIPTS,
   INHERITANCE_CASE,
   MERGE_CASE,
+  goldenWorld,
   mergeSeam,
   type GoldenCase,
   type InheritanceCase,
@@ -25,7 +26,7 @@ export function runGoldenChecks(): GoldenResult[] {
     let world = worlds.get(key)
     if (!world) {
       const plan = GOLDEN_SCRIPTS[golden.script]
-      world = new Worldline(golden.seed, plan.decisions, null, plan.crossings)
+      world = goldenWorld(golden.seed, plan)
       worlds.set(key, world)
     }
     if (world.present.tick < golden.year) world.advance(golden.year - world.present.tick)
@@ -96,7 +97,7 @@ export interface InheritanceResult extends InheritanceCase {
 // virou lar e a cadeia causal que liga o momento à fundação da colônia que salvou a história
 export function runInheritanceCheck(): InheritanceResult {
   const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-  const world = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+  const world = goldenWorld(INHERITANCE_CASE.seed, plan)
   world.advance(INHERITANCE_CASE.year)
   const moments = world.records.filter((record) => record.event === 'inheritance')
   const moved = moments.length === 1 ? (moments[0]?.start ?? -1) : -1
@@ -139,8 +140,8 @@ export interface MergeResult extends MergeCase {
 export function runMergeCheck(): MergeResult {
   const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
   const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
-  const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
-  const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+  const receives = goldenWorld(MERGE_CASE.seed, host)
+  const departs = goldenWorld(MERGE_CASE.seed, guest)
   receives.advance(MERGE_CASE.tick)
   departs.advance(MERGE_CASE.tick)
 

@@ -21,12 +21,16 @@ import {
   INHERIT_ENVIRONMENT,
   INHERIT_SHOCK,
 } from './params.ts'
-import { Era, type WorldState } from './state.ts'
+import type { WorldState } from './state.ts'
 import { colonisable, type Body } from './system.ts'
-import { workMods, type Work } from './work.ts'
+import { workIndex, workMods, type Work } from './work.ts'
 
-// FEAT: um só lugar dono do bit da era espacial, agora que `Era` mora em state.ts
-export const SPACE_ERA = Era.space
+// FEAT: a era diz que a civilização pode tentar; o foguete pronto é o que a faz conseguir
+export const ROCKET = workIndex('rocket')
+
+export function canColonise(works: readonly Work[]): boolean {
+  return works.some((work) => work.def === ROCKET)
+}
 
 export interface Colony {
   readonly body: number
@@ -44,7 +48,6 @@ export interface HomeWorld {
 }
 
 export interface ColonisingWorld extends HomeWorld {
-  readonly eras: number
   readonly colonies: readonly Colony[]
   readonly home: number | null
   readonly works: readonly Work[]
@@ -78,7 +81,7 @@ export function foundColony(
   year: number,
   record: number,
 ): Colony | null {
-  if ((state.eras & SPACE_ERA) === 0) return null
+  if (!canColonise(state.works)) return null
   const price = colonyCost(state.colonies, workMods(state.works).colonyCost)
   if (spareEnergy(state) - price < COLONY_FOUND_COST) return null
 

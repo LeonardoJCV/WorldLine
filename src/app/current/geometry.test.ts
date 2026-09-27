@@ -249,11 +249,11 @@ describe('layoutEvents', () => {
 
   // FEAT: anos reais do roteiro INHERITANCE_CASE (seed 482913, 'inherited'), lidos de Worldline.records em 3000
   const inheritance = [
-    record('agricultural_revolution', 250, null),
-    record('era_classical', 543, null),
-    record('industrial_revolution', 644, null),
-    record('era_electric', 1331, null),
-    record('space_era', 1950, null),
+    record('agricultural_revolution', 395, null),
+    record('era_classical', 871, null),
+    record('industrial_revolution', 998, null),
+    record('era_electric', 1471, null),
+    record('space_era', 1725, null),
   ]
   const LABEL_WIDTH = 150
 

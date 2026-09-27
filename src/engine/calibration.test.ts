@@ -21,7 +21,7 @@ import {
 } from './params.ts'
 import { step } from './step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from './state.ts'
-import { PRESENTATION_ORDER, WORKS, isCommissionable, workIndex } from './work.ts'
+import { PRESENTATION_ORDER, WORKS, isCommissionable, workIndex, type Work } from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const balanced: Allocation = {
@@ -379,6 +379,10 @@ interface Left {
   readonly peakEnergy: number
 }
 
+// FEAT: o foguete pronto, de efeito vazio: os critérios abaixo medem a energia, o sustento e a
+// superlotação, não o portão, então o mundo recebe a obra de graça no ano em que a era o autoriza
+const FLOWN: readonly Work[] = [{ def: workIndex('rocket'), done: 0, record: 0 }]
+
 function leave(
   seed: number,
   decisions: readonly Decision[],
@@ -407,13 +411,8 @@ function leave(
       if (entry) arriving.push(entry)
       crossed++
     }
-    const result = step(
-      grounded ? { ...s, eras: s.eras & ~Era.space } : s,
-      origin.world,
-      records,
-      due,
-      arriving,
-    )
+    const flown = !grounded && (s.eras & Era.space) !== 0
+    const result = step(flown ? { ...s, works: FLOWN } : s, origin.world, records, due, arriving)
     records += result.started.length
     s = result.state
     if (eraAt < 0 && (s.eras & Era.space) !== 0) eraAt = s.tick

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Colony } from '../../engine/colony.ts'
 import { colonisable, system, type BodyKind } from '../../engine/system.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
-import { Worldline } from '../../engine/worldline.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, goldenWorld } from '../../engine/golden.ts'
 import { toSnapshot, type Snapshot } from '../../worker/protocol.ts'
 import { planetPalette, planetState } from '../planet/uniforms.ts'
 import { bodyLabelKey, systemPlacement, type PlacedBody } from './model.ts'
@@ -11,7 +10,7 @@ import { bodyPalette, bodyState, bodyYaw } from './palette.ts'
 // FEAT: um Snapshot de verdade, do mundo que chegou ao espaço, em vez de um literal inventado
 function snapshotFixture(year = INHERITANCE_CASE.ended - 1): Snapshot {
   const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-  const line = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+  const line = goldenWorld(INHERITANCE_CASE.seed, plan)
   line.advance(3000)
   return toSnapshot(line.stateAt(year))
 }

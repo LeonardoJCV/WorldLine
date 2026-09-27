@@ -8,7 +8,7 @@ import {
   type Crossing,
   type CrossingKind,
 } from '../../engine/crossing.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, goldenWorld } from '../../engine/golden.ts'
 import { hashState } from '../../engine/hash.ts'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
@@ -843,14 +843,24 @@ describe('a link to a history that outlived its world', () => {
       decisions: plan.decisions,
       branches: [],
       crossings: plan.crossings,
+      commissions: plan.commissions,
     }
     const back = decodeMultiverse(encodeMultiverse(value))
     expect(back).toEqual(value)
     const file = parseWorldFile(serializeWorld({ name: 'Heir', link: value }))
     expect(file?.link).toEqual(value)
 
-    const sent = new Worldline(value.seed, plan.decisions, null, plan.crossings)
-    const opened = new Worldline(value.seed, back?.decisions ?? [], null, back?.crossings ?? [])
+    const sent = goldenWorld(value.seed, plan)
+    // FEAT: o link é o roteiro inteiro — sem as comissões o mundo reaberto não tem foguete, não
+    // coloniza e não herda, e é isso que a igualdade dos dois fingerprints prova
+    const opened = new Worldline(
+      value.seed,
+      back?.decisions ?? [],
+      null,
+      back?.crossings ?? [],
+      [],
+      back?.commissions ?? [],
+    )
     sent.advance(INHERITANCE_CASE.year)
     opened.advance(INHERITANCE_CASE.year)
     expect(sent.present.status).toBe('running')

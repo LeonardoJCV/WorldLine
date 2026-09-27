@@ -14,6 +14,8 @@ import { toSnapshot, type FromWorker, type ToWorker, type WorldlineId } from './
 import { FakeClock } from './testing.ts'
 
 const SEED = 482913
+// FEAT: sete anos depois da fundação da colônia da herança, para a que deságua já ter uma frota
+const SEAM_YEAR = INHERITANCE_CASE.founded + 7
 const starved: Allocation = {
   agriculture: 5,
   industry: 45,
@@ -1183,10 +1185,11 @@ describe('SimulationHost: confluences', () => {
     host.handle({
       type: 'open',
       seed: INHERITANCE_CASE.seed,
-      tick: 2290,
+      tick: INHERITANCE_CASE.year,
       root: plan.decisions,
       branches: [],
       crossings: plan.crossings,
+      commissions: plan.commissions,
     })
     host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 100, allocation: balanced })
     // FEAT: A herdou a colônia do corpo 1 quando o natal caiu; B nunca saiu do natal
@@ -1982,10 +1985,11 @@ describe('SimulationHost: what the arrival record carries', () => {
     lived.host.handle({
       type: 'open',
       seed: INHERITANCE_CASE.seed,
-      tick: 1958,
+      tick: SEAM_YEAR,
       root: plan.decisions,
       branches: [],
       crossings: plan.crossings,
+      commissions: plan.commissions,
     })
     lived.host.handle({
       type: 'branch',
@@ -1999,7 +2003,7 @@ describe('SimulationHost: what the arrival record carries', () => {
     // FIX: `colonies: []` no recibo passava por todos os testes; a colônia da que deságua pinça isso
     expect(world(lived.sent, 'B')?.merges).toMatchObject([
       {
-        tick: 1958,
+        tick: SEAM_YEAR,
         self: 'B',
         other: 'A',
         direction: 'in',
@@ -2014,16 +2018,17 @@ describe('SimulationHost: what the arrival record carries', () => {
     host.handle({
       type: 'open',
       seed: INHERITANCE_CASE.seed,
-      tick: 1960,
+      tick: SEAM_YEAR + 2,
       root: plan.decisions,
       crossings: plan.crossings,
-      merges: [{ tick: 1958, self: 'A', other: 'B', direction: 'out' }],
+      commissions: plan.commissions,
+      merges: [{ tick: SEAM_YEAR, self: 'A', other: 'B', direction: 'out' }],
       branches: [
         {
           parent: 0,
           fork: 100,
           decisions: [{ tick: 100, allocation: balanced }],
-          merges: [{ tick: 1958, self: 'B', other: 'A', direction: 'in' }],
+          merges: [{ tick: SEAM_YEAR, self: 'B', other: 'A', direction: 'in' }],
         },
       ],
     })

@@ -10,7 +10,14 @@ import {
   type Dose,
 } from './crossing.ts'
 import { METRICS, worldMetrics } from './events.ts'
-import { GOLDEN_CASES, GOLDEN_SCRIPTS, INHERITANCE_CASE, MERGE_CASE, mergeSeam } from './golden.ts'
+import {
+  GOLDEN_CASES,
+  GOLDEN_SCRIPTS,
+  INHERITANCE_CASE,
+  MERGE_CASE,
+  goldenWorld,
+  mergeSeam,
+} from './golden.ts'
 import { hashState } from './hash.ts'
 import { HORIZON } from './params.ts'
 import { Era, VARIABLES, hasEra, type Allocation, type Decision } from './state.ts'
@@ -116,7 +123,7 @@ const drainScript = (maxTick: number) =>
 describe('golden hashes', () => {
   it.each(GOLDEN_CASES)('seed $seed, $script, year $year', ({ seed, script, year, hash }) => {
     const plan = GOLDEN_SCRIPTS[script]
-    const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+    const w = goldenWorld(seed, plan)
     w.advance(year)
     expect(w.hashAt(year)).toBe(hash)
   })
@@ -125,7 +132,7 @@ describe('golden hashes', () => {
 describe('the inheritance fingerprint', () => {
   it('reproduces the first year of a history that outlived its own world', () => {
     const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-    const w = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+    const w = goldenWorld(INHERITANCE_CASE.seed, plan)
     w.advance(INHERITANCE_CASE.year)
     expect(w.present.tick).toBe(INHERITANCE_CASE.year)
     expect(w.present.status).toBe('running')
@@ -137,7 +144,7 @@ describe('the inheritance fingerprint', () => {
     // FEAT: nenhum roteiro de referência chega ao espaço, então nenhum deles sente esta tarefa
     for (const { seed, script, year, hash } of GOLDEN_CASES) {
       const plan = GOLDEN_SCRIPTS[script]
-      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      const w = goldenWorld(seed, plan)
       w.advance(year)
       expect(w.present.colonies).toEqual([])
       expect(w.present.home).toBeNull()
@@ -148,7 +155,7 @@ describe('the inheritance fingerprint', () => {
   it('leaves all sixteen fingerprints alone, because no reference script merges', () => {
     for (const { seed, script, year, hash } of GOLDEN_CASES) {
       const plan = GOLDEN_SCRIPTS[script]
-      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      const w = goldenWorld(seed, plan)
       w.advance(year)
       expect(w.present.lastMerge).toBeNull()
       expect(w.present.status).not.toBe('merged')
@@ -162,8 +169,8 @@ describe('the merge fingerprint', () => {
   function histories() {
     const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
     const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
-    const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
-    const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+    const receives = goldenWorld(MERGE_CASE.seed, host)
+    const departs = goldenWorld(MERGE_CASE.seed, guest)
     receives.advance(MERGE_CASE.tick)
     departs.advance(MERGE_CASE.tick)
     return { receives, departs, seam: mergeSeam(departs.present) }
@@ -204,7 +211,7 @@ describe('the merge fingerprint', () => {
     // FEAT: sem a costura o mesmo roteiro no mesmo ano dá outro fingerprint — é o que prova que o
     // valor fixado carrega a confluência, e não apenas as duas viradas de `merged`
     const plan = GOLDEN_SCRIPTS[MERGE_CASE.script]
-    const alone = new Worldline(MERGE_CASE.seed, plan.decisions, null, plan.crossings)
+    const alone = goldenWorld(MERGE_CASE.seed, plan)
     alone.advance(MERGE_CASE.year)
     expect(alone.present.lastMerge).toBeNull()
     expect(alone.hashAt(MERGE_CASE.year)).not.toBe(MERGE_CASE.hash)
@@ -243,7 +250,7 @@ describe('space era gate', () => {
       if (seen.has(key)) continue
       seen.add(key)
       const plan = GOLDEN_SCRIPTS[script]
-      const w = new Worldline(seed, plan.decisions, null, plan.crossings)
+      const w = goldenWorld(seed, plan)
       w.advance(HORIZON)
       for (let t = 0; t <= w.present.tick; t += 25) {
         expect(hasEra(w.stateAt(t), Era.space)).toBe(false)

@@ -300,8 +300,9 @@ test('dives to the planet with the visible way down, no gesture needed', async (
 test('reads the natal body alive and the colony with people before the inheritance', async ({
   page,
 }) => {
-  // FEAT: semente 4242 (support.ts), ano 2500 — as duas colônias já fundadas, o natal ainda de pé
-  await page.goto(siblingInheritanceLink(2500))
+  // FEAT: semente 4242 (support.ts), um século antes da queda — as duas colônias já de pé e o
+  // mundo natal também
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended - 100))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 30_000 })
   await enter.click()

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { ROCKET } from '../engine/colony.ts'
 import {
   GOLDEN_CASES,
   GOLDEN_SCRIPTS,
   INHERITANCE_CASE,
   MERGE_CASE,
+  goldenWorld,
   mergeSeam,
 } from '../engine/golden.ts'
 import { CAUSAL_WINDOW } from '../engine/params.ts'
+import { WORKS } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
   COLLAPSE_CASE,
@@ -97,18 +100,19 @@ describe('runMergeCheck', () => {
   })
 })
 
-describe('the works the reference histories never build', () => {
-  // FEAT: nenhum roteiro comissiona nada, então os dezessete têm de sair com a obra vazia — e é
-  // essa afirmação, e não a confiança, que sustenta que nenhum fingerprint se moveu nesta tarefa
+describe('the works the reference histories build, and the ones they never do', () => {
+  // FEAT: quinze dos dezessete não comissionam nada, então têm de sair com a obra vazia; a herança
+  // é a única que constrói, porque sem o foguete pronto ela não colonizaria e não herdaria
   const idle = (world: Worldline) => {
     expect(world.present.works).toEqual([])
     expect(world.present.building).toBeNull()
   }
 
-  it('leaves all seventeen fingerprints alone, with no work done and none under way', () => {
+  it('leaves the fifteen grounded fingerprints alone, with no work done and none under way', () => {
     for (const { seed, script, year, hash } of GOLDEN_CASES) {
       const plan = GOLDEN_SCRIPTS[script]
-      const world = new Worldline(seed, plan.decisions, null, plan.crossings)
+      expect(plan.commissions, script).toEqual([])
+      const world = goldenWorld(seed, plan)
       world.advance(year)
       idle(world)
       expect(world.hashAt(year)).toBe(hash)
@@ -124,21 +128,10 @@ describe('the works the reference histories never build', () => {
     idle(collapsing)
     expect(collapsing.hashAt(COLLAPSE_CASE.year)).toBe(COLLAPSE_CASE.hash)
 
-    const inherited = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-    const heir = new Worldline(
-      INHERITANCE_CASE.seed,
-      inherited.decisions,
-      null,
-      inherited.crossings,
-    )
-    heir.advance(INHERITANCE_CASE.year)
-    idle(heir)
-    expect(heir.hashAt(INHERITANCE_CASE.year)).toBe(INHERITANCE_CASE.hash)
-
     const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
     const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
-    const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
-    const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+    const receives = goldenWorld(MERGE_CASE.seed, host)
+    const departs = goldenWorld(MERGE_CASE.seed, guest)
     receives.advance(MERGE_CASE.tick)
     departs.advance(MERGE_CASE.tick)
     receives.merge(mergeSeam(departs.present).receives)
@@ -148,11 +141,24 @@ describe('the works the reference histories never build', () => {
     expect(receives.hashAt(MERGE_CASE.year)).toBe(MERGE_CASE.hash)
   })
 
+  // FEAT: o portão é a obra, não a era: a herança comissiona a subida inteira, e o foguete fecha
+  // antes da fundação da colônia que acabou salvando a história
+  it('builds the whole climb on the history that outlived its world, rocket before colony', () => {
+    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+    const heir = goldenWorld(INHERITANCE_CASE.seed, plan)
+    heir.advance(INHERITANCE_CASE.year)
+    expect(heir.present.works).toHaveLength(WORKS.length)
+    expect(plan.commissions).toHaveLength(WORKS.length)
+    const rocket = heir.present.works.find((work) => work.def === ROCKET)
+    expect(rocket?.done).toBeLessThan(INHERITANCE_CASE.founded)
+    expect(heir.hashAt(INHERITANCE_CASE.year)).toBe(INHERITANCE_CASE.hash)
+  })
+
   // FEAT: o recibo carrega as obras da que deságua, e é por isso que a costura pode uni-las; com os
   // roteiros de referência ela carrega uma lista vazia, e é por isso que o hash da confluência parou
   it('stamps the works of the departing history on the receipt, empty or not', () => {
     const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
-    const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+    const departs = goldenWorld(MERGE_CASE.seed, guest)
     departs.advance(MERGE_CASE.tick)
     expect(mergeSeam(departs.present).receives.works).toEqual([])
 

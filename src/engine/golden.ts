@@ -1,13 +1,18 @@
+import type { Commission } from './commission.ts'
 import type { Crossing } from './crossing.ts'
 import type { Merge } from './merge.ts'
 import { VARIABLES, type Decision, type Variable, type WorldState } from './state.ts'
 import { system } from './system.ts'
+import { Worldline } from './worldline.ts'
 
 export type GoldenScript = 'steady' | 'shifting' | 'crossed' | 'inherited' | 'merged'
 
 export interface GoldenPlan {
   readonly decisions: readonly Decision[]
   readonly crossings: readonly Crossing[]
+  // FEAT: a obra que o roteiro encomenda no ano em que o canteiro ficou livre; sem ela um roteiro
+  // de referência nunca chega ao foguete, e sem foguete nenhuma história coloniza
+  readonly commissions: readonly Commission[]
 }
 
 const SHIFTING: readonly Decision[] = [
@@ -66,27 +71,66 @@ const CROSSED: readonly Crossing[] = [
   },
 ]
 
-// FEAT: indústria e pesquisa sem trégua, o único caminho que chega à era espacial
-// FEAT: num roteiro espacial a parcela de obras sai da agricultura, porque tirá-la da indústria
-// fecha a era espacial em todas as sementes
+// FEAT: a alocação de `WORKS_PATH`, a que a calibração conduz até o foguete: medido, a de antes
+// (a15 i50 r30 c0 w5) extingue por volta do ano 970 quando o mundo passa a construir de verdade
 const SPACEFARING: readonly Decision[] = [
   {
     tick: 0,
-    allocation: { agriculture: 15, industry: 50, research: 30, conservation: 0, works: 5 },
+    allocation: { agriculture: 25, industry: 25, research: 20, conservation: 5, works: 25 },
   },
 ]
 
-// FEAT: um presente que um mundo de tecnologia saturada não tem como quitar; a dívida vira
-// paradoxo, o paradoxo vence o prazo, e o mundo natal cai — com uma colônia de pé
+// FEAT: o catálogo inteiro, cada obra no ano em que o canteiro ficou livre para ela — anos medidos
+// conduzindo a alocação acima na ordem que o jogo apresenta, não anos escolhidos à mão
+const CLIMB: readonly Commission[] = [
+  { tick: 396, work: 'irrigation' },
+  { tick: 405, work: 'plough' },
+  { tick: 416, work: 'granary' },
+  { tick: 423, work: 'calendar' },
+  { tick: 432, work: 'pottery' },
+  { tick: 872, work: 'writing' },
+  { tick: 882, work: 'roads' },
+  { tick: 896, work: 'coinage' },
+  { tick: 910, work: 'aqueduct' },
+  { tick: 924, work: 'navigation' },
+  { tick: 939, work: 'reforestation' },
+  { tick: 999, work: 'printing' },
+  { tick: 1026, work: 'metallurgy' },
+  { tick: 1049, work: 'steam' },
+  { tick: 1070, work: 'railway' },
+  { tick: 1091, work: 'sanitation' },
+  { tick: 1100, work: 'filters' },
+  { tick: 1472, work: 'electrification' },
+  { tick: 1483, work: 'telegraph' },
+  { tick: 1496, work: 'chemistry' },
+  { tick: 1510, work: 'medicine' },
+  { tick: 1522, work: 'computer' },
+  { tick: 1535, work: 'cleanGrid' },
+  { tick: 1726, work: 'arcology' },
+  { tick: 1751, work: 'reactor' },
+  { tick: 1782, work: 'closedCycle' },
+  { tick: 1810, work: 'launchpad' },
+  { tick: 1902, work: 'telemetry' },
+  { tick: 1993, work: 'propellant' },
+  { tick: 2087, work: 'rocket' },
+  { tick: 2182, work: 'orbit' },
+  { tick: 2191, work: 'shipyard' },
+]
+
+// FEAT: um empréstimo que fecha um ciclo entre duas histórias: o paradoxo chega com a travessia e
+// a tecnologia saturada nunca quita a dívida que o desfaria, então o prazo vence e o mundo natal
+// cai — com uma colônia de pé. Medido: num mundo que constrói, dívida cobrável nenhuma pesa o
+// bastante para o paradoxo da dívida, porque a razão dela cai com o tamanho do mundo
 const UNPAYABLE: readonly Crossing[] = [
   {
-    tick: 1950,
+    tick: 2270,
     kind: 'knowledge',
     dose: 3,
     amounts: [5],
-    origin: { world: 'B', tick: 1950 },
+    origin: { world: 'B', tick: 2270 },
     cost: 30,
     direction: 'in',
+    circular: true,
   },
 ]
 
@@ -104,11 +148,17 @@ const CONFLUENT: readonly Decision[] = [
 ]
 
 export const GOLDEN_SCRIPTS: Readonly<Record<GoldenScript, GoldenPlan>> = {
-  steady: { decisions: [], crossings: [] },
-  shifting: { decisions: SHIFTING, crossings: [] },
-  crossed: { decisions: SHIFTING, crossings: CROSSED },
-  inherited: { decisions: SPACEFARING, crossings: UNPAYABLE },
-  merged: { decisions: CONFLUENT, crossings: [] },
+  steady: { decisions: [], crossings: [], commissions: [] },
+  shifting: { decisions: SHIFTING, crossings: [], commissions: [] },
+  crossed: { decisions: SHIFTING, crossings: CROSSED, commissions: [] },
+  inherited: { decisions: SPACEFARING, crossings: UNPAYABLE, commissions: CLIMB },
+  merged: { decisions: CONFLUENT, crossings: [], commissions: [] },
+}
+
+// FEAT: um roteiro de referência são três listas, e montá-lo num lugar só é o que impede um
+// consumidor de esquecer as comissões e ler um mundo que nunca chegou ao foguete
+export function goldenWorld(seed: number, plan: GoldenPlan): Worldline {
+  return new Worldline(seed, plan.decisions, null, plan.crossings, [], plan.commissions)
 }
 
 export interface GoldenCase {
@@ -150,10 +200,10 @@ export interface InheritanceCase {
 export const INHERITANCE_CASE: InheritanceCase = {
   seed: 482913,
   script: 'inherited',
-  founded: 1951,
-  ended: 2229,
-  year: 2230,
-  hash: '8f8b86c8',
+  founded: 2182,
+  ended: 2470,
+  year: 2471,
+  hash: '3681f2a0',
 }
 
 // FEAT: um GoldenPlan descreve UMA história, e uma confluência são duas; o caso nomeia os dois
