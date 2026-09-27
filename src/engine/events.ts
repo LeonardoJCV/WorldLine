@@ -71,34 +71,67 @@ export interface Condition {
   readonly value: number
 }
 
-// FEAT: o que cada chave da camada permanente move, para a obra pronta poder ser nomeada como causa
-const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly Metric[]>> = {
-  harvest: ['food', 'foodSecurity'],
-  production: ['food', 'foodSecurity', 'economy', 'economyTrend'],
-  research: ['technology'],
-  energy: ['energy', 'energyRatio'],
-  economy: ['economy', 'economyTrend'],
-  capacity: ['crowding'],
-  colonyCost: ['energyRatio'],
-  mortality: ['population'],
-  spoil: ['food', 'foodSecurity'],
-  harvestNoise: ['food', 'foodSecurity'],
-  pollution: ['environment'],
+// FEAT: um empurrão de primeira ordem: a métrica que a chave move e para que lado, com sinal 0 para
+// o que ela move sem direção definida — o sinal 0 conta como toque e nunca vira causa
+interface WorkPush {
+  readonly metric: Metric
+  readonly sign: number
 }
 
-function workInfluences(def: number): readonly Metric[] {
+const up = (metric: Metric): WorkPush => ({ metric, sign: 1 })
+const down = (metric: Metric): WorkPush => ({ metric, sign: -1 })
+const blind = (metric: Metric): WorkPush => ({ metric, sign: 0 })
+
+// FEAT: o que cada chave da camada permanente move quando cresce, com a direção de primeira ordem
+const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly WorkPush[]>> = {
+  harvest: [up('food'), up('foodSecurity')],
+  production: [up('food'), up('foodSecurity'), up('economy'), up('economyTrend')],
+  research: [up('technology')],
+  // FIX: energia empurra o ambiente porque a poluição é proporcional a ela, como a fatia de
+  // indústria já declarava pelo mesmo caminho; a razão de energia move um alvo, não um nível
+  energy: [up('energy'), down('environment'), blind('energyRatio')],
+  economy: [up('economy'), up('economyTrend')],
+  capacity: [down('crowding')],
+  colonyCost: [down('energy'), blind('energyRatio')],
+  mortality: [down('population')],
+  spoil: [down('food'), down('foodSecurity')],
+  // FEAT: variância não tem lado: ela alarga o ano, então toca sem nunca apontar direção
+  harvestNoise: [blind('food'), blind('foodSecurity')],
+  pollution: [down('environment')],
+}
+
+// FEAT: os empurrões de uma obra, já com o sinal do valor do catálogo multiplicado dentro
+function pushesOf(def: number): readonly WorkPush[] {
   const effect = WORKS[def]?.effect
   if (!effect) return []
-  return METRICS.filter((metric) =>
-    [...FACTOR_KEYS, ...TERM_KEYS].some(
-      (key) => effect[key] !== undefined && WORK_INFLUENCES[key].includes(metric),
-    ),
+  const pushes: WorkPush[] = []
+  const add = (key: WorkKey, dir: number) => {
+    for (const push of WORK_INFLUENCES[key])
+      pushes.push({ metric: push.metric, sign: dir * push.sign })
+  }
+  for (const key of FACTOR_KEYS) {
+    const factor = effect[key]
+    if (factor !== undefined) add(key, Math.sign(factor - 1))
+  }
+  for (const key of TERM_KEYS) {
+    const term = effect[key]
+    if (term !== undefined) add(key, Math.sign(term))
+  }
+  return pushes
+}
+
+// FIX: a obra só é causa quando empurra a métrica rompida para o lado do rompimento; sem isso uma
+// camada permanente e cega de direção culpa toda crise pelas melhorias que vieram antes dela
+function pushesInto(def: number, condition: Condition): boolean {
+  return pushesOf(def).some(
+    (push) =>
+      push.metric === condition.metric && (condition.op === '<' ? push.sign < 0 : push.sign > 0),
   )
 }
 
 // FEAT: a união do que o catálogo inteiro move — o recibo da obra e a fatia de obras falam por ela
 const WORK_METRICS: readonly Metric[] = METRICS.filter((metric) =>
-  WORKS.some((_, def) => workInfluences(def).includes(metric)),
+  WORKS.some((_, def) => pushesOf(def).some((push) => push.metric === metric)),
 )
 
 export interface EventDef {
@@ -530,9 +563,13 @@ function causesOf(
     if (other.influences.some(involved)) causes.push({ kind: 'event', record: entry.record })
   }
 
-  // FEAT: a obra pronta não tem janela como a decisão tem, porque a marca dela não expira nunca
+  // FEAT: a obra pronta não tem janela como a decisão tem, porque a marca dela não expira nunca —
+  // mas a que fechou neste ano só move coeficiente no ano seguinte, então hoje ela não é causa
   for (const work of s.works) {
-    if (workInfluences(work.def).some(involved)) causes.push({ kind: 'event', record: work.record })
+    if (work.done === s.tick) continue
+    if (def.trigger.some((c) => pushesInto(work.def, c))) {
+      causes.push({ kind: 'event', record: work.record })
+    }
   }
 
   const decision = s.lastDecision

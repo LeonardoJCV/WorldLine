@@ -17,7 +17,7 @@ export interface Commission {
 
 // FEAT: o ano de obra sai da produção do ano, nunca de um estoque; população entra pela raiz
 // para que dez mil anos de crescimento não achatem os custos das últimas obras
-export function progressWork(s: WorldState, mods: WorkMods = workMods(s.works)): number {
+export function progressWork(s: WorldState, mods: WorkMods): number {
   const share = s.allocation.works / 100
   return K.workRate * share * s.economy * Math.sqrt(s.population / 1e6) * mods.production
 }
@@ -59,7 +59,9 @@ export function tickWork(s: WorldState, nextRecord: number, commission?: Commiss
   }
   const def = building ? WORKS[building.def] : undefined
   if (!building || !def) return { works: s.works, building: null, finished: null }
-  const progress = building.progress + progressWork(s)
+  // FEAT: o ano de obra corre antes de os modificadores do ano serem colhidos, então o que entra
+  // aqui é a camada das obras prontas, nunca a dos acontecimentos
+  const progress = building.progress + progressWork(s, workMods(s.works))
   if (progress < def.cost) {
     return { works: s.works, building: { ...building, progress }, finished: null }
   }

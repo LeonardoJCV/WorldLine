@@ -303,19 +303,24 @@ describe('the permanent layer of the works', () => {
     readonly rises: (value: number) => boolean
   }
 
-  // FEAT: onde cada chave do catálogo aterra, e para que lado ela empurra a grandeza que toca
-  const READINGS: Readonly<Record<WorkKey, Reading>> = {
-    harvest: { read: (s) => derived(s).foodProduction, rises: (v) => v > 1 },
-    production: { read: (s) => derived(s).foodProduction, rises: (v) => v > 1 },
-    research: { read: (s) => year(s).technology, rises: (v) => v > 1 },
-    energy: { read: (s) => derived(s).energyTarget, rises: (v) => v > 1 },
-    economy: { read: (s) => year(s).economy, rises: (v) => v > 1 },
-    capacity: { read: (s) => derived(s).carryingCapacity, rises: (v) => v > 1 },
-    colonyCost: { read: (s) => derived(s).energyTarget, rises: (v) => v < 1 },
-    mortality: { read: (s) => derived(s).deathRate, rises: (v) => v > 0 },
-    spoil: { read: (s) => derived(s).foodAvailable, rises: (v) => v < 0 },
-    harvestNoise: { read: (s) => derived(s).foodProduction, rises: (v) => v < 0 },
-    pollution: { read: (s) => derived(s).pollution, rises: (v) => v > 0 },
+  // FEAT: onde cada chave do catálogo aterra, e para que lado ela empurra cada grandeza que toca —
+  // uma chave pode ter mais de um alvo, e cada alvo tem de ser medido
+  const READINGS: Readonly<Record<WorkKey, readonly Reading[]>> = {
+    harvest: [{ read: (s) => derived(s).foodProduction, rises: (v) => v > 1 }],
+    // FEAT: production aterra duas vezes, como mods.production: na colheita e no alvo da economia
+    production: [
+      { read: (s) => derived(s).foodProduction, rises: (v) => v > 1 },
+      { read: (s) => year(s).economy, rises: (v) => v > 1 },
+    ],
+    research: [{ read: (s) => year(s).technology, rises: (v) => v > 1 }],
+    energy: [{ read: (s) => derived(s).energyTarget, rises: (v) => v > 1 }],
+    economy: [{ read: (s) => year(s).economy, rises: (v) => v > 1 }],
+    capacity: [{ read: (s) => derived(s).carryingCapacity, rises: (v) => v > 1 }],
+    colonyCost: [{ read: (s) => derived(s).energyTarget, rises: (v) => v < 1 }],
+    mortality: [{ read: (s) => derived(s).deathRate, rises: (v) => v > 0 }],
+    spoil: [{ read: (s) => derived(s).foodAvailable, rises: (v) => v < 0 }],
+    harvestNoise: [{ read: (s) => derived(s).foodProduction, rises: (v) => v < 0 }],
+    pollution: [{ read: (s) => derived(s).pollution, rises: (v) => v > 0 }],
   }
 
   it('derives differently for two worlds identical except their works', () => {
@@ -349,9 +354,11 @@ describe('the permanent layer of the works', () => {
     expect(d.carryingCapacity).toBe(d.capacity * (1 - 1 / (K.laborShare * K.y0)))
   })
 
-  it('reads all eleven keys of the layer, so no key lands nowhere', () => {
+  it('reads all eleven keys of the layer and all twelve landings, so none lands nowhere', () => {
     expect(WORK_KEYS).toHaveLength(11)
     expect(Object.keys(READINGS).sort()).toEqual([...WORK_KEYS].sort())
+    const landings = WORK_KEYS.reduce((sum, key) => sum + READINGS[key].length, 0)
+    expect(landings).toBe(12)
   })
 
   const EFFECTFUL = WORKS.map((work, def) => ({ id: work.id, def, effect: work.effect })).filter(
@@ -371,12 +378,13 @@ describe('the permanent layer of the works', () => {
     for (const key of WORK_KEYS) {
       const value = effect[key]
       if (value === undefined) continue
-      const reading = READINGS[key]
-      const label = `${id}.${key}`
-      if (reading.rises(value)) {
-        expect(reading.read(after), label).toBeGreaterThan(reading.read(before))
-      } else {
-        expect(reading.read(after), label).toBeLessThan(reading.read(before))
+      for (const [target, reading] of READINGS[key].entries()) {
+        const label = `${id}.${key}#${target}`
+        if (reading.rises(value)) {
+          expect(reading.read(after), label).toBeGreaterThan(reading.read(before))
+        } else {
+          expect(reading.read(after), label).toBeLessThan(reading.read(before))
+        }
       }
     }
   })

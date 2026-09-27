@@ -7,12 +7,15 @@ import {
   computeMetrics,
   evaluateEvents,
   type EventDef,
+  type EventId,
+  type Metric,
+  type Metrics,
 } from './events.ts'
 import { CAUSAL_WINDOW } from './params.ts'
 import { NEUTRAL_MODIFIERS, derive, integrate } from './rules.ts'
-import { Era, NEVER, type WorldState } from './state.ts'
+import { Era, NEVER, type Work, type WorldState } from './state.ts'
 import { TEST_WORLD, makeMetrics, makeState } from './testing.ts'
-import { workIndex } from './work.ts'
+import { WORKS, workIndex } from './work.ts'
 
 const shortage: EventDef = {
   id: 'famine',
@@ -541,10 +544,84 @@ describe('the works in the causal chain', () => {
     expect(crisis(s)).toContainEqual({ kind: 'event', record: 12 })
   })
 
+  // FIX: o reator move a energia, e a poluição é proporcional à energia — a obra que destruiu a
+  // biosfera tem de ser nomeada por ela, como a fatia de indústria já era pelo mesmo caminho
+  it('names the reactor for the biosphere its energy destroyed', () => {
+    const s = world(EVENTS, { works: [{ def: workIndex('reactor'), done: 40, record: 12 }] })
+    expect(crisis(s)).toContainEqual({ kind: 'event', record: 12 })
+  })
+
   it('blames a work only for what it touched', () => {
     const granary = workIndex('granary')
     const s = world(EVENTS, { works: [{ def: granary, done: 40, record: 12 }] })
     expect(crisis(s)?.some((cause) => cause.kind === 'event')).toBe(false)
+  })
+
+  // FIX: e só para o lado do rompimento — uma obra que empurra a métrica para o lado bom não é
+  // causa da quebra dela, senão toda crise vira culpa das melhorias que vieram antes
+  const named = (works: readonly Work[], metrics: Metrics, event: EventId) =>
+    evaluateEvents(world(EVENTS, { works }), metrics, 1, 30)
+      .started.find((r) => r.event === event)
+      ?.causes.filter((cause) => cause.kind === 'event').length ?? -1
+
+  it('never blames the healers for the die-off they spent centuries delaying', () => {
+    const healers = ['aqueduct', 'sanitation', 'medicine'] as const
+    const works = healers.map((id, i) => ({ def: workIndex(id), done: 40, record: 12 + i }))
+    expect(named(works, makeMetrics({ population: 500 }), 'extinction')).toBe(0)
+  })
+
+  it('never blames the shipyard for the energy crisis: it lowered the price of the fleet', () => {
+    const works = [{ def: workIndex('shipyard'), done: 40, record: 12 }]
+    const short = makeMetrics({ energyRatio: 0.5, economyTrend: 0.95 })
+    expect(named(works, short, 'energy_crisis')).toBe(0)
+  })
+
+  // FEAT: a fome malthusiana da irrigação é real e de segunda ordem, e esta engine não a modela —
+  // fica de fora de propósito, porque uma causa faltando é lacuna e uma causa errada é mentira
+  it('never blames the irrigation for the famine, and leaves that gap on purpose', () => {
+    const works = [{ def: workIndex('irrigation'), done: 40, record: 12 }]
+    expect(named(works, makeMetrics({ foodSecurity: 0.5 }), 'famine')).toBe(0)
+  })
+
+  it('still names the irrigation for the revolution its food opened', () => {
+    const works = [{ def: workIndex('irrigation'), done: 40, record: 12 }]
+    const fed = makeMetrics({ technology: 25, foodSecurity: 1.5 })
+    expect(named(works, fed, 'agricultural_revolution')).toBe(1)
+  })
+
+  // FEAT: a obra que fechou neste ano só move coeficiente no ano seguinte, então não é causa hoje
+  it('never names a work finished this very year', () => {
+    const today = world(EVENTS, { works: [{ def: chemistry, done: 100, record: 12 }] })
+    expect(today.tick).toBe(100)
+    expect(crisis(today)?.some((cause) => cause.kind === 'event')).toBe(false)
+    const yesterday = world(EVENTS, { works: [{ def: chemistry, done: 99, record: 12 }] })
+    expect(crisis(yesterday)).toContainEqual({ kind: 'event', record: 12 })
+  })
+
+  // FEAT: o teto, com as vinte e cinco obras de pé: a era espacial nomeia as quinze que empurraram
+  // os três portões dela para cima, e nenhuma crise nomeia obra nenhuma
+  it('bounds how many works one record can ever name', () => {
+    const all = WORKS.map((_, def) => ({ def, done: 40, record: 100 + def }))
+    const climbed = Era.agricultural | Era.classical | Era.industrial | Era.electric
+    const s = world(EVENTS, { works: all, eras: climbed })
+    const reached = evaluateEvents(
+      s,
+      makeMetrics({ technology: 95, energy: 20, economy: 12 }),
+      1,
+      0,
+    )
+    const era = reached.started.find((r) => r.event === 'space_era')
+    expect(reached.started.map((r) => r.event)).toEqual(['space_era'])
+    expect(era?.causes.filter((cause) => cause.kind === 'event')).toHaveLength(15)
+    expect(era?.causes).toHaveLength(18)
+
+    for (const event of ['famine', 'extinction', 'energy_crisis', 'recession'] as const) {
+      const def = EVENTS.find((d) => d.id === event)
+      if (!def) throw new Error(`missing ${event}`)
+      const breached = { ...makeMetrics() } as Record<Metric, number>
+      for (const c of def.trigger) breached[c.metric] = c.op === '<' ? c.value / 2 : c.value * 2 + 1
+      expect(named(all, breached as Metrics, event), event).toBe(0)
+    }
   })
 
   it('names the works slice of a recent decision, because the slice now moves metrics', () => {

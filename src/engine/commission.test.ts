@@ -6,7 +6,7 @@ import { DEFAULT_ALLOCATION, HORIZON, PARAMS } from './params.ts'
 import { Era, type WorldState } from './state.ts'
 import { step } from './step.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
-import { NEUTRAL_MODS, WORKS, findWork, workIndex, type WorkId } from './work.ts'
+import { NEUTRAL_MODS, WORKS, findWork, workIndex, workMods, type WorkId } from './work.ts'
 
 const base = makeState()
 
@@ -78,22 +78,32 @@ describe('progressWork', () => {
     expect(progressWork(world, NEUTRAL_MODS)).toBeCloseTo(PARAMS.workRate * share * 4 * 3, 10)
   })
 
-  it('reads the modifiers from the works already done when none are handed to it', () => {
+  // FIX: sem argumento padrão, quem chama diz o que entrega — um padrão silencioso absorve a
+  // fiação errada, e o único chamador de produção entrega a camada das obras prontas
+  it('is handed the modifiers of the works already done by its only caller', () => {
     const plain = { ...base, economy: 4, population: 4e6 }
-    const forged = {
-      ...plain,
-      works: [{ def: workIndex('metallurgy'), done: 10, record: 0 }],
-    }
-    expect(progressWork(plain)).toBeCloseTo(progressWork(plain, NEUTRAL_MODS), 10)
-    expect(progressWork(forged)).toBeCloseTo(progressWork(plain, NEUTRAL_MODS) * 1.15, 10)
+    const forged = { ...plain, works: [{ def: workIndex('metallurgy'), done: 10, record: 0 }] }
+    expect(progressWork(forged, workMods(forged.works))).toBeCloseTo(
+      progressWork(plain, NEUTRAL_MODS) * 1.15,
+      10,
+    )
+
+    const under = { def: IRRIGATION, progress: 0, since: 0 }
+    const year = (s: WorldState) => tickWork({ ...s, building: under }, 0).building?.progress
+    expect(year(forged)).toBeCloseTo((year(plain) ?? 0) * 1.15, 10)
   })
 
   // FEAT: a obra come o ano antes de os modificadores do ano serem colhidos, então ela sente a
   // camada permanente e nunca a dos acontecimentos — combinar as duas aqui é decisão, não descuido
   it('advances the work with the works layer alone, never with the active events', () => {
     const unrest = EVENTS.findIndex((def) => def.id === 'civil_unrest')
-    const troubled = { ...base, active: [{ def: unrest, record: 0, start: 0 }] }
-    expect(progressWork(troubled)).toBe(progressWork(base))
+    const under = { def: IRRIGATION, progress: 0, since: 0 }
+    const calm = { ...base, building: under }
+    const troubled = { ...calm, active: [{ def: unrest, record: 0, start: 0 }] }
+    expect(tickWork(troubled, 0).building?.progress).toBe(tickWork(calm, 0).building?.progress)
+    expect(progressWork(troubled, workMods(troubled.works))).toBe(
+      progressWork(base, workMods(base.works)),
+    )
   })
 })
 
