@@ -5,9 +5,11 @@ import {
   GOLDEN_SCRIPTS,
   INHERITANCE_CASE,
   MERGE_CASE,
+  WORKS_CASE,
   goldenWorld,
   mergeSeam,
 } from '../engine/golden.ts'
+import { hashState } from '../engine/hash.ts'
 import { CAUSAL_WINDOW } from '../engine/params.ts'
 import { WORKS } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
@@ -19,6 +21,7 @@ import {
   runGoldenChecks,
   runInheritanceCheck,
   runMergeCheck,
+  runWorksCheck,
 } from './check.ts'
 
 describe('runGoldenChecks', () => {
@@ -87,23 +90,69 @@ describe('runMergeCheck', () => {
     expect(MERGE_CASE.script).not.toBe(MERGE_CASE.other)
   })
 
-  it('keeps every published fingerprint distinct, all seventeen of them', () => {
+  it('keeps every published fingerprint distinct, all eighteen of them', () => {
     // FEAT: dois casos com o mesmo hash seriam duas provas valendo uma; o Set pega a colisão
     const published = [
       ...GOLDEN_CASES.map((golden) => golden.hash),
       COLLAPSE_CASE.hash,
       INHERITANCE_CASE.hash,
       MERGE_CASE.hash,
+      WORKS_CASE.hash,
     ]
-    expect(published).toHaveLength(17)
-    expect(new Set(published).size).toBe(17)
+    expect(published).toHaveLength(18)
+    expect(new Set(published).size).toBe(18)
+  })
+})
+
+describe('runWorksCheck', () => {
+  it('reaches the year with works standing and one under way, and reproduces its fingerprint', () => {
+    const result = runWorksCheck()
+    expect(result.status).toBe('running')
+    expect(result.finished).toBe(WORKS_CASE.done)
+    expect(result.site).toBe(WORKS_CASE.under)
+    expect(result.computed).toBe(WORKS_CASE.hash)
+    expect(result.ok).toBe(true)
+  })
+
+  // FEAT: o caso existe para fixar os dois blocos condicionais que os dezessete deixam vazios, e
+  // para fixá-los num mundo comum: nada chegou de fora, ninguém costurou, nenhuma colônia
+  it('pins the two blocks the other seventeen leave empty, in a history with nothing else in it', () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const world = goldenWorld(WORKS_CASE.seed, plan)
+    world.advance(WORKS_CASE.year)
+    const present = world.present
+    expect(present.works.length).toBeGreaterThan(0)
+    expect(present.building).not.toBeNull()
+    expect(present.colonies).toEqual([])
+    expect(present.home).toBeNull()
+    expect(present.lastMerge).toBeNull()
+    expect(present.debts).toEqual([])
+    expect(present.paradox).toBeNull()
+    expect(present.echoes).toEqual([])
+    expect(present.lastCrossing).toBeNull()
+    expect(world.hashAt(WORKS_CASE.year)).toBe(WORKS_CASE.hash)
+    // FEAT: sem os dois blocos o mesmo estado dá outro hash, e é isso que prova que o valor
+    // publicado carrega as obras em vez de apenas coexistir com elas
+    expect(hashState({ ...present, works: [], building: null })).not.toBe(WORKS_CASE.hash)
+  })
+
+  it('stands every work the script ordered except the one it left on the site', () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const world = goldenWorld(WORKS_CASE.seed, plan)
+    world.advance(WORKS_CASE.year)
+    const standing = new Set(world.present.works.map((done) => WORKS[done.def]?.id))
+    const ordered = plan.commissions
+    expect(ordered.at(-1)?.work).toBe(WORKS_CASE.under)
+    expect(ordered.slice(0, -1).filter((commission) => !standing.has(commission.work))).toEqual([])
+    expect(standing.has(WORKS_CASE.under)).toBe(false)
+    expect(WORKS[world.present.building?.def ?? -1]?.id).toBe(WORKS_CASE.under)
   })
 })
 
 describe('the works the reference histories build, and the ones they never do', () => {
-  // FEAT: dezesseis dos dezessete não comissionam nada, então têm de sair com a obra vazia — os
-  // catorze, o colapso e as DUAS histórias da confluência; a herança é a única que constrói, porque
-  // sem o foguete pronto ela não colonizaria e não herdaria
+  // FEAT: dezesseis dos dezoito não comissionam nada, então têm de sair com a obra vazia — os
+  // catorze, o colapso e as DUAS histórias da confluência; as que constroem são a herança, porque sem
+  // o foguete pronto ela não colonizaria, e o décimo-oitavo caso, que existe só para isso
   const idle = (world: Worldline) => {
     expect(world.present.works).toEqual([])
     expect(world.present.building).toBeNull()

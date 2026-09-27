@@ -381,6 +381,9 @@ describe('the permanent layer of the works', () => {
     for (const key of WORK_KEYS) {
       const value = effect[key]
       if (value === undefined) continue
+      // FIX: a direção esperada sai do próprio valor, então sem esta linha uma chave escrita no seu
+      // próprio neutro — 1 num fator, 0 numa parcela — passaria por "não sobe" em vez de reprovar
+      expect(value, `${id}.${key}`).not.toBe(TERM_KEYS.includes(key as never) ? 0 : 1)
       for (const [target, reading] of READINGS[key].entries()) {
         const label = `${id}.${key}#${target}`
         if (reading.rises(value)) {
@@ -415,8 +418,14 @@ describe('the permanent layer of the works', () => {
       makeState({ energy: 0, population: 0, technology: 0, works })
     // FEAT: sem energia e sem gente o termo base é zero, então o que resta é a parcela sozinha
     const parcel = derived(state([chemistry])).pollution
-    expect(parcel).toBeCloseTo(0.04, 12)
-    expect(derived(state([chemistry, filters])).pollution).toBeCloseTo(0.04 * 0.8, 12)
+    // FIX: os dois valores saem do catálogo, e o que o teste afirma é que o fator morde a parcela —
+    // com dois literais o teste passaria igual num degrau de mitigação que não mitigasse nada
+    const added = WORKS[workIndex('chemistry')]?.effect.pollution ?? 0
+    const factor = WORKS[workIndex('filters')]?.effect.smoke ?? 1
+    const held = derived(state([chemistry, filters])).pollution
+    expect(parcel).toBeCloseTo(added, 12)
+    expect(held).toBeCloseTo(added * factor, 12)
+    expect(held).toBeLessThan(parcel)
     expect(derived(state([filters])).pollution).toBe(0)
   })
 
@@ -428,10 +437,16 @@ describe('the permanent layer of the works', () => {
       done: 0,
       record: i,
     }))
-    expect(workMods(many).smoke).toBeLessThan(0.02)
-    expect(workMods(many).smoke).toBeGreaterThan(0)
+    // FIX: o comportamento primeiro, para o diagnóstico ser sobre o veneno e não sobre um número do
+    // catálogo: doze degraus cortam a poluição do mesmo mundo sem nunca a levar a zero
     const s = makeState({ energy: 40, population: 4e6, technology: 20, works: many })
+    expect(derived(s).pollution).toBeLessThan(derived({ ...s, works: [] }).pollution)
     expect(derived(s).pollution).toBeGreaterThan(0)
+    // FIX: e a composição depois, comparada a um degrau só em vez de a um limiar tirado de 0,7^12
+    const one = [{ def: workIndex('closedCycle'), done: 0, record: 0 }]
+    expect(workMods(one).smoke).toBeLessThan(1)
+    expect(workMods(many).smoke).toBeLessThan(workMods(one).smoke)
+    expect(workMods(many).smoke).toBeGreaterThan(0)
   })
 
   // FEAT: a escada de mitigação contra a escada de energia, medida uma contra a outra — e ela NÃO
@@ -445,17 +460,21 @@ describe('the permanent layer of the works', () => {
     const clean = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
       (id, i) => ({ def: workIndex(id), done: 0, record: 3 + i }),
     )
-    expect(workMods(energy).energy).toBeCloseTo(6.336, 10)
-    expect(workMods(clean).smoke).toBeCloseTo(0.357, 10)
+    const rise = workMods(energy).energy
+    const cut = workMods(clean).smoke
     // FEAT: a escada de energia multiplica o ALVO e é o NÍVEL que a poluição lê, então a medida é a
-    // mesma civilização no nível que cada uma alcança — 7,8 sem obra nenhuma, 6,336× disso com elas
+    // mesma civilização no nível que cada uma alcança — 7,8 sem obra nenhuma, e 6,336× disso com elas
     const s = (level: number, works: readonly Work[]) =>
       makeState({ energy: level, population: 4e6, technology: 20, works })
     const bare = derived(s(7.8, [])).pollution
-    const held = derived(s(7.8 * 6.336, [...energy, ...clean])).pollution
-    expect(held / bare).toBeCloseTo(6.336 * 0.357, 6)
+    const held = derived(s(7.8 * rise, [...energy, ...clean])).pollution
+    // FIX: o comportamento primeiro: o veneno sobe, e sobe MENOS que a energia — é esta linha que
+    // reprova uma escada de mitigação neutra, e as de baixo só dizem por quanto
     expect(held).toBeGreaterThan(bare)
     expect(held).toBeLessThan(3 * bare)
+    expect(rise).toBeCloseTo(6.336, 10)
+    expect(cut).toBeLessThan(1)
+    expect(held / bare).toBeCloseTo(rise * cut, 6)
   })
 
   // FIX: uma taxa de perda negativa criaria comida do nada, então ela para em zero

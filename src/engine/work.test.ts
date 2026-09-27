@@ -262,10 +262,16 @@ describe('workMods', () => {
   })
 
   it('multiplies the four rungs of the mitigation ladder into one factor', () => {
-    const ladder = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
-      (id, i) => ({ def: workIndex(id), done: i, record: i }),
+    const rungs = ['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const
+    const ladder = rungs.map((id, i) => ({ def: workIndex(id), done: i, record: i }))
+    // FIX: o esperado sai do catálogo em vez de repetir os quatro literais, e o que o teste afirma
+    // é a composição: a escada inteira corta mais que o melhor degrau dela sozinho
+    const each = rungs.map((id) => findWork(id).effect.smoke ?? 1)
+    expect(workMods(ladder).smoke).toBeCloseTo(
+      each.reduce((product, value) => product * value, 1),
+      10,
     )
-    expect(workMods(ladder).smoke).toBeCloseTo(0.85 * 0.8 * 0.75 * 0.7, 10)
+    expect(workMods(ladder).smoke).toBeLessThan(Math.min(...each))
     expect(workMods(ladder).pollution).toBe(0)
   })
 

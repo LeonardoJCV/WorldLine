@@ -3,9 +3,10 @@ import type { Crossing } from './crossing.ts'
 import type { Merge } from './merge.ts'
 import { VARIABLES, type Decision, type Variable, type WorldState } from './state.ts'
 import { system } from './system.ts'
+import type { WorkId } from './work.ts'
 import { Worldline } from './worldline.ts'
 
-export type GoldenScript = 'steady' | 'shifting' | 'crossed' | 'inherited' | 'merged'
+export type GoldenScript = 'steady' | 'shifting' | 'crossed' | 'inherited' | 'merged' | 'building'
 
 export interface GoldenPlan {
   readonly decisions: readonly Decision[]
@@ -147,12 +148,35 @@ const CONFLUENT: readonly Decision[] = [
   },
 ]
 
+// FEAT: uma história comum que constrói — nenhuma travessia, nenhuma costura, nenhuma colônia, só
+// 15% do ano em obra, para o fingerprint do caso ser a obra e mais nada
+const BUILDER: readonly Decision[] = [
+  {
+    tick: 0,
+    allocation: { agriculture: 35, industry: 25, research: 20, conservation: 5, works: 15 },
+  },
+]
+
+// FEAT: sete obras nos anos em que o canteiro ficou livre nesta semente, e a sétima ainda está no
+// canteiro no ano fixado, medida a 1697,27 dos 2400 que `roads` custa: é ela que põe `building` no
+// hash, e as seis prontas que põem `works`
+const SEVEN: readonly Commission[] = [
+  { tick: 396, work: 'irrigation' },
+  { tick: 408, work: 'plough' },
+  { tick: 423, work: 'granary' },
+  { tick: 432, work: 'calendar' },
+  { tick: 444, work: 'pottery' },
+  { tick: 871, work: 'writing' },
+  { tick: 886, work: 'roads' },
+]
+
 export const GOLDEN_SCRIPTS: Readonly<Record<GoldenScript, GoldenPlan>> = {
   steady: { decisions: [], crossings: [], commissions: [] },
   shifting: { decisions: SHIFTING, crossings: [], commissions: [] },
   crossed: { decisions: SHIFTING, crossings: CROSSED, commissions: [] },
   inherited: { decisions: SPACEFARING, crossings: UNPAYABLE, commissions: CLIMB },
   merged: { decisions: CONFLUENT, crossings: [], commissions: [] },
+  building: { decisions: BUILDER, crossings: [], commissions: SEVEN },
 }
 
 // FEAT: um roteiro de referência são três listas, e montá-lo num lugar só é o que impede um
@@ -184,6 +208,28 @@ export const GOLDEN_CASES: readonly GoldenCase[] = [
   { seed: 482913, script: 'crossed', year: 1000, hash: '13c3a6fd' },
   { seed: 482913, script: 'crossed', year: 5000, hash: 'cef8326a' },
 ]
+
+// FEAT: o décimo-oitavo caso, fora dos dezessete: uma história que ainda corre e que construiu. Sem
+// ele os dezessete provam só que mundos SEM obra reproduzem — a herança constrói, mas termina num
+// corpo novo, e nenhum caso publicado tinha `works` e `building` preenchidos num mundo comum
+export interface WorksCase {
+  readonly seed: number
+  readonly script: GoldenScript
+  // FEAT: quantas obras estão prontas no ano fixado, e qual ficou no canteiro nesse ano
+  readonly done: number
+  readonly under: WorkId
+  readonly year: number
+  readonly hash: string
+}
+
+export const WORKS_CASE: WorksCase = {
+  seed: 482913,
+  script: 'building',
+  done: 6,
+  under: 'roads',
+  year: 900,
+  hash: 'a2d33a0f',
+}
 
 // FEAT: o roteiro que sobrevive ao próprio mundo, fora dos doze para não mexer em nenhum deles
 export interface InheritanceCase {

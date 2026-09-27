@@ -1,9 +1,16 @@
 import { CROSSING_KINDS } from './crossing.ts'
 import { DEBT_KINDS, PARADOX_KINDS } from './debt.ts'
 import { ECHO_TARGETS } from './echo.ts'
-import { NEVER, SECTORS, VARIABLES, type WorldState } from './state.ts'
+import { NEVER, SECTORS, VARIABLES, type Status, type WorldState } from './state.ts'
 
-const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2, merged: 3 } as const
+// FIX: `satisfies` em vez de anotação para um quinto status ainda ser erro de tipo aqui sem que os
+// quatro códigos publicados sejam alargados para `number`
+export const STATUS_CODES = {
+  running: 0,
+  extinct: 1,
+  collapsed: 2,
+  merged: 3,
+} as const satisfies Record<Status, number>
 // FIX: os eventos antigos sempre entram, mesmo em NEVER; os novos só depois de terem disparado uma vez
 const LEGACY_EVENT_COUNT = 11
 

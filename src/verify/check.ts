@@ -5,13 +5,16 @@ import {
   GOLDEN_SCRIPTS,
   INHERITANCE_CASE,
   MERGE_CASE,
+  WORKS_CASE,
   goldenWorld,
   mergeSeam,
   type GoldenCase,
   type InheritanceCase,
   type MergeCase,
+  type WorksCase,
 } from '../engine/golden.ts'
 import type { Decision, Status } from '../engine/state.ts'
+import { WORKS, type WorkId } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
 
 export interface GoldenResult extends GoldenCase {
@@ -176,5 +179,41 @@ export function runMergeCheck(): MergeResult {
       settled &&
       totalOwed(receives.present.debts) === 0 &&
       computed === MERGE_CASE.hash,
+  }
+}
+
+export interface WorksResult extends WorksCase {
+  readonly computed: string
+  readonly status: Status
+  readonly finished: number
+  readonly site: WorkId | null
+  readonly ok: boolean
+}
+
+// FEAT: prova a obra inteira, não só o hash: a história segue correndo num mundo comum, as obras que
+// o roteiro encomendou estão de pé e a última ficou no canteiro — os dois blocos condicionais que os
+// dezessete deixam vazios, fixados aqui num mundo que ninguém herdou nem costurou
+export function runWorksCheck(): WorksResult {
+  const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+  const world = goldenWorld(WORKS_CASE.seed, plan)
+  world.advance(WORKS_CASE.year)
+  const present = world.present
+  const site = present.building ? (WORKS[present.building.def]?.id ?? null) : null
+  const computed = world.hashAt(Math.min(WORKS_CASE.year, present.tick))
+  return {
+    ...WORKS_CASE,
+    computed,
+    status: present.status,
+    finished: present.works.length,
+    site,
+    ok:
+      present.status === 'running' &&
+      present.tick === WORKS_CASE.year &&
+      present.works.length === WORKS_CASE.done &&
+      site === WORKS_CASE.under &&
+      present.colonies.length === 0 &&
+      present.home === null &&
+      present.lastMerge === null &&
+      computed === WORKS_CASE.hash,
   }
 }

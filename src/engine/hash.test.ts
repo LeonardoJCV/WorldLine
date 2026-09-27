@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { genesis } from './genesis.ts'
-import { hashState } from './hash.ts'
+import { STATUS_CODES, hashState } from './hash.ts'
+import { STATUSES } from './state.ts'
 
 describe('hashState', () => {
   const { state } = genesis(482913)
@@ -125,6 +126,17 @@ describe('hashState', () => {
     expect(collapsed).toBe('db8eda1c')
   })
 
+  // FIX: distinguir os quatro não impede um quinto de colidir — quem impede é o mapa cobrir a união.
+  // Um status sem código alimentaria o hash com um valor ausente, e dois deles sairiam iguais; a
+  // cobertura abaixo, e o `satisfies` de `STATUS_CODES`, é o que proíbe que um chegue assim
+  it('gives a code to every status there is, so a fifth could not arrive without one', () => {
+    expect(Object.keys(STATUS_CODES).sort()).toEqual([...STATUSES].sort())
+    expect(new Set(Object.values(STATUS_CODES)).size).toBe(STATUSES.length)
+    expect(new Set(STATUSES.map((status) => hashState({ ...state, status }))).size).toBe(
+      STATUSES.length,
+    )
+  })
+
   it('pins a state with several optional blocks populated at once, so no block can move', () => {
     // FIX: nenhum teste isolado prova a ordem dos blocos condicionais; este cobre todos de uma vez
     const composite = {
@@ -144,6 +156,10 @@ describe('hashState', () => {
       building: { def: 9, progress: 40, since: 1400 },
     }
     expect(hashState(composite)).toBe('30d8a70d')
+    // FIX: sem estes dois o pino composto passaria igual com a obra fora do hash, e a ordem dos
+    // dois últimos blocos deixaria de estar coberta por ele
+    expect(hashState({ ...composite, works: [] })).not.toBe('30d8a70d')
+    expect(hashState({ ...composite, building: null })).not.toBe('30d8a70d')
   })
 
   it('ignores the works fields while they are empty', () => {

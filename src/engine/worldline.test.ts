@@ -365,7 +365,12 @@ describe('a history that leaves a sister behind', () => {
     line.records.filter((record) => record.event === event).map((record) => record.start)
 
   it('builds the whole climb, founds both sisters, loses one and settles the body again', () => {
-    expect(SIBLING_CASE.plan.commissions).toHaveLength(WORKS.length)
+    // FIX: contar as comissões do roteiro só repetia uma constante; a guarda é que toda obra que
+    // ele encomenda tenha ficado de pé, porque uma comissão de canteiro ocupado é perdida em silêncio
+    const standing = new Set(line.present.works.map((done) => WORKS[done.def]?.id))
+    expect(SIBLING_CASE.plan.commissions.filter((ordered) => !standing.has(ordered.work))).toEqual(
+      [],
+    )
     expect(line.present.works).toHaveLength(WORKS.length)
     expect(years('colony_founded')).toEqual([...SIBLING_CASE.founded, SIBLING_CASE.refounded])
     expect(years('inheritance')).toEqual([SIBLING_CASE.ended])

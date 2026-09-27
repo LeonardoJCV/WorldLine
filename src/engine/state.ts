@@ -42,7 +42,10 @@ export interface ActiveEvent {
   readonly start: number
 }
 
-export type Status = 'running' | 'extinct' | 'collapsed' | 'merged'
+// FEAT: a lista em tempo de execução existe para o mapa de códigos do hash poder ser conferido
+// contra ela — um status sem código alimenta o hash com NaN e colide com qualquer outro sem código
+export const STATUSES = ['running', 'extinct', 'collapsed', 'merged'] as const
+export type Status = (typeof STATUSES)[number]
 
 export interface WorldConfig {
   readonly seed: number
