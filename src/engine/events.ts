@@ -12,6 +12,7 @@ import {
   type WorldConfig,
   type WorldState,
 } from './state.ts'
+import { FACTOR_KEYS, TERM_KEYS, WORKS, type WorkKey } from './work.ts'
 
 export const EVENT_IDS = [
   'agricultural_revolution',
@@ -37,6 +38,9 @@ export const EVENT_IDS = [
   'merge',
   'merged_away',
   'debt_settled',
+  'work_done',
+  'era_classical',
+  'era_electric',
 ] as const
 export type EventId = (typeof EVENT_IDS)[number]
 
@@ -66,6 +70,76 @@ export interface Condition {
   readonly op: '<' | '>'
   readonly value: number
 }
+
+// FEAT: um empurrão de primeira ordem: a métrica que a chave move e para que lado, com sinal 0 para
+// o que ela move sem direção definida — o sinal 0 conta como toque e nunca vira causa
+interface WorkPush {
+  readonly metric: Metric
+  readonly sign: number
+}
+
+const up = (metric: Metric): WorkPush => ({ metric, sign: 1 })
+const down = (metric: Metric): WorkPush => ({ metric, sign: -1 })
+const blind = (metric: Metric): WorkPush => ({ metric, sign: 0 })
+
+// FEAT: o que cada chave da camada permanente move quando cresce, com a direção de primeira ordem
+const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly WorkPush[]>> = {
+  harvest: [up('food'), up('foodSecurity')],
+  production: [up('food'), up('foodSecurity'), up('economy'), up('economyTrend')],
+  research: [up('technology')],
+  // FIX: energia empurra o ambiente porque a poluição é proporcional a ela, como a fatia de
+  // indústria já declarava pelo mesmo caminho
+  // FIX: e empurra a razão de energia para BAIXO, porque ela multiplica o alvo no denominador
+  // enquanto o nível ainda é o velho: o reator abre a falta que a rede dele ainda não enche
+  energy: [up('energy'), down('environment'), down('energyRatio')],
+  economy: [up('economy'), up('economyTrend')],
+  capacity: [down('crowding')],
+  // FIX: é a única chave cujo coeficiente multiplica uma SOMA — o sustento da frota — que vale zero
+  // sem frota ou com frota autossuficiente, então ela nunca pode alegar magnitude nenhuma
+  colonyCost: [blind('energy'), blind('energyRatio')],
+  // FEAT: fumar mais é poluir mais, então a chave empurra o ambiente para baixo quando cresce — e a
+  // obra de mitigação, que a leva abaixo de 1, nunca é culpada pela crise ecológica
+  smoke: [down('environment')],
+  mortality: [down('population')],
+  spoil: [down('food'), down('foodSecurity')],
+  // FEAT: variância não tem lado: ela alarga o ano, então toca sem nunca apontar direção
+  harvestNoise: [blind('food'), blind('foodSecurity')],
+  pollution: [down('environment')],
+}
+
+// FEAT: os empurrões de uma obra, já com o sinal do valor do catálogo multiplicado dentro
+function pushesOf(def: number): readonly WorkPush[] {
+  const effect = WORKS[def]?.effect
+  if (!effect) return []
+  const pushes: WorkPush[] = []
+  const add = (key: WorkKey, dir: number) => {
+    for (const push of WORK_INFLUENCES[key])
+      pushes.push({ metric: push.metric, sign: dir * push.sign })
+  }
+  for (const key of FACTOR_KEYS) {
+    const factor = effect[key]
+    if (factor !== undefined) add(key, Math.sign(factor - 1))
+  }
+  for (const key of TERM_KEYS) {
+    const term = effect[key]
+    if (term !== undefined) add(key, Math.sign(term))
+  }
+  return pushes
+}
+
+// FIX: a obra só é causa quando empurra a métrica rompida para o lado do rompimento; sem isso uma
+// camada permanente e cega de direção culpa toda crise pelas melhorias que vieram antes dela
+function pushesInto(def: number, condition: Condition): boolean {
+  return pushesOf(def).some(
+    (push) =>
+      push.metric === condition.metric && (condition.op === '<' ? push.sign < 0 : push.sign > 0),
+  )
+}
+
+// FEAT: a união do que o catálogo inteiro move — o recibo da obra e a fatia de obras falam por ela
+const WORK_METRICS: readonly Metric[] = METRICS.filter((metric) =>
+  WORKS.some((_, def) => pushesOf(def).some((push) => push.metric === metric)),
+)
 
 export interface EventDef {
   readonly id: EventId
@@ -130,16 +204,21 @@ export const EVENTS: readonly EventDef[] = [
     cooldown: 0,
     influences: ['energy', 'energyRatio', 'technology', 'environment'],
   },
+  // FEAT: não é era, é condição: enquanto ela dura, nascem menos e cada um produz mais — e ela
+  // se desfaz se a prosperidade que a abriu se desfizer
+  // FEAT: espera de 30 anos como a da dívida, porque uma transição demográfica é coisa de uma era
+  // inteira, não um abalo que volta todo ano
   {
     id: 'demographic_transition',
-    kind: 'era',
-    era: Era.demographic,
+    kind: 'condition',
     trigger: [
       { metric: 'economy', op: '>', value: 3 },
       { metric: 'birthRate', op: '<', value: 0.02 },
     ],
-    cooldown: 0,
-    influences: ['population'],
+    release: [{ metric: 'economy', op: '<', value: 2 }],
+    cooldown: 30,
+    effect: { birth: 0.95, economy: 1.02 },
+    influences: ['population', 'birthRate', 'economy', 'economyTrend'],
   },
   {
     id: 'famine',
@@ -276,7 +355,8 @@ export const EVENTS: readonly EventDef[] = [
     id: 'space_era',
     kind: 'era',
     era: Era.space,
-    // FEAT: tecnologia e economia saturam em qualquer mundo maduro; energia é o portão real (spec §3)
+    // FEAT: o portão bifurcou — em mundo que não constrói energia é o gargalo (spec §3, medido no MVP
+    // 6); em mundo conduzido para obras ela sobra 4× e quem prende passa a ser a tecnologia
     trigger: [
       { metric: 'technology', op: '>', value: 90 },
       { metric: 'energy', op: '>', value: 12 },
@@ -336,6 +416,39 @@ export const EVENTS: readonly EventDef[] = [
     cooldown: 0,
     influences: ['debtRatio'],
   },
+  // FEAT: recibo de obra concluída, escrito direto pelo step() na Tarefa 4; o gatilho nunca vale
+  {
+    id: 'work_done',
+    kind: 'pulse',
+    duration: 1,
+    trigger: [{ metric: 'population', op: '<', value: 0 }],
+    cooldown: 0,
+    influences: WORK_METRICS,
+  },
+  // FEAT: os dois degraus que faltavam na escada, apendados no fim para não mexer no índice de
+  // nenhum acontecimento antigo — e por isso fora da ordem cronológica da tabela
+  {
+    id: 'era_classical',
+    kind: 'era',
+    era: Era.classical,
+    trigger: [
+      { metric: 'technology', op: '>', value: 35 },
+      { metric: 'economy', op: '>', value: 3 },
+    ],
+    cooldown: 0,
+    influences: ['technology', 'economy', 'economyTrend'],
+  },
+  {
+    id: 'era_electric',
+    kind: 'era',
+    era: Era.electric,
+    trigger: [
+      { metric: 'technology', op: '>', value: 75 },
+      { metric: 'energy', op: '>', value: 6 },
+    ],
+    cooldown: 0,
+    influences: ['technology', 'energy', 'energyRatio'],
+  },
 ]
 
 const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
@@ -343,6 +456,7 @@ const SECTOR_INFLUENCES: Readonly<Record<Sector, readonly Metric[]>> = {
   industry: ['energy', 'energyRatio', 'economy', 'economyTrend', 'environment'],
   research: ['technology'],
   conservation: ['environment'],
+  works: WORK_METRICS,
 }
 
 // FEAT: doutrina mexe no que qualquer setor mexe; só quem abre dívida chega ao paradoxo
@@ -355,6 +469,11 @@ const CROSSING_INFLUENCES: Readonly<Record<CrossingKind, readonly Metric[]>> = {
     'debtRatio',
     'paradoxActive',
   ],
+}
+
+function economyTrend(s: WorldState): number {
+  const past = s.recentEconomy[0] ?? s.economy
+  return past === 0 && s.economy === 0 ? 1 : s.economy / past
 }
 
 export function computeMetrics(s: WorldState, d: Derived): Metrics {
@@ -372,7 +491,9 @@ export function computeMetrics(s: WorldState, d: Derived): Metrics {
     crowding:
       s.population === 0 && d.carryingCapacity === 0 ? 0 : s.population / d.carryingCapacity,
     energyRatio: s.energy / d.energyTarget,
-    economyTrend: s.economy / (s.recentEconomy[0] ?? s.economy),
+    // FIX: uma economia morta contra uma referência morta dava 0/0, e uma métrica NaN reprova toda
+    // condição em silêncio; sem referência a medir a tendência é 1, como já era com a entrada ausente
+    economyTrend: economyTrend(s),
     birthRate: d.birthRate,
     debtRatio: debtRatio(s.debts, s),
     paradoxActive: s.paradox ? 1 : 0,
@@ -405,6 +526,7 @@ export function collectModifiers(
       production: mods.production * (effect.production ?? 1),
       economy: mods.economy * (effect.economy ?? 1),
       research: mods.research * (effect.research ?? 1),
+      birth: mods.birth * (effect.birth ?? 1),
       mortality: mods.mortality + (effect.mortality ?? 0),
       stability: mods.stability + (effect.stability ?? 0),
     }
@@ -454,6 +576,15 @@ function causesOf(
     if (entry.start === s.tick) continue
     if (other.kind === 'era' && s.tick - entry.start > CAUSAL_WINDOW) continue
     if (other.influences.some(involved)) causes.push({ kind: 'event', record: entry.record })
+  }
+
+  // FEAT: a obra pronta não tem janela como a decisão tem, porque a marca dela não expira nunca —
+  // mas a que fechou neste ano só move coeficiente no ano seguinte, então hoje ela não é causa
+  for (const work of s.works) {
+    if (work.done === s.tick) continue
+    if (def.trigger.some((c) => pushesInto(work.def, c))) {
+      causes.push({ kind: 'event', record: work.record })
+    }
   }
 
   const decision = s.lastDecision

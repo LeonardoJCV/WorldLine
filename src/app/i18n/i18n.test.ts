@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { EVENTS, EVENT_IDS } from '../../engine/events.ts'
+import { Era } from '../../engine/state.ts'
 import { en } from './en.ts'
 import {
   embedLabel,
@@ -31,6 +33,21 @@ describe('dictionaries', () => {
     expect(Object.keys(ptBR).sort()).toEqual(Object.keys(en).sort())
     for (const text of [...Object.values(en), ...Object.values(ptBR)])
       expect(text.trim()).not.toBe('')
+  })
+
+  // FEAT: a cobertura por acontecimento já é total no tipo — faltar `event.<id>` é erro de compilação
+  // em en.ts e em pt-BR.ts, e em execução `translate` indexa o dicionário e lançaria em vez de mostrar
+  // a chave crua; o que este teste acrescenta é o que o tipo não vê: quantas eras existem e que
+  // `work_done` está na união. Obra nenhuma tem nome traduzido em idioma nenhum, de propósito, porque
+  // nada as exibe até o Plano 24.
+  it('names every event, era included, in both languages', () => {
+    for (const id of EVENT_IDS) {
+      expect(translate('en', `event.${id}`).trim(), id).not.toBe('')
+      expect(translate('pt-BR', `event.${id}`).trim(), id).not.toBe('')
+    }
+    const eras = EVENTS.filter((def) => def.kind === 'era')
+    expect(eras).toHaveLength(Object.keys(Era).length)
+    expect(EVENT_IDS).toContain('work_done')
   })
 })
 

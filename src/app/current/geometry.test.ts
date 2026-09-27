@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Crossing } from '../../engine/crossing.ts'
-import type { EventRecord } from '../../engine/events.ts'
-import { VARIABLES, type Variable } from '../../engine/state.ts'
+import { EVENTS, type EventRecord } from '../../engine/events.ts'
+import { Era, VARIABLES, type Variable } from '../../engine/state.ts'
 import type { Series } from '../../worker/protocol.ts'
 import { PLANET_BODY } from '../planet/uniforms.ts'
 import {
   COMPANION_SCALE,
   EPISODE_ROWS,
+  ERA_LABEL_INK,
   ERA_ROW_HEIGHT,
   ERA_ROWS,
   MAX_WIDTH,
@@ -18,6 +19,7 @@ import {
   crossingSegments,
   episodeY,
   eraLabelY,
+  eraLabelsFit,
   layoutEvents,
   markerAt,
   movingAverage,
@@ -186,7 +188,7 @@ describe('layoutEvents', () => {
       [
         record('agricultural_revolution', 10, null),
         record('industrial_revolution', 12, null),
-        record('demographic_transition', 90, null),
+        record('era_electric', 90, null),
       ],
       0,
       100,
@@ -247,14 +249,15 @@ describe('layoutEvents', () => {
 
   // FEAT: anos reais do roteiro INHERITANCE_CASE (seed 482913, 'inherited'), lidos de Worldline.records em 3000
   const inheritance = [
-    record('agricultural_revolution', 250, null),
-    record('demographic_transition', 354, null),
-    record('industrial_revolution', 648, null),
-    record('space_era', 1802, null),
+    record('agricultural_revolution', 395, null),
+    record('era_classical', 871, null),
+    record('industrial_revolution', 998, null),
+    record('era_electric', 1471, null),
+    record('space_era', 1725, null),
   ]
   const LABEL_WIDTH = 150
 
-  it('keeps all four real eras of a spacefaring world on the chain, at realistic widths and time windows', () => {
+  it('keeps all five real eras of a spacefaring world on the chain, at realistic widths and time windows', () => {
     const widths = [320, 375, 414, 430, 768, 820, 1024, 1280, 1440, 1920, 2560]
     const presents = [1900, 2284, 3000, 5000, 10000]
     for (const width of widths) {
@@ -269,12 +272,24 @@ describe('layoutEvents', () => {
     }
   })
 
-  it('would still lose a label if a fifth era arrived -- proves the test above can fail', () => {
-    const fifthEra = [...inheritance, record('industrial_revolution', 1850, null)]
-    const markers = layoutEvents(fifthEra, 0, 10000, 10000, frame, LABEL_WIDTH)
+  it('would still lose a label if a sixth era arrived -- proves the test above can fail', () => {
+    const sixthEra = [...inheritance, record('industrial_revolution', 1990, null)]
+    const markers = layoutEvents(sixthEra, 0, 10000, 10000, frame, LABEL_WIDTH)
     expect(markers.some((marker) => marker.row === -1)).toBe(true)
   })
 })
+
+// FEAT: alturas reais de `drawn` (Observatory.tsx:98 -- size.height menos o chão da folha e a
+// faixa do zoom), lidas do palco do app no navegador, não da altura do viewport
+const REAL_STAGES: readonly (readonly [string, number, number])[] = [
+  ['320x568 phone, sheet at peek', 320, 182],
+  ['375x667 phone, sheet at peek', 375, 242],
+  ['375x667 phone, sheet hidden', 375, 356],
+  ['390x844 phone, sheet at peek', 390, 372],
+  ['390x844 phone, sheet hidden', 390, 566],
+  ['1024x768 tablet', 1024, 624],
+  ['1440x900 desktop', 1440, 746],
+]
 
 describe('eraLabelY', () => {
   // FIX: 320px de largura com o palco no piso de MIN_STAGE (120), a tela mais curta que o app desenha
@@ -284,16 +299,47 @@ describe('eraLabelY', () => {
       const top = short.centerY - short.height / 2
       const bottom = short.centerY + short.height / 2
       for (let row = 0; row < ERA_ROWS; row++) {
-        const y = eraLabelY(short, row)
+        const y = eraLabelY(short, row, ERA_ROWS)
         expect(y, `width=${width} row=${row} (top)`).toBeGreaterThanOrEqual(top)
         expect(y, `width=${width} row=${row} (bottom)`).toBeLessThanOrEqual(bottom)
       }
     }
   })
 
+  // FIX: a asserção anterior pedia só âncoras distintas, e passava com 2,28px entre nomes de
+  // 12px -- era ela que dava luz verde à geometria ilegível; esta liga o passo ao texto que carrega
+  it('either spaces every era row above the height of its own text, or draws none of them', () => {
+    for (const [name, width, drawn] of REAL_STAGES) {
+      const { frame: real } = stageLayout(width, drawn)
+      for (let rows = 1; rows <= ERA_ROWS; rows++) {
+        if (!eraLabelsFit(real, rows)) continue
+        for (let row = 1; row < rows; row++) {
+          const gap = eraLabelY(real, row - 1, rows) - eraLabelY(real, row, rows)
+          expect(gap, `${name} rows=${rows} row=${row}`).toBeGreaterThanOrEqual(ERA_LABEL_INK)
+        }
+      }
+    }
+  })
+
+  // FEAT: sem isto o teste acima passaria de graça se o portão fechasse em toda tela
+  it('draws what fits and stays silent about what does not, on the stage a phone really gets', () => {
+    const { frame: phone } = stageLayout(375, 242)
+    expect(eraLabelsFit(phone, ERA_ROWS)).toBe(false)
+    expect(eraLabelsFit(phone, 2)).toBe(true)
+    const { frame: desk } = stageLayout(1440, 746)
+    expect(eraLabelsFit(desk, ERA_ROWS)).toBe(true)
+  })
+
   it('keeps rows at their usual spacing on a tall frame where the clamp never engages', () => {
-    expect(eraLabelY(frame, 0)).toBe(frame.centerY - frame.height * 0.26)
-    expect(eraLabelY(frame, 1)).toBe(eraLabelY(frame, 0) - ERA_ROW_HEIGHT)
+    expect(eraLabelY(frame, 0, ERA_ROWS)).toBe(frame.centerY - frame.height * 0.26)
+    expect(eraLabelY(frame, 1, ERA_ROWS)).toBe(eraLabelY(frame, 0, ERA_ROWS) - ERA_ROW_HEIGHT)
+  })
+
+  // FIX: o Plano 19 achou ERA_ROWS em 3 com quatro eras, e o nome da era espacial sumia em silêncio
+  // em toda largura; sem esta conta uma sexta era repetiria o bug com a suíte verde
+  it('keeps one row for every era the engine can open', () => {
+    expect(ERA_ROWS).toBe(EVENTS.filter((def) => def.kind === 'era').length)
+    expect(ERA_ROWS).toBe(Object.keys(Era).length)
   })
 })
 
@@ -382,7 +428,7 @@ describe('markerAt', () => {
     expect(markerAt(markers, 100, frame.centerY - 20, frame, 120)?.event).toBe(
       'agricultural_revolution',
     )
-    expect(markerAt(markers, 160, eraLabelY(frame, 0), frame, 120)?.event).toBe(
+    expect(markerAt(markers, 160, eraLabelY(frame, 0, 1), frame, 120)?.event).toBe(
       'agricultural_revolution',
     )
   })

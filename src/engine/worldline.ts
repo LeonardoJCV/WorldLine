@@ -1,3 +1,4 @@
+import { validateCommissions, type Commission } from './commission.ts'
 import { validateCrossings, type Crossing } from './crossing.ts'
 import type { EventRecord } from './events.ts'
 import { genesis } from './genesis.ts'
@@ -14,10 +15,19 @@ import {
   type WorldState,
 } from './state.ts'
 import { step } from './step.ts'
+import type { WorkId } from './work.ts'
 
 export interface Lineage {
   readonly parent: Worldline
   readonly tick: number
+}
+
+// FEAT: o passado que uma filha que sai no ano do fork tem de reviver, nas quatro listas
+export interface Inheritance {
+  readonly decisions: readonly Decision[]
+  readonly crossings: readonly Crossing[]
+  readonly merges: readonly Merge[]
+  readonly commissions: readonly Commission[]
 }
 
 export interface Bucketed {
@@ -83,12 +93,14 @@ export class Worldline {
   readonly #decisions: Decision[]
   readonly #crossings: Crossing[]
   readonly #merges: Merge[]
+  readonly #commissions: Commission[]
   readonly #checkpoints = new Map<number, Checkpoint>()
   #columns: Columns
   #length = 0
   #nextDecision = 0
   #nextCrossing = 0
   #nextMerge = 0
+  #nextCommission = 0
   #state: WorldState
 
   constructor(
@@ -97,6 +109,7 @@ export class Worldline {
     lineage: Lineage | null = null,
     crossings: readonly Crossing[] = [],
     merges: readonly Merge[] = [],
+    commissions: readonly Commission[] = [],
   ) {
     const origin = genesis(seed)
     this.world = origin.world
@@ -104,6 +117,7 @@ export class Worldline {
     this.#decisions = validateDecisions(decisions)
     this.#crossings = validateCrossings(crossings)
     this.#merges = validateMerges(merges)
+    this.#commissions = validateCommissions(commissions)
     this.#columns = allocateColumns(1024)
     this.#state = origin.state
     this.#record(origin.state)
@@ -129,6 +143,10 @@ export class Worldline {
     return this.#merges
   }
 
+  get commissions(): readonly Commission[] {
+    return this.#commissions
+  }
+
   get ended(): boolean {
     return this.#state.status !== 'running' || this.#state.tick >= HORIZON
   }
@@ -142,6 +160,7 @@ export class Worldline {
       const away = seam?.direction === 'out'
       let due: Decision | undefined
       let arriving: readonly Crossing[] = NO_CROSSINGS
+      let ordered: Commission | undefined
       // FEAT: precaução, não comportamento provado — nada aqui é observável pela API pública hoje
       if (!away) {
         due = this.#dueDecision(this.#nextDecision, this.#state.tick)
@@ -149,8 +168,18 @@ export class Worldline {
         const crossings = this.#dueCrossings(this.#nextCrossing, this.#state.tick)
         this.#nextCrossing = crossings.next
         arriving = crossings.due
+        ordered = this.#dueCommission(this.#nextCommission, this.#state.tick)
+        if (ordered) this.#nextCommission++
       }
-      const result = step(this.#state, this.world, this.records.length, due, arriving, seam)
+      const result = step(
+        this.#state,
+        this.world,
+        this.records.length,
+        due,
+        arriving,
+        seam,
+        ordered,
+      )
       this.records.push(...result.started)
       for (const index of result.ended) {
         const record = this.records[index]
@@ -194,6 +223,21 @@ export class Worldline {
     return decision
   }
 
+  // FEAT: registra a comissão no ano presente; uma obra impossível o passo ignora, não recusa aqui
+  commission(work: WorkId): Commission {
+    if (this.ended) throw new Error('worldline has ended')
+    const ordered: Commission = { tick: this.#state.tick, work }
+    validateCommissions([ordered])
+    const last = this.#commissions.at(-1)
+    if (last && last.tick > ordered.tick) {
+      throw new Error('scheduled commissions are still pending')
+    }
+    if (last && last.tick === ordered.tick)
+      this.#commissions[this.#commissions.length - 1] = ordered
+    else this.#commissions.push(ordered)
+    return ordered
+  }
+
   // FEAT: registra uma travessia no ano presente, já validada
   cross(crossing: Crossing): Crossing {
     if (this.ended) throw new Error('worldline has ended')
@@ -230,6 +274,10 @@ export class Worldline {
     if (crossed === -1) crossed = this.#crossings.length
     let seamed = this.#merges.findIndex((m) => m.tick >= base)
     if (seamed === -1) seamed = this.#merges.length
+    let ordered = this.#commissions.findIndex((c) => c.tick >= base)
+    if (ordered === -1) ordered = this.#commissions.length
+    // FIX: esta é a segunda cópia do laço do ano, e toda entrada que o laço de `advance` ganhar tem
+    // de entrar aqui também, senão reviver um ano gravado devolve outra história
     while (state.tick < tick) {
       const due = this.#dueDecision(index, state.tick)
       if (due) index++
@@ -237,11 +285,13 @@ export class Worldline {
       crossed = arriving.next
       const seam = this.#dueMerge(seamed, state.tick)
       if (seam) seamed++
+      const commission = this.#dueCommission(ordered, state.tick)
+      if (commission) ordered++
       // FEAT: precaução, não comportamento provado — nenhum ano gravado vem depois de um deságue
       if (seam?.direction === 'out') {
         throw new RangeError(`year ${tick} is past the confluence of year ${seam.tick}`)
       }
-      const result = step(state, this.world, records, due, arriving.due, seam)
+      const result = step(state, this.world, records, due, arriving.due, seam, commission)
       records += result.started.length
       state = result.state
     }
@@ -283,19 +333,28 @@ export class Worldline {
     return { min, max, mean }
   }
 
+  // FEAT: a regra da herança vive aqui só uma vez, porque o hospedeiro remonta uma filha sem passar
+  // por `fork()` — uma costura ou uma comissão ANTES do ponto de partida é passado que ela revive
+  inherited(tick: number): Inheritance {
+    return {
+      decisions: this.#decisions.filter((d) => d.tick < tick),
+      crossings: this.#crossings.filter((c) => c.tick < tick),
+      merges: this.#merges.filter((m) => m.tick < tick),
+      commissions: this.#commissions.filter((c) => c.tick < tick),
+    }
+  }
+
   // FEAT: nova linha temporal a partir de um ano desta
   fork(tick: number): Worldline {
     this.#assertRecorded(tick)
-    const inherited = this.#decisions.filter((d) => d.tick < tick)
-    const inheritedCrossings = this.#crossings.filter((c) => c.tick < tick)
-    // FEAT: uma costura antes do ponto de partida faz parte do passado que o filho tem de reviver
-    const inheritedMerges = this.#merges.filter((m) => m.tick < tick)
+    const past = this.inherited(tick)
     const child = new Worldline(
       this.seed,
-      inherited,
+      past.decisions,
       { parent: this, tick },
-      inheritedCrossings,
-      inheritedMerges,
+      past.crossings,
+      past.merges,
+      past.commissions,
     )
     child.advance(tick)
     return child
@@ -304,6 +363,11 @@ export class Worldline {
   #dueDecision(index: number, tick: number): Decision | undefined {
     const decision = this.#decisions[index]
     return decision?.tick === tick ? decision : undefined
+  }
+
+  #dueCommission(index: number, tick: number): Commission | undefined {
+    const commission = this.#commissions[index]
+    return commission?.tick === tick ? commission : undefined
   }
 
   #dueMerge(index: number, tick: number): Merge | undefined {

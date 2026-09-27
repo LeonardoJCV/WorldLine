@@ -621,7 +621,7 @@ test('announces the confluence on a phone without pushing anything sideways', as
 // uma, e um anúncio de um ano antigo seria a tela contando o que não aconteceu agora
 // FEAT: duas histórias no ano pedido, abertas direto do endereço, para a costura poder acontecer
 // longe do ano 5 sem o navegador reviver dois séculos em tempo real
-const LEAN: Allocation = { agriculture: 30, industry: 30, research: 20, conservation: 20 }
+const LEAN: Allocation = { agriculture: 30, industry: 25, research: 20, conservation: 20, works: 5 }
 
 function pairAtYear(year: number): string {
   return `/#/m/${encodeMultiverse({

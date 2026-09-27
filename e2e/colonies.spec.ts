@@ -1,53 +1,21 @@
 import { expect, test, type Page } from '@playwright/test'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../src/engine/golden.ts'
-import { MODEL_VERSION } from '../src/engine/params.ts'
-import { encodeMultiverse } from '../src/app/world/link.ts'
+import { INHERITANCE_CASE } from '../src/engine/golden.ts'
 import { useGraphics } from './stage.ts'
-import { SIBLING_CASE, siblingInheritanceLink, worldAtYear } from './support.ts'
-
-// FEAT: o roteiro dourado da herança (golden.ts) aberto direto no ano pedido, para o navegador
-// assistir aos últimos anos do mundo natal sem reviver vinte e dois séculos em tempo real
-function inheritanceLink(tick: number): string {
-  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-  return `/#/m/${encodeMultiverse({
-    version: MODEL_VERSION,
-    seed: INHERITANCE_CASE.seed,
-    tick,
-    decisions: plan.decisions,
-    crossings: plan.crossings,
-    branches: [],
-  })}`
-}
-
-// FEAT: mesma alocação do roteiro dourado SPACEFARING (golden.ts), a única calibrada a abrir a
-// era espacial perto do ano 1800 nesta semente (calibration.test.ts, "the quickest path to the sky")
-async function turnToSpace(page: Page) {
-  await page.goto('/?seed=482913')
-  await page.getByRole('button', { name: 'Intervene' }).click()
-  // FIX: cada slider reequilibra os outros pela proporção atual; esta ordem é a única, achada por
-  // busca, que sai do padrão inicial (40/30/20/10) e pousa exatamente em 20/50/30/0
-  await page.getByRole('slider', { name: /Agriculture/ }).fill('20')
-  await page.getByRole('slider', { name: /Research/ }).fill('30')
-  await page.getByRole('slider', { name: /Conservation/ }).fill('0')
-  await page.getByRole('slider', { name: /Industry/ }).fill('50')
-  await page.getByRole('button', { name: 'Apply decision' }).click()
-  await page.getByRole('button', { name: 'Observe' }).click()
-  await page.getByRole('button', { name: '×64' }).click()
-  await page.getByRole('button', { name: 'Play' }).click()
-}
+import { inheritanceLink, SIBLING_CASE, siblingInheritanceLink, worldAtYear } from './support.ts'
 
 test.beforeEach(async ({ page }) => {
   await useGraphics(page, '2d')
 })
 
-test('shows how far a history has settled once it reaches the space era', async ({ page }) => {
+test('shows how far a history has settled once the rocket is standing', async ({ page }) => {
+  test.slow()
   test.setTimeout(120_000)
-  await turnToSpace(page)
+  // FEAT: o portão é a obra, não a era: o roteiro dourado funda a colônia no ano seguinte ao do
+  // foguete, e cento e vinte anos depois ela já se basta (golden.ts, check.test.ts)
+  await page.goto(inheritanceLink(INHERITANCE_CASE.founded + 120))
 
   const colonies = page.locator('.state__colonies')
-  // FEAT: dezoito séculos de indústria e pesquisa até o portão abrir (calibration.test.ts)
   await expect(colonies).toBeVisible({ timeout: 90_000 })
-  await page.getByRole('button', { name: 'Pause' }).click()
 
   await expect(colonies).toContainText('Colonies')
   await expect(colonies).toContainText(/One on \S+|\d+, the most advanced on \S+/)
@@ -81,7 +49,7 @@ async function announced(page: Page): Promise<number> {
 
 test('announces that a history survived its own world', async ({ page }) => {
   test.slow()
-  // FEAT: a colônia já é autossuficiente desde 1803; o paradoxo vence o prazo em 2283
+  // FEAT: a colônia já se basta desde 2262; o paradoxo do ciclo vence o prazo em 2470
   await page.goto(inheritanceLink(INHERITANCE_CASE.ended - 13))
   await expect(page.locator('.state__colonies')).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.paradox[data-state="warning"]')).toBeVisible()
@@ -93,7 +61,7 @@ test('announces that a history survived its own world', async ({ page }) => {
   await expect(notice).toBeVisible({ timeout: 30_000 })
   await page.getByRole('button', { name: 'Pause' }).click()
 
-  // FEAT: Lulia e Dedes são os corpos desta semente; 2283 é o ano gravado no roteiro dourado
+  // FEAT: Lulia e Dedes são os corpos desta semente, e o ano é o gravado no roteiro dourado
   await expect(notice.locator('.inheritance__when')).toContainText(`Year ${INHERITANCE_CASE.ended}`)
   await expect(notice.locator('.inheritance__moved')).toHaveText(
     'The history moved to Lulia. 835.6K survived the end of Dedes.',
@@ -132,12 +100,13 @@ test('reaches the colony that saved the history, and tells the whole story of th
   await useGraphics(page, '2d')
   // FEAT: a semente 4242 (support.ts) funda duas colônias antes do colapso, ao contrário do roteiro
   // dourado da herança (uma só) — só assim a lista tem uma irmã para perder de verdade
-  // FIX: +5 anos depois do colapso — no próprio ano do prazo o passo que resolve o paradoxo ainda
-  // não rodou, e a herança do ano 6676 ainda não teria aparecido na lista
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  // FIX: +2 anos depois do colapso — no próprio ano do prazo o passo que resolve o paradoxo ainda
+  // não rodou, e a herança daquele ano ainda não teria aparecido na lista; e mais do que +4 e o
+  // herdeiro já teria refundado a colônia no corpo que a herança orfanou
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const events = page.locator('.panel.events')
   await expect(events).toBeVisible({ timeout: 60_000 })
-  // FIX: quase sete mil anos para calcular — o painel aparece antes de o worker chegar ao ano pedido
+  // FIX: vinte e cinco séculos para calcular — o painel aparece antes de o worker chegar ao ano pedido
   await expect(events.locator('.events__item').first()).toContainText('Inheritance', {
     timeout: 90_000,
   })

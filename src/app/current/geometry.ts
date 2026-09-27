@@ -21,8 +21,9 @@ export interface StageLayout {
 export const WAVELENGTH = 180
 export const MIN_WIDTH = 1
 export const MAX_WIDTH = 8
-// FIX: um mundo que chega ao espaço tem quatro eras na corrente, não três (spec §7)
-export const ERA_ROWS = 4
+// FIX: uma fileira para cada era que o motor abre — três engoliam o nome da era espacial em
+// silêncio, e quatro engoliriam o da elétrica (geometry.test.ts prende as duas contas juntas)
+export const ERA_ROWS = 5
 export const EPISODE_ROWS = 4
 const NARROW = 720
 const LABEL_GAP = 8
@@ -191,11 +192,32 @@ export function layoutEvents(
 
 export const ERA_ROW_HEIGHT = 20
 export const EPISODE_ROW_HEIGHT = 8
+// FEAT: measureText dá 10,86px de caixa aos nomes de era no tipo de 12px do rótulo (10,84 no
+// WebKit); arredondado para cima, é o que duas fileiras precisam distar para os nomes não colidirem
+export const ERA_LABEL_INK = 11
 
-export function eraLabelY(frame: Frame, row: number): number {
-  const wanted = frame.centerY - frame.height * 0.26 - Math.max(row, 0) * ERA_ROW_HEIGHT
-  // FIX: cada fileira sobe até o topo do quadro, nunca além -- fileiras que já cabiam não se mexem
-  return Math.max(wanted, frame.centerY - frame.height / 2)
+// FEAT: a folga entre o eixo e o topo do quadro, repartida entre as fileiras realmente em uso
+export function eraLabelStep(frame: Frame, rows: number): number {
+  if (rows <= 1) return ERA_ROW_HEIGHT
+  return Math.min(ERA_ROW_HEIGHT, Math.max(0, frame.height * 0.24) / (rows - 1))
+}
+
+export function eraLabelY(frame: Frame, row: number, rows: number): number {
+  return frame.centerY - frame.height * 0.26 - Math.max(row, 0) * eraLabelStep(frame, rows)
+}
+
+export function eraRowsUsed(markers: readonly Marker[]): number {
+  let rows = 0
+  for (const marker of markers) {
+    if (marker.kind === 'era' && marker.row >= 0) rows = Math.max(rows, marker.row + 1)
+  }
+  return rows
+}
+
+// FIX: cinco nomes não cabem na faixa de 105px que um telefone dá ao quadro, e apertá-los só
+// troca um nome engolido por cinco borrados; abaixo da altura do próprio texto, nenhum é desenhado
+export function eraLabelsFit(frame: Frame, rows: number): boolean {
+  return eraLabelStep(frame, rows) >= ERA_LABEL_INK
 }
 
 export function episodeY(frame: Frame, row: number): number {
@@ -337,15 +359,22 @@ export function markerAt(
   frame: Frame,
   labelWidth: number,
 ): Marker | null {
+  const rows = eraRowsUsed(markers)
+  // FEAT: sem nome desenhado não há nome para acertar; a haste no eixo segue alcançável
+  const labelled = eraLabelsFit(frame, rows)
   for (let i = markers.length - 1; i >= 0; i--) {
     const marker = markers[i]
     if (!marker) continue
     if (marker.kind === 'era') {
-      const labelY = eraLabelY(frame, marker.row)
+      const labelY = eraLabelY(frame, marker.row, rows)
       const onStem = Math.abs(x - marker.x) <= 6 && y >= labelY - 8 && y <= frame.centerY + 6
       const left = marker.align === 'end' ? marker.x - labelWidth : marker.x
       const onLabel =
-        marker.row >= 0 && x >= left && x <= left + labelWidth && Math.abs(y - labelY) <= 9
+        labelled &&
+        marker.row >= 0 &&
+        x >= left &&
+        x <= left + labelWidth &&
+        Math.abs(y - labelY) <= 9
       if (onStem || onLabel) return marker
     } else if (marker.kind === 'episode') {
       const bandY = episodeY(frame, marker.row) + 1.5

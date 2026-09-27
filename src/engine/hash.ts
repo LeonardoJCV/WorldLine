@@ -1,9 +1,16 @@
 import { CROSSING_KINDS } from './crossing.ts'
 import { DEBT_KINDS, PARADOX_KINDS } from './debt.ts'
 import { ECHO_TARGETS } from './echo.ts'
-import { NEVER, SECTORS, VARIABLES, type WorldState } from './state.ts'
+import { NEVER, SECTORS, VARIABLES, type Status, type WorldState } from './state.ts'
 
-const STATUS_CODES = { running: 0, extinct: 1, collapsed: 2, merged: 3 } as const
+// FIX: `satisfies` em vez de anotação para um quinto status ainda ser erro de tipo aqui sem que os
+// quatro códigos publicados sejam alargados para `number`
+export const STATUS_CODES = {
+  running: 0,
+  extinct: 1,
+  collapsed: 2,
+  merged: 3,
+} as const satisfies Record<Status, number>
 // FIX: os eventos antigos sempre entram, mesmo em NEVER; os novos só depois de terem disparado uma vez
 const LEGACY_EVENT_COUNT = 11
 
@@ -68,7 +75,8 @@ export function hashState(s: WorldState): string {
     h = feed(h, s.paradox.since)
     h = feed(h, s.paradox.deadline)
   }
-  // FEAT: sem era espacial não há colônia; o bloco só entra quando há alguma, no mesmo padrão
+  // FEAT: o bloco só entra quando há alguma colônia, e o portão dela é o foguete pronto, não a era:
+  // a costura pode entregar o foguete, ou a frota inteira, a um mundo que nunca abriu a era espacial
   if (s.colonies.length > 0) {
     h = feed(h, s.colonies.length)
     for (const colony of s.colonies) {
@@ -83,5 +91,18 @@ export function hashState(s: WorldState): string {
   if (s.home !== null) h = feed(h, s.home)
   // FEAT: o nome da outra história é recibo, não física, e fica fora, como Debt.origin
   if (s.lastMerge) h = feed(h, s.lastMerge.tick)
+  // FEAT: sem obra nenhuma o bloco não entra, e um mundo sem obras sai igual ao de antes delas
+  if (s.works.length > 0) {
+    h = feed(h, s.works.length)
+    for (const work of s.works) {
+      h = feed(h, work.def)
+      h = feed(h, work.done)
+    }
+  }
+  if (s.building) {
+    h = feed(h, s.building.def)
+    h = feed(h, s.building.progress)
+    h = feed(h, s.building.since)
+  }
   return h.toString(16).padStart(8, '0')
 }

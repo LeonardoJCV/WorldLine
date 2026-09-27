@@ -19,7 +19,7 @@ It is not a game with a win condition and it is not a dashboard. It is an instru
 
   ![A causal chain: the industrial revolution traced back to technology, energy and an earlier golden age](docs/images/causal.png)
 
-- **Intervene** by reallocating effort between agriculture, industry, research and conservation. The decision takes effect from the present year and the world diverges from there.
+- **Intervene** by reallocating effort between agriculture, industry, research, conservation and public works. The decision takes effect from the present year and the world diverges from there.
 
   ![Intervene mode: coupled sliders that always sum to 100%](docs/images/intervene.png)
 
@@ -31,7 +31,7 @@ It is not a game with a win condition and it is not a dashboard. It is an instru
 
   ![A lit city at night on the planet surface, roads leading out of it](docs/images/surface.png)
 
-- **Share and keep** worlds: the address bar always holds a link with the seed, the decisions and the year; worlds can be saved in the browser or exported as JSON files.
+- **Share and keep** worlds: the address bar always holds a link with the seed, the year and everything the history received; worlds can be saved in the browser or exported as JSON files.
 
 ## Determinism
 
@@ -40,11 +40,14 @@ The same seed and the same decisions always produce the same history, in every b
 - **Engine-independent math.** JavaScript engines may disagree in the last bit of `Math.exp`, `Math.log` or `Math.pow`. The engine implements its own `exp`, `ln` and `pow` using only operations IEEE 754 guarantees to be correctly rounded (`+ − × ÷` and bit manipulation), and lint rules forbid the native versions inside the engine.
 - **Counter-based randomness.** Every random draw is a pure hash of `(seed, year, channel)`. No draw can shift another, any year can be recomputed in isolation, and a branch that makes no new decision stays identical to its parent.
 - **Fingerprints.** Each world state hashes to an 8-character fingerprint. Reference fingerprints for several seeds and decision scripts are pinned in the repository and checked by the test suite in Node, and by end-to-end tests in Chromium, Firefox and WebKit.
+- **Links carry inputs, not state.** A shared link holds the seed, the year and everything the history received; opening it re-simulates the world from year zero, which is what makes it reopen the same history byte for byte. It also means the rules are part of the link: public works changed them, so a link shared before this version now opens a different history.
 - **Check it yourself.** The `/verify` page re-runs the reference worlds in your browser and compares every fingerprint.
 
 ## How the simulation works
 
-A world is six stocks (population, food reserve, energy, technology, economy and environment) plus a stability index with memory. Each year a fixed pipeline applies the current decision, derives quantities such as food security and pollution, updates every stock from the start-of-year state, and evaluates events. Causes always precede effects: an event triggered this year changes the world from next year on.
+A world is six stocks (population, food reserve, energy, technology, economy and environment) and a stability index with memory, together with what the civilization has permanently built: the eras it has opened, the public works that stand, and the one still on the site. Each year a fixed pipeline applies the current decision, spends that year's share of production on the work under way, derives quantities such as food security and pollution, updates every stock from the start-of-year state, and evaluates events. Causes always precede effects: an event triggered this year changes the world from next year on.
+
+Events open eras — agricultural, classical, industrial, electric, space — and an era is what puts a work within reach. A work costs years of production and needs the works it rests on. Most change a coefficient of the world for good — harvests, energy, mortality, the price of settling another body — and a few open something instead of changing a number. Unlike an event, what a work changes never expires, which is why the year 3000 does not come out like the year 300. The catalogue answers itself: every rung of the energy climb has a work that holds back the smoke it makes, and the rocket that opens colonisation sits at the top of a launch climb a world has to finish first.
 
 The rules are few and coupled, so behaviour comes from feedback loops rather than scripted outcomes:
 
@@ -93,11 +96,13 @@ npm run probe      # calibration report
 
 ## Roadmap
 
-Worldlines can already be branched, compared and explored down to their surface. Each worldline still evolves alone; what comes next is what happens when they touch.
+Worldlines can be branched, compared, explored down to their surface, crossed, driven into paradox and reconciled into one, and a civilization can now build its way off its own planet. What comes next is putting that in the observer's hands, and giving the other worlds something to arrive at.
 
-1. **Crossline**: let information, resources or decisions cross from one worldline into another, under conditions set by the worlds themselves.
-2. **Causal debt and paradoxes**: track what a world receives that its own history could not have produced.
-3. **Merge and collapse**: reconcile two histories into a coherent new one, or watch an inconsistent one fall apart.
+1. **Choosing the work**: a share of the year can already be set aside for building, but not yet spent on anything in particular. What is missing is the tree to choose from, what each work will cost in years at the civilization's current pace, and the dated chronicle of what it has finished.
+2. **Cities the engine knows about**: the towns, ports and factories on the surface are drawn from population alone. They should be the works and the people that made them.
+3. **A voyage, not an arrival**: a colony appears in the year it is founded. Distance should cost years, and a launch should be something in flight.
+4. **Ground of their own**: every body in the system wears the home world's terrain. Each should have its own to land on.
+5. **Tongues that drift**: a colony that loses contact should, over centuries, stop speaking its parent's language.
 
 ## License
 

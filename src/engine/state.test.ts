@@ -4,30 +4,57 @@ import { changedSectors, isValidAllocation } from './state.ts'
 describe('isValidAllocation', () => {
   it('accepts whole percentages summing to 100', () => {
     expect(
-      isValidAllocation({ agriculture: 40, industry: 30, research: 20, conservation: 10 }),
+      isValidAllocation({
+        agriculture: 40,
+        industry: 25,
+        research: 20,
+        conservation: 10,
+        works: 5,
+      }),
     ).toBe(true)
-    expect(isValidAllocation({ agriculture: 100, industry: 0, research: 0, conservation: 0 })).toBe(
-      true,
-    )
+    expect(
+      isValidAllocation({ agriculture: 100, industry: 0, research: 0, conservation: 0, works: 0 }),
+    ).toBe(true)
   })
 
   it('rejects other sums, fractions and negatives', () => {
     expect(
-      isValidAllocation({ agriculture: 40, industry: 30, research: 20, conservation: 9 }),
+      isValidAllocation({ agriculture: 40, industry: 25, research: 20, conservation: 9, works: 5 }),
     ).toBe(false)
     expect(
-      isValidAllocation({ agriculture: 40.5, industry: 29.5, research: 20, conservation: 10 }),
+      isValidAllocation({
+        agriculture: 40.5,
+        industry: 24.5,
+        research: 20,
+        conservation: 10,
+        works: 5,
+      }),
     ).toBe(false)
     expect(
-      isValidAllocation({ agriculture: 110, industry: -10, research: 0, conservation: 0 }),
+      isValidAllocation({
+        agriculture: 110,
+        industry: -10,
+        research: 0,
+        conservation: 0,
+        works: 0,
+      }),
+    ).toBe(false)
+    expect(
+      isValidAllocation({
+        agriculture: 40,
+        industry: 30,
+        research: 20,
+        conservation: 10,
+        works: 5,
+      }),
     ).toBe(false)
   })
 })
 
 describe('changedSectors', () => {
   it('lists sectors whose share changed, in sector order', () => {
-    const before = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
-    const after = { agriculture: 30, industry: 30, research: 20, conservation: 20 }
+    const before = { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 }
+    const after = { agriculture: 30, industry: 25, research: 20, conservation: 20, works: 5 }
     expect(changedSectors(before, after)).toEqual(['agriculture', 'conservation'])
   })
 })

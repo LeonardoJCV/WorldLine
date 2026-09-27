@@ -44,6 +44,8 @@ export function genesis(seed: number): { readonly world: WorldConfig; readonly s
       colonies: [],
       home: null,
       lastMerge: null,
+      works: [],
+      building: null,
     },
   }
 }

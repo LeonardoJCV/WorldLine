@@ -41,12 +41,25 @@ test('reproduces the history that outlived its own world in this browser', async
 test('reproduces the two histories that become one in this browser', async ({ page }) => {
   await page.goto('/verify.html')
   const status = page.getByRole('status')
-  await expect(status.last()).toHaveText(
+  await expect(status.nth(3)).toHaveText(
     'The confluence and its fingerprint match in this browser.',
     { timeout: 60_000 },
   )
   await expect(page.getByRole('heading', { name: 'Two histories that become one' })).toBeVisible()
-  const row = page.locator('table').last().locator('tbody tr')
+  const row = page.locator('table').nth(3).locator('tbody tr')
+  await expect(row).toHaveCount(1)
+  await expect(row).toHaveAttribute('data-ok', 'true')
+})
+
+test('reproduces the history that built something in this browser', async ({ page }) => {
+  await page.goto('/verify.html')
+  const status = page.getByRole('status')
+  await expect(status).toHaveCount(5)
+  await expect(status.nth(4)).toHaveText('The works and their fingerprint match in this browser.', {
+    timeout: 60_000,
+  })
+  await expect(page.getByRole('heading', { name: 'A history that built something' })).toBeVisible()
+  const row = page.locator('table').nth(4).locator('tbody tr')
   await expect(row).toHaveCount(1)
   await expect(row).toHaveAttribute('data-ok', 'true')
 })

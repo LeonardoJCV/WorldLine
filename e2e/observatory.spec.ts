@@ -180,7 +180,7 @@ test('applies a decision in intervene mode', async ({ page }) => {
   for (let i = 0; i < 5; i++) await agriculture.press('ArrowRight')
   await expect(agriculture).toHaveValue('45')
   const values = await Promise.all(
-    ['Agriculture', 'Industry', 'Research', 'Conservation'].map(async (name) =>
+    ['Agriculture', 'Industry', 'Research', 'Conservation', 'Works'].map(async (name) =>
       Number(await page.getByRole('slider', { name: new RegExp(name) }).inputValue()),
     ),
   )
@@ -220,4 +220,16 @@ test('moves the window with the minimap keyboard', async ({ page }) => {
   const present = await page.getByTestId('year').textContent()
   await minimap.press('End')
   await expect(minimap).toHaveAttribute('aria-valuetext', new RegExp(`to ${present ?? ''}$`))
+})
+
+// FEAT: o link que um observador de verdade compartilhava antes das obras: uma decisão, ano 320
+const DECIDED_V1 = 'AQAHXmEBQAABAGQoHhQK'
+
+// FIX: a recusa saía da conta de bytes, então este link caía no genesis sem aviso nenhum
+test('says out loud that a link written before the works cannot be replayed', async ({ page }) => {
+  await page.goto(`/#/w/${DECIDED_V1}`)
+  await expect(page.getByTestId('seed')).toHaveText('482913')
+  await expect(
+    page.getByText('This link was made with model v1; the world may differ from what was shared.'),
+  ).toBeVisible()
 })

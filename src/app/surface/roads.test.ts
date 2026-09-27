@@ -21,7 +21,7 @@ const model = surfaceModel({
   },
   eras: Era.agricultural | Era.industrial,
   active: [],
-  allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+  allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   status: 'running',
   history: { from: 0, to: 800, population: Float32Array.from([1_000_000, 6_000_000]) },
 })

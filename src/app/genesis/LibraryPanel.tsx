@@ -48,23 +48,30 @@ export function LibraryPanel({ onOpen }: LibraryPanelProps) {
         <p className="panel__empty">{t('library.empty')}</p>
       ) : (
         <ul className="library__list">
-          {worlds.map((world) => (
-            <li key={world.id} className="library__item">
-              <span className="library__name">{world.name}</span>
-              <span className="library__meta">
-                {t('library.meta', {
-                  year: formatYear(world.link.tick),
-                  date: dates.format(world.savedAt),
-                })}
-              </span>
-              <button type="button" onClick={() => onOpen(world.link)}>
-                {t('library.open')}
-              </button>
-              <button type="button" onClick={() => remove(world.id)}>
-                {t('library.delete')}
-              </button>
-            </li>
-          ))}
+          {worlds.map((world) => {
+            const link = world.link
+            return (
+              <li key={world.id} className="library__item">
+                <span className="library__name">{world.name}</span>
+                <span className="library__meta">
+                  {link === null
+                    ? t('library.outdated')
+                    : t('library.meta', {
+                        year: formatYear(link.tick),
+                        date: dates.format(world.savedAt),
+                      })}
+                </span>
+                {link !== null && (
+                  <button type="button" onClick={() => onOpen(link)}>
+                    {t('library.open')}
+                  </button>
+                )}
+                <button type="button" onClick={() => remove(world.id)}>
+                  {t('library.delete')}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
       <label className="library__import">

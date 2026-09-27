@@ -6,13 +6,24 @@ import {
   mergeColonies,
   mergeStates,
   mergeWeights,
+  mergeWorks,
   settleDebts,
   validateMerge,
   type Merge,
 } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
-import { NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
+import { Era, NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
+import { step } from './step.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
+import {
+  FACTOR_KEYS,
+  TERM_KEYS,
+  WORKS,
+  isCommissionable,
+  workIndex,
+  workMods,
+  type Work,
+} from './work.ts'
 
 function world(overrides: Partial<WorldState> = {}): WorldState {
   return makeState(overrides)
@@ -34,15 +45,17 @@ function colony(overrides: Partial<Colony> = {}): Colony {
 
 const HOST_DOCTRINE: Allocation = {
   agriculture: 20,
-  industry: 40,
+  industry: 35,
   research: 30,
   conservation: 10,
+  works: 5,
 }
 const GUEST_DOCTRINE: Allocation = {
   agriculture: 60,
-  industry: 10,
+  industry: 5,
   research: 20,
   conservation: 10,
+  works: 5,
 }
 
 describe('mergeWeights', () => {
@@ -435,6 +448,125 @@ describe('mergeColonies', () => {
   })
 })
 
+describe('mergeWorks', () => {
+  it('unions two work lists, keeping the earlier year for a work both had', () => {
+    const own = [
+      { def: 0, done: 300, record: 1 },
+      { def: 5, done: 900, record: 2 },
+    ]
+    const other = [
+      { def: 0, done: 120, record: 7 },
+      { def: 2, done: 400, record: 8 },
+    ]
+    const seamed = mergeStates(world({ works: own }), incoming({}, { works: other })).works
+    expect(seamed.map((w) => w.def)).toEqual([0, 2, 5])
+    expect(seamed.find((w) => w.def === 0)?.done).toBe(120)
+  })
+
+  it('orders the united list by def, so the same seam reads the same either way round', () => {
+    const early = [{ def: 12, done: 1, record: 0 }]
+    const late = [{ def: 3, done: 2, record: 0 }]
+    expect(mergeWorks(early, late).map((w) => w.def)).toEqual([3, 12])
+    expect(mergeWorks(late, early).map((w) => w.def)).toEqual([3, 12])
+  })
+
+  // FEAT: o mesmo idioma das colônias — um índice de acontecimento da outra história não vale nada
+  // nesta, e uma cadeia causal apontando para ele é o defeito que o Plano 12 já pagou uma vez
+  it('never keeps a record that points into the other side, alone or paired', () => {
+    expect(mergeWorks([], [{ def: 4, done: 10, record: 9 }])[0]?.record).toBe(NEVER)
+    const otherEarlier = mergeWorks(
+      [{ def: 4, done: 200, record: 1 }],
+      [{ def: 4, done: 100, record: 9 }],
+    )
+    expect(otherEarlier[0]).toEqual({ def: 4, done: 100, record: NEVER })
+    const ownEarlier = mergeWorks(
+      [{ def: 4, done: 100, record: 1 }],
+      [{ def: 4, done: 200, record: 9 }],
+    )
+    expect(ownEarlier[0]).toEqual({ def: 4, done: 100, record: 1 })
+  })
+
+  it("keeps the survivor's own work under way through a confluence", () => {
+    const site = { def: 6, progress: 900, since: 40 }
+    const seamed = mergeStates(
+      world({ building: site }),
+      incoming({}, { works: [{ def: 2, done: 30, record: 4 }] }),
+    )
+    expect(seamed.building).toEqual(site)
+  })
+
+  // FIX: a regra que o motor já tinha é que obra pronta não se comissiona, e a união é o primeiro
+  // caminho por que um `def` entra em `works` sem passar por `isCommissionable` — o canteiro é largado
+  it('abandons the site when the union already has the work it was building', () => {
+    const site = { def: 19, progress: 41_000, since: 400 }
+    const seamed = mergeStates(
+      world({ works: [{ def: 2, done: 30, record: 1 }], building: site }),
+      incoming({}, { works: [{ def: 19, done: 100, record: 7 }] }),
+    )
+    expect(seamed.building).toBeNull()
+    expect(seamed.works.map((work) => work.def)).toEqual([2, 19])
+  })
+
+  // FIX: e a prova de que importa: sem largar o canteiro o ano seguinte fecha a obra de novo, a lista
+  // guarda o mesmo `def` duas vezes e o coeficiente dela fica multiplicado ao quadrado para sempre
+  it('never lets one work be finished twice, nor its factor be squared', () => {
+    const computer = workIndex('computer')
+    const cost = WORKS[computer]?.cost ?? 0
+    const research = WORKS[computer]?.effect.research ?? 1
+    const result = step(
+      makeState({
+        tick: 500,
+        population: 4e6,
+        economy: 9,
+        works: [{ def: 2, done: 30, record: 1 }],
+        building: { def: computer, progress: cost - 1, since: 400 },
+      }),
+      TEST_WORLD,
+      0,
+      undefined,
+      [],
+      incoming(
+        { population: 1000 },
+        { tick: 500, works: [{ def: computer, done: 100, record: 7 }] },
+      ),
+    )
+    const built = result.state.works.filter((work) => work.def === computer)
+    expect(built).toHaveLength(1)
+    expect(workMods(result.state.works).research).toBeCloseTo(research, 10)
+    expect(result.state.building).toBeNull()
+  })
+
+  // FEAT: o prêmio que o MVP 7 não tinha: duas metades de uma árvore viram uma árvore inteira
+  it('lets the union satisfy a prerequisite neither history could satisfy alone', () => {
+    const own = [{ def: workIndex('electrification'), done: 100, record: 0 }]
+    const other = [{ def: workIndex('computer'), done: 120, record: 3 }]
+    const reactor = workIndex('reactor')
+    expect(isCommissionable({ eras: Era.space, works: own }, reactor)).toBe(false)
+    expect(isCommissionable({ eras: Era.space, works: other }, reactor)).toBe(false)
+    const seamed = mergeStates(
+      world({ eras: Era.space, works: own }),
+      incoming({}, { works: other }),
+    )
+    expect(isCommissionable(seamed, reactor)).toBe(true)
+  })
+
+  // FIX: `tickWork` já entrega a lista em ordem de `def`, então uma costura que não traz obra nenhuma
+  // devolve a MESMA sequência — e o produto dos fatores sai bit a bit igual, sem perturbação alheia
+  it('perturbs nothing at all when the guest brings no works, whatever the survivor built', () => {
+    const everything = WORKS.map((_, def) => ({ def, done: 100 + def, record: def }))
+    const before = workMods(everything)
+    const after = mergeStates(world({ works: everything }), incoming({})).works
+    expect(after).toEqual(everything)
+    const mods = workMods(after)
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) expect(mods[key], key).toBe(before[key])
+  })
+
+  it('leaves a survivor that built alone with exactly what it had', () => {
+    const own = [{ def: 1, done: 10, record: 2 }]
+    expect(mergeStates(world({ works: own }), incoming({})).works).toEqual(own)
+  })
+})
+
 describe('validateMerge', () => {
   const owing = (debts: readonly Debt[]): Merge => incoming({ population: 1000 }, { debts })
 
@@ -460,6 +592,17 @@ describe('validateMerge', () => {
     expect(validateMerge(others)).toBe(others)
     const clean = incoming({ population: 1000 })
     expect(validateMerge(clean)).toBe(clean)
+  })
+
+  // FEAT: uma obra fora do catálogo não moveria coeficiente nenhum, e entraria calada no hash
+  it('refuses a work the catalogue does not have, and takes every one it has', () => {
+    const seam = (works: readonly Work[]): Merge => incoming({ population: 1000 }, { works })
+    expect(() => validateMerge(seam([{ def: WORKS.length, done: 1, record: 0 }]))).toThrow(
+      RangeError,
+    )
+    expect(() => validateMerge(seam([{ def: -1, done: 1, record: 0 }]))).toThrow(RangeError)
+    const every = seam(WORKS.map((_, def) => ({ def, done: def, record: def })))
+    expect(validateMerge(every)).toBe(every)
   })
 
   it('refuses it because that debt would never repay a single credit', () => {

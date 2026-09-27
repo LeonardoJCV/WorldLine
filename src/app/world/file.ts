@@ -1,5 +1,7 @@
+import type { Commission } from '../../engine/commission.ts'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import { SECTORS, type Allocation, type Decision } from '../../engine/state.ts'
+import { WORKS, type WorkId } from '../../engine/work.ts'
 import type { BranchSpec, MergeSpec } from '../../worker/protocol.ts'
 import { formatVersion, isValidMultiverse, type MultiverseLink } from './link.ts'
 
@@ -20,6 +22,7 @@ export function serializeWorld(file: WorldFile): string {
       decisions: file.link.decisions,
       crossings: file.link.crossings ?? [],
       merges: file.link.merges ?? [],
+      commissions: file.link.commissions ?? [],
       branches: file.link.branches,
     },
     null,
@@ -100,6 +103,24 @@ function toMerges(value: unknown): MergeSpec[] | null {
   return merges.some((merge) => merge === null) ? null : (merges as MergeSpec[])
 }
 
+function toCommission(value: unknown): Commission | null {
+  if (!isRecord(value) || typeof value.tick !== 'number' || typeof value.work !== 'string') {
+    return null
+  }
+  return WORKS.some((def) => def.id === value.work)
+    ? { tick: value.tick, work: value.work as WorkId }
+    : null
+}
+
+function toCommissions(value: unknown): Commission[] | null {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) return null
+  const commissions = value.map(toCommission)
+  return commissions.some((commission) => commission === null)
+    ? null
+    : (commissions as Commission[])
+}
+
 function toBranch(value: unknown): BranchSpec | null {
   if (!isRecord(value) || typeof value.parent !== 'number' || typeof value.fork !== 'number') {
     return null
@@ -107,7 +128,9 @@ function toBranch(value: unknown): BranchSpec | null {
   const decisions = toDecisions(value.decisions)
   const crossings = toCrossings(value.crossings)
   const merges = toMerges(value.merges)
+  const commissions = toCommissions(value.commissions)
   if (decisions === null || crossings === null || merges === null) return null
+  if (commissions === null) return null
   // FEAT: um galho sem costura volta com a forma que sempre teve, sem um campo vazio a mais
   return {
     parent: value.parent,
@@ -115,6 +138,7 @@ function toBranch(value: unknown): BranchSpec | null {
     decisions,
     crossings,
     ...(merges.length === 0 ? {} : { merges }),
+    ...(commissions.length === 0 ? {} : { commissions }),
   }
 }
 
@@ -143,6 +167,8 @@ export function parseWorldFile(text: string): WorldFile | null {
   if (branches === null) return null
   const merges = toMerges(data.merges)
   if (merges === null) return null
+  const commissions = toCommissions(data.commissions)
+  if (commissions === null) return null
   const link: MultiverseLink = {
     version: data.version,
     seed: data.seed,
@@ -150,6 +176,7 @@ export function parseWorldFile(text: string): WorldFile | null {
     decisions,
     crossings,
     ...(merges.length === 0 ? {} : { merges }),
+    ...(commissions.length === 0 ? {} : { commissions }),
     branches,
   }
   return isValidMultiverse(link) ? { name: data.name, link } : null

@@ -115,7 +115,7 @@ test('falls back to the planet when the zoom digs past the floor', async ({ page
 
 test('has no system lens in 2D', async ({ page }) => {
   await useGraphics(page, '2d')
-  await page.goto('/#/w/AQAHXmEAAAAA/system')
+  await page.goto('/#/w/BAAHXmEAAAAA/system')
   await expect(page.getByTestId('seed')).toHaveText(String(SEED))
   await expect(stage(page)).toHaveAttribute('data-lens', 'current')
   await expect(page.locator('.system')).toHaveCount(0)
@@ -300,8 +300,9 @@ test('dives to the planet with the visible way down, no gesture needed', async (
 test('reads the natal body alive and the colony with people before the inheritance', async ({
   page,
 }) => {
-  // FEAT: semente 4242 (support.ts), ano 2500 — as duas colônias já fundadas, o natal ainda de pé
-  await page.goto(siblingInheritanceLink(2500))
+  // FEAT: semente 4242 (support.ts), um século antes da queda — as duas colônias já de pé e o
+  // mundo natal também
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended - 100))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 30_000 })
   await enter.click()
@@ -317,8 +318,8 @@ test('reads the natal body as ended and the heir as home after the inheritance',
   page,
 }) => {
   test.slow()
-  // FEAT: cinco anos depois do prazo, a herança já rodou (colonies.spec.ts explica o +5)
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  // FEAT: dois anos depois do prazo, a herança já rodou (colonies.spec.ts explica o +2)
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 60_000 })
   await enter.click()

@@ -2,8 +2,11 @@ import type { Colony } from './colony.ts'
 import type { CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
 import type { Echo } from './echo.ts'
+import type { Building, Work } from './work.ts'
 
-export const SECTORS = ['agriculture', 'industry', 'research', 'conservation'] as const
+export type { Building, Work }
+
+export const SECTORS = ['agriculture', 'industry', 'research', 'conservation', 'works'] as const
 export type Sector = (typeof SECTORS)[number]
 export type Allocation = Readonly<Record<Sector, number>>
 
@@ -18,7 +21,13 @@ export const VARIABLES = [
 ] as const
 export type Variable = (typeof VARIABLES)[number]
 
-export const Era = { agricultural: 1, industrial: 2, demographic: 4, space: 8 } as const
+export const Era = {
+  agricultural: 1,
+  classical: 2,
+  industrial: 4,
+  electric: 8,
+  space: 16,
+} as const
 
 export const NEVER = -1_000_000
 
@@ -33,7 +42,10 @@ export interface ActiveEvent {
   readonly start: number
 }
 
-export type Status = 'running' | 'extinct' | 'collapsed' | 'merged'
+// FEAT: a lista em tempo de execução existe para o mapa de códigos do hash poder ser conferido
+// contra ela — um status sem código alimenta o hash com NaN e colide com qualquer outro sem código
+export const STATUSES = ['running', 'extinct', 'collapsed', 'merged'] as const
+export type Status = (typeof STATUSES)[number]
 
 export interface WorldConfig {
   readonly seed: number
@@ -68,6 +80,9 @@ export interface WorldState {
   readonly home: number | null
   // FEAT: quem essa história absorveu; null até o step() escrever o primeiro merge, na Tarefa 5
   readonly lastMerge: { readonly tick: number; readonly other: string } | null
+  // FEAT: obras concluídas, e a única em curso; as duas nascem vazias, então o hash segue igual
+  readonly works: readonly Work[]
+  readonly building: Building | null
 }
 
 export function isValidAllocation(allocation: Allocation): boolean {

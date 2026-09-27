@@ -14,14 +14,15 @@ import { GOLDEN_SCRIPTS } from '../src/engine/golden.ts'
 import { PARADOX_RATIO } from '../src/engine/params.ts'
 import { step } from '../src/engine/step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from '../src/engine/state.ts'
+import { PRESENTATION_ORDER, WORKS, isCommissionable } from '../src/engine/work.ts'
 import { Worldline } from '../src/engine/worldline.ts'
 
 const STRATEGIES: Record<string, Allocation> = {
-  balanced: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
-  industrial: { agriculture: 25, industry: 60, research: 15, conservation: 0 },
-  starved: { agriculture: 5, industry: 50, research: 40, conservation: 5 },
-  green: { agriculture: 40, industry: 15, research: 20, conservation: 25 },
-  research: { agriculture: 35, industry: 20, research: 40, conservation: 5 },
+  balanced: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+  industrial: { agriculture: 25, industry: 55, research: 15, conservation: 0, works: 5 },
+  starved: { agriculture: 5, industry: 45, research: 40, conservation: 5, works: 5 },
+  green: { agriculture: 40, industry: 10, research: 20, conservation: 25, works: 5 },
+  research: { agriculture: 35, industry: 15, research: 40, conservation: 5, works: 5 },
 }
 const YEARS = [200, 600, 1500, 5000]
 const fixed = (value: number, digits = 1) => value.toFixed(digits).padStart(7)
@@ -62,33 +63,35 @@ type Stance = (typeof STANCES)[number]
 
 const DONOR_ALLOCATION: Allocation = {
   agriculture: 35,
-  industry: 20,
+  industry: 15,
   research: 40,
   conservation: 5,
+  works: 5,
 }
 
 // FEAT: investir na moeda devida é pesquisa para conhecimento, campo e indústria para recurso,
 // e manter a alocação recebida para doutrina
 const STANCE_ALLOCATION: Readonly<Record<CrossingKind, Readonly<Record<Stance, Allocation>>>> = {
   knowledge: {
-    invests: { agriculture: 35, industry: 20, research: 40, conservation: 5 },
-    neglects: { agriculture: 50, industry: 45, research: 0, conservation: 5 },
+    invests: { agriculture: 35, industry: 15, research: 40, conservation: 5, works: 5 },
+    neglects: { agriculture: 50, industry: 40, research: 0, conservation: 5, works: 5 },
   },
   resource: {
-    invests: { agriculture: 55, industry: 35, research: 5, conservation: 5 },
-    neglects: { agriculture: 15, industry: 5, research: 50, conservation: 30 },
+    invests: { agriculture: 55, industry: 30, research: 5, conservation: 5, works: 5 },
+    neglects: { agriculture: 15, industry: 0, research: 50, conservation: 30, works: 5 },
   },
   doctrine: {
-    invests: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
-    neglects: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+    invests: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    neglects: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   },
   people: { invests: DONOR_ALLOCATION, neglects: DONOR_ALLOCATION },
 }
 const DROPPED_DOCTRINE: Allocation = {
   agriculture: 35,
-  industry: 35,
+  industry: 30,
   research: 20,
   conservation: 10,
+  works: 5,
 }
 
 interface Trace {
@@ -398,33 +401,78 @@ const SPACE_STRATEGIES: Record<string, readonly Decision[]> = {
   industrial: [{ tick: 0, allocation: STRATEGIES.industrial ?? DONOR_ALLOCATION }],
   research: [{ tick: 0, allocation: STRATEGIES.research ?? DONOR_ALLOCATION }],
   spacer: [
-    { tick: 0, allocation: { agriculture: 20, industry: 50, research: 30, conservation: 0 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 15, industry: 50, research: 30, conservation: 0, works: 5 },
+    },
   ],
   turning: [
-    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
+    {
+      tick: 400,
+      allocation: { agriculture: 20, industry: 45, research: 30, conservation: 0, works: 5 },
+    },
   ],
   tended: [
-    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 25, conservation: 5 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
+    {
+      tick: 400,
+      allocation: { agriculture: 25, industry: 40, research: 25, conservation: 5, works: 5 },
+    },
   ],
   late: [
-    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-    { tick: 1200, allocation: { agriculture: 25, industry: 45, research: 25, conservation: 5 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
+    {
+      tick: 1200,
+      allocation: { agriculture: 25, industry: 40, research: 25, conservation: 5, works: 5 },
+    },
   ],
   reaching: [
-    { tick: 0, allocation: { agriculture: 30, industry: 40, research: 25, conservation: 5 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 30, industry: 35, research: 25, conservation: 5, works: 5 },
+    },
   ],
   wavering: [
-    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
-    { tick: 3000, allocation: { agriculture: 35, industry: 25, research: 25, conservation: 15 } },
-    { tick: 3800, allocation: { agriculture: 25, industry: 45, research: 25, conservation: 5 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
+    {
+      tick: 400,
+      allocation: { agriculture: 20, industry: 45, research: 30, conservation: 0, works: 5 },
+    },
+    {
+      tick: 3000,
+      allocation: { agriculture: 35, industry: 20, research: 25, conservation: 15, works: 5 },
+    },
+    {
+      tick: 3800,
+      allocation: { agriculture: 25, industry: 40, research: 25, conservation: 5, works: 5 },
+    },
   ],
   abandons: [
-    { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-    { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
-    { tick: 3200, allocation: { agriculture: 40, industry: 15, research: 20, conservation: 25 } },
+    {
+      tick: 0,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
+    {
+      tick: 400,
+      allocation: { agriculture: 20, industry: 45, research: 30, conservation: 0, works: 5 },
+    },
+    {
+      tick: 3200,
+      allocation: { agriculture: 40, industry: 10, research: 20, conservation: 25, works: 5 },
+    },
   ],
 }
 
@@ -618,10 +666,64 @@ function spaceProbe(): void {
   )
 }
 
+// FEAT: a grade da escada de mitigação — construir tudo contra não construir nada, mesma alocação,
+// que é o critério do E7: em semente nenhuma construir pode terminar pior do que não construir
+const WORKS_SEEDS = [1, 2, 3, 7, 11, 42, 101, 777]
+const WORKS_HORIZON = 10_000
+const BY_INDEX: readonly number[] = WORKS.map((_, def) => def)
+const WORKS_PLANS: Record<string, Allocation> = {
+  balanced: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+  spendthrift: { agriculture: 40, industry: 25, research: 25, conservation: 0, works: 10 },
+  thrifty: { agriculture: 40, industry: 25, research: 22, conservation: 3, works: 10 },
+  green: { agriculture: 35, industry: 20, research: 20, conservation: 20, works: 5 },
+}
+
+function worksRun(seed: number, allocation: Allocation, order: readonly number[]): WorldState {
+  const w = new Worldline(seed, [{ tick: 0, allocation }])
+  for (let year = 0; year < WORKS_HORIZON && !w.ended; year++) {
+    if (order.length > 0 && !w.present.building) {
+      const next = order.find((def) => isCommissionable(w.present, def))
+      const work = next === undefined ? undefined : WORKS[next]
+      if (work) w.commission(work.id)
+    }
+    w.advance(1)
+  }
+  return w.present
+}
+
+function worksProbe(): void {
+  for (const [plan, allocation] of Object.entries(WORKS_PLANS)) {
+    for (const [name, order] of [
+      ['catalogue', BY_INDEX],
+      ['era', PRESENTATION_ORDER],
+    ] as const) {
+      console.log(`\n-- ${plan} / ${name} order --`)
+      let worse = 0
+      for (const seed of WORKS_SEEDS) {
+        const built = worksRun(seed, allocation, order)
+        const bare = worksRun(seed, allocation, [])
+        const off =
+          (built.status !== 'running' && bare.status === 'running') ||
+          built.population < bare.population
+        if (off) worse++
+        console.log(
+          `  ${String(seed).padStart(4)}  built ${built.status}@${String(built.tick).padStart(5)}` +
+            ` P ${fixed(built.population / 1e6, 2)}M  N ${fixed(built.environment)}  E ${fixed(built.energy, 1)}` +
+            `  ${String(built.works.length).padStart(2)}w   |   bare ${bare.status} P ${fixed(bare.population / 1e6, 2)}M` +
+            `  N ${fixed(bare.environment)}${off ? '   WORSE' : ''}`,
+        )
+      }
+      console.log(`  worse building than not building: ${worse}/${WORKS_SEEDS.length}`)
+    }
+  }
+}
+
 const args = process.argv.slice(2)
 const seed = Number(args.find((a) => /^\d+$/.test(a)) ?? 482913)
-const mode = args.find((a) => a === 'debt' || a === 'strategies' || a === 'space') ?? 'all'
-if (mode === 'space') spaceProbe()
+const mode =
+  args.find((a) => a === 'debt' || a === 'strategies' || a === 'space' || a === 'works') ?? 'all'
+if (mode === 'works') worksProbe()
+else if (mode === 'space') spaceProbe()
 else {
   if (mode !== 'debt') strategyProbe(seed)
   if (mode !== 'strategies') debtProbe()

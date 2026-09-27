@@ -1,5 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import type { Commission } from '../../engine/commission.ts'
 import {
   CROSSING_KINDS,
   crossingAmounts,
@@ -7,7 +8,7 @@ import {
   type Crossing,
   type CrossingKind,
 } from '../../engine/crossing.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../../engine/golden.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, goldenWorld } from '../../engine/golden.ts'
 import { hashState } from '../../engine/hash.ts'
 import { HORIZON, MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
@@ -43,15 +44,30 @@ import { toSavedWorld } from './library.ts'
 import { parseRoute } from './route.ts'
 import { seedFromText } from './seed.ts'
 
-const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
-const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+const starved: Allocation = {
+  agriculture: 5,
+  industry: 45,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
+const balanced: Allocation = {
+  agriculture: 40,
+  industry: 25,
+  research: 20,
+  conservation: 10,
+  works: 5,
+}
 const sample: WorldLink = {
   version: MODEL_VERSION,
   seed: 482913,
   tick: 320,
   decisions: [
     { tick: 100, allocation: starved },
-    { tick: 250, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
+    {
+      tick: 250,
+      allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+    },
   ],
 }
 
@@ -60,10 +76,17 @@ const allocation = fc
     fc.integer({ min: 0, max: 100 }),
     fc.integer({ min: 0, max: 100 }),
     fc.integer({ min: 0, max: 100 }),
+    fc.integer({ min: 0, max: 100 }),
   )
   .map((cuts): Allocation => {
-    const [a, b, c] = [...cuts].sort((x, y) => x - y) as [number, number, number]
-    return { agriculture: a, industry: b - a, research: c - b, conservation: 100 - c }
+    const [a, b, c, d] = [...cuts].sort((x, y) => x - y) as [number, number, number, number]
+    return {
+      agriculture: a,
+      industry: b - a,
+      research: c - b,
+      conservation: d - c,
+      works: 100 - d,
+    }
   })
 
 const link = fc
@@ -131,6 +154,24 @@ function withExtraByte(text: string): string {
   return btoa(`${binary}\0`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+// FEAT: o livro de acontecimentos com as referências de UM registro a outro, que são índices nele:
+// é por elas que uma troca de índice no meio da história aparece, e o hash do último ano não a vê
+function ledgerOf(world: Worldline) {
+  return world.records.map((record) => ({
+    event: record.event,
+    start: record.start,
+    end: record.end,
+    after: record.causes.flatMap((cause) => (cause.kind === 'event' ? [cause.record] : [])),
+  }))
+}
+
+function withByteAt(text: string, index: number, value: number): string {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
+  const bytes = [...binary]
+  bytes[index] = String.fromCharCode(value)
+  return btoa(bytes.join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 function withoutBytes(text: string, count: number): string {
   const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
   return btoa(binary.slice(0, -count)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -181,8 +222,8 @@ describe('world link', () => {
     expect(isValidLink({ ...sample, tick: HORIZON + 1 })).toBe(false)
   })
 
-  it('trusts every version that opens the same world', () => {
-    expect(isCompatibleVersion(1)).toBe(true)
+  it('refuses every link written before the works existed', () => {
+    for (const version of [1, 2, 3]) expect(isCompatibleVersion(version)).toBe(false)
     expect(isCompatibleVersion(MODEL_VERSION)).toBe(true)
     expect(isCompatibleVersion(SEAMED_VERSION)).toBe(true)
     expect(isCompatibleVersion(0)).toBe(false)
@@ -341,13 +382,23 @@ const crossed: MultiverseLink = {
   ],
 }
 
-// FEAT: gravado pelo escritor da versão 1, antes das travessias existirem
+// FEAT: gravado pelo escritor da versão 1, quando a alocação tinha quatro destinos
 const VERSION_1 = 'AQAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAA'
+// FEAT: e pelo escritor da versão 2, na mesma alocação de quatro destinos
+const VERSION_2 = 'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAAAAAA'
+// FEAT: o link que um observador de verdade compartilhava: uma decisão de quatro setores, ano 320
+const DECIDED_V1 = 'AQAHXmEBQAABAGQoHhQK'
+// FEAT: o mesmo, em árvore — os bytes que o novo passo de sete leria como uma obra em zero
+const DECIDED_V2_TREE = 'AgAHXmEBQAABAGQoHhQKAAA'
 
-// FEAT: os bytes que o escritor da versão 2 produzia antes da costura existir, copiados dele
-const SEAMLESS_TREE = 'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAAAAAA'
+// FEAT: os bytes que o escritor da versão 4 produz para uma árvore sem costura — os seis últimos
+// são os três contadores de comissão zerados, um por história, que toda árvore da versão 4 carrega
+const SEAMLESS_TREE = 'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAAAAAAAAAA'
 const SEAMLESS_CROSSED =
-  'AgAHXmEBQAACAGQFMigFAPooHhQKAgAAZAABAGQFMigFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUyKAUA'
+  'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUtKAUFAAAAAAAAAA'
+// FEAT: e a mesma árvore com três comissões, duas na raiz e uma no primeiro galho
+const COMMISSIONED_TREE =
+  'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAAAAgB4AgEEAAABAJYEAAA'
 
 // FEAT: os nomes são posições no link: a raiz é A, o primeiro galho é B, o segundo é C
 const arrived: MergeSpec = { tick: 320, self: 'A', other: 'B', direction: 'in' }
@@ -369,16 +420,35 @@ const confluence: MultiverseLink = {
   ],
 }
 
+// FEAT: a mesma árvore com comissões próprias na raiz e no primeiro galho
+const commissioned: MultiverseLink = {
+  ...tree,
+  commissions: [
+    { tick: 120, work: 'granary' },
+    { tick: 260, work: 'irrigation' },
+  ],
+  branches: [
+    {
+      parent: 0,
+      fork: 100,
+      decisions: [{ tick: 100, allocation: starved }],
+      crossings: [],
+      commissions: [{ tick: 150, work: 'pottery' }],
+    },
+    { parent: 1, fork: 200, decisions: [], crossings: [] },
+  ],
+}
+
 describe('multiverse link', () => {
   it('round-trips a tree of worldlines', () => {
     expect(decodeMultiverse(encodeMultiverse(tree))).toEqual(tree)
   })
 
-  it('writes a multiverse without a seam on the very bytes it always wrote', () => {
+  it('writes a multiverse without a seam on the bytes of the fifth sector', () => {
     expect(encodeMultiverse(tree)).toBe(SEAMLESS_TREE)
     expect(encodeMultiverse(crossed)).toBe(SEAMLESS_CROSSED)
     expect(linkHash(tree)).toBe(`#/m/${SEAMLESS_TREE}`)
-    // FEAT: nenhum link já salvo muda de versão por causa de uma costura que ele não tem
+    // FEAT: um link sem costura fica na versão do modelo, porque não tem costura para carregar
     expect(decodeMultiverse(SEAMLESS_TREE)?.version).toBe(MODEL_VERSION)
     expect(decodeMultiverse(SEAMLESS_CROSSED)?.version).toBe(MODEL_VERSION)
   })
@@ -435,7 +505,10 @@ describe('multiverse link', () => {
   it('carries the circular flag, so a world that collapsed from a loop reopens collapsed', () => {
     // FEAT: pesquisa zerada nunca quita o presente, e o ciclo marca o paradoxo no ano zero
     const idle: Decision[] = [
-      { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+      {
+        tick: 0,
+        allocation: { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 },
+      },
     ]
     const plain: Crossing = {
       tick: 0,
@@ -485,13 +558,137 @@ describe('multiverse link', () => {
     )
   })
 
-  it('still reads a version 1 link', () => {
-    expect(decodeMultiverse(VERSION_1)).toEqual({ ...tree, version: 1 })
+  it('no longer replays a link written before the allocation grew', () => {
+    expect(decodeMultiverse(VERSION_1)?.decisions).toEqual([])
+    expect(decodeMultiverse(VERSION_2)?.decisions).toEqual([])
+  })
+
+  // FIX: a recusa era um efeito da conta de bytes, então o link antigo com decisão sumia sem aviso
+  it('refuses an old link on its version, and hands the version back so the screen can say so', () => {
+    for (const text of [DECIDED_V1, DECIDED_V2_TREE]) {
+      const back = decodeMultiverse(text) ?? decodeLink(text)
+      if (!back) throw new Error(`the old link ${text} vanished instead of being refused`)
+      expect(isCompatibleVersion(back.version)).toBe(false)
+      expect(back.seed).toBe(482913)
+      expect(back.tick).toBe(320)
+      expect(back.decisions).toEqual([])
+    }
+    // FEAT: a tela só anuncia o que a rota entrega; um link antigo não pode cair no genesis calado
+    const route = parseRoute(`#/w/${DECIDED_V1}`, '')
+    expect(route.screen).toBe('observatory')
+    expect(route.screen === 'observatory' && route.link.version).toBe(1)
+    expect(decodeLink(DECIDED_V1)?.version).toBe(1)
+  })
+
+  // FEAT: o teste que protege o invariante do projeto inteiro — um mundo que comissionou obra sai e
+  // volta nos mesmos bytes, e o replay do link reproduz o livro de acontecimentos inteiro
+  it('reopens a link with commissions byte-identically', () => {
+    const text = encodeMultiverse(commissioned)
+    expect(text).toBe(COMMISSIONED_TREE)
+    const back = decodeMultiverse(text)
+    expect(back).toEqual(commissioned)
+    expect(encodeMultiverse(back as MultiverseLink)).toBe(text)
+
+    const ordered: Commission[] = [{ tick: 600, work: 'irrigation' }]
+    const value: MultiverseLink = {
+      version: MODEL_VERSION,
+      seed: 482913,
+      tick: 700,
+      decisions: [{ tick: 0, allocation: balanced }],
+      branches: [],
+      crossings: [],
+      commissions: ordered,
+    }
+    const reopened = decodeMultiverse(encodeMultiverse(value))
+    expect(reopened?.commissions).toEqual(ordered)
+    const built = new Worldline(value.seed, value.decisions, null, [], [], ordered)
+    const shared = new Worldline(value.seed, value.decisions, null, [], [], reopened?.commissions)
+    const idle = new Worldline(value.seed, value.decisions)
+    built.advance(700)
+    shared.advance(700)
+    idle.advance(700)
+    // FIX: o hash de um ano só não vê um registro trocado no meio da história, e `Work.record` fica
+    // fora do hash — então a promessa do link se afirma sobre o livro inteiro e sobre a obra
+    expect(ledgerOf(shared)).toEqual(ledgerOf(built))
+    expect(ledgerOf(built)).toEqual([
+      { event: 'golden_age', start: 43, end: null, after: [] },
+      { event: 'agricultural_revolution', start: 395, end: null, after: [0] },
+      { event: 'work_done', start: 623, end: 623, after: [1] },
+      { event: 'epidemic', start: 656, end: 659, after: [0] },
+    ])
+    expect(shared.present.works).toEqual(built.present.works)
+    expect(built.present.works).toEqual([{ def: 0, done: 623, record: 2 }])
+    for (let year = 0; year <= 700; year++) {
+      expect(shared.hashAt(year)).toBe(built.hashAt(year))
+    }
+    // FEAT: e o controle: sem a comissão não há obra nem recibo dela, então o teste sabe falhar
+    expect(idle.present.works).toEqual([])
+    expect(ledgerOf(idle)).not.toEqual(ledgerOf(built))
+    expect(idle.hashAt(700)).not.toBe(built.hashAt(700))
+  })
+
+  it('sends a commissioned world down the long form, because the short one cannot carry it', () => {
+    const alone: MultiverseLink = {
+      ...sample,
+      branches: [],
+      crossings: [],
+      commissions: [{ tick: 600, work: 'granary' }],
+    }
+    expect(linkHash(alone)).toBe(`#/m/${encodeMultiverse(alone)}`)
+    expect(decodeMultiverse(encodeMultiverse(alone))?.commissions).toEqual(alone.commissions)
+  })
+
+  it('refuses a corrupted commission log without throwing', () => {
+    const swapped: MultiverseLink = {
+      ...commissioned,
+      commissions: [
+        { tick: 260, work: 'irrigation' },
+        { tick: 120, work: 'granary' },
+      ],
+    }
+    expect(decodeMultiverse(encodeMultiverse(swapped))).toBeNull()
+    expect(isValidMultiverse(swapped)).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...commissioned,
+        commissions: [{ tick: 120, work: 'obelisk' }] as unknown as Commission[],
+      }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({ ...commissioned, commissions: 'x' as unknown as readonly Commission[] }),
+    ).toBe(false)
+    // FIX: um contador mentiroso lia além do buffer e ESTOURAVA, em vez de recusar o link; o byte 45
+    // é a parte baixa do contador de comissões da raiz, que a fixação de COMMISSIONED_TREE ancora
+    const lying = withByteAt(COMMISSIONED_TREE, 45, 0xff)
+    expect(() => decodeMultiverse(lying)).not.toThrow()
+    expect(decodeMultiverse(lying)).toBeNull()
+    expect(decodeMultiverse(withoutBytes(COMMISSIONED_TREE, 4))).toBeNull()
+    // FEAT: uma comissão anterior à bifurcação não é do galho; ela chega pela mãe, no replay dela
+    expect(
+      isValidMultiverse({
+        ...commissioned,
+        branches: [
+          { parent: 0, fork: 100, decisions: [], commissions: [{ tick: 99, work: 'granary' }] },
+        ],
+      }),
+    ).toBe(false)
   })
 
   it('refuses trailing bytes', () => {
     expect(decodeMultiverse(withExtraByte(encodeMultiverse(crossed)))).toBeNull()
-    expect(decodeMultiverse(withExtraByte(VERSION_1))).toBeNull()
+    expect(decodeMultiverse(withExtraByte(SEAMLESS_TREE))).toBeNull()
+  })
+
+  // FIX: o custo cabe num byte, e um crédito acima do teto voltava 244 em vez de 500, em silêncio
+  it('refuses to write a cost the byte could only carry truncated', () => {
+    const dear = (cost: number): MultiverseLink => ({
+      ...crossed,
+      crossings: [{ ...arrival, cost }],
+    })
+    expect(() => encodeMultiverse(dear(500))).toThrow(RangeError)
+    expect(() => encodeMultiverse(dear(-1))).toThrow(RangeError)
+    const most = decodeMultiverse(encodeMultiverse(dear(255)))
+    expect(most?.crossings?.[0]?.cost).toBe(255)
   })
 
   it('refuses a corrupted crossing log without throwing', () => {
@@ -578,6 +775,27 @@ describe('multiverse link', () => {
     expect(parseWorldFile(legacy)?.link).toEqual(tree)
   })
 
+  // FIX: um arquivo que não gravasse a comissão perdia a obra em silêncio, como o link perderia
+  it('writes commissions to world files and reads files without them', () => {
+    const text = serializeWorld({ name: 'Built', link: commissioned })
+    expect(JSON.parse(text)).toMatchObject({
+      commissions: [
+        { tick: 120, work: 'granary' },
+        { tick: 260, work: 'irrigation' },
+      ],
+    })
+    expect(parseWorldFile(text)).toEqual({ name: 'Built', link: commissioned })
+    const legacy = serializeWorld({ name: 'Old', link: tree }).replace(
+      /,?\s*"commissions": \[\]/g,
+      '',
+    )
+    expect(parseWorldFile(legacy)?.link).toEqual(tree)
+    expect(parseWorldFile(text.replace('"work": "granary"', '"work": "obelisk"'))).toBeNull()
+    expect(
+      parseWorldFile(text.replace('"commissions": [', '"commissions": "none", "spare": [')),
+    ).toBe(null)
+  })
+
   it('rejects a world file whose crossings break the rules', () => {
     const text = serializeWorld({ name: 'Crossed', link: crossed })
     expect(parseWorldFile(text.replace('"cost": 6', '"cost": -1'))).toBeNull()
@@ -597,8 +815,33 @@ describe('library', () => {
       savedAt: 1,
       link: { version: MODEL_VERSION, seed: 482913, tick: 0, decisions: [] },
     }
-    expect(toSavedWorld(legacyRow)?.link.branches).toEqual([])
+    expect(toSavedWorld(legacyRow)?.link?.branches).toEqual([])
     expect(toSavedWorld({ ...legacyRow, link: { ...legacyRow.link, branches: 'x' } })).toBeNull()
+  })
+
+  // FIX: um registro de modelo anterior era filtrado da lista e ficava no banco sem quem o apagasse
+  it('keeps a record from an earlier model listed, named and without a link to open', () => {
+    const row = {
+      id: 'b',
+      name: 'Before the works',
+      savedAt: 2,
+      link: {
+        version: 2,
+        seed: 482913,
+        tick: 320,
+        decisions: [
+          {
+            tick: 100,
+            allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+          },
+        ],
+      },
+    }
+    const kept = toSavedWorld(row)
+    expect(kept).not.toBeNull()
+    expect(kept?.name).toBe('Before the works')
+    expect(kept?.id).toBe('b')
+    expect(kept?.link).toBeNull()
   })
 })
 
@@ -612,14 +855,24 @@ describe('a link to a history that outlived its world', () => {
       decisions: plan.decisions,
       branches: [],
       crossings: plan.crossings,
+      commissions: plan.commissions,
     }
     const back = decodeMultiverse(encodeMultiverse(value))
     expect(back).toEqual(value)
     const file = parseWorldFile(serializeWorld({ name: 'Heir', link: value }))
     expect(file?.link).toEqual(value)
 
-    const sent = new Worldline(value.seed, plan.decisions, null, plan.crossings)
-    const opened = new Worldline(value.seed, back?.decisions ?? [], null, back?.crossings ?? [])
+    const sent = goldenWorld(value.seed, plan)
+    // FEAT: o link é o roteiro inteiro — sem as comissões o mundo reaberto não tem foguete, não
+    // coloniza e não herda, e é isso que a igualdade dos dois fingerprints prova
+    const opened = new Worldline(
+      value.seed,
+      back?.decisions ?? [],
+      null,
+      back?.crossings ?? [],
+      [],
+      back?.commissions ?? [],
+    )
     sent.advance(INHERITANCE_CASE.year)
     opened.advance(INHERITANCE_CASE.year)
     expect(sent.present.status).toBe('running')
@@ -716,6 +969,7 @@ function viewOf(world: WorldProgress): WorldView {
     previousDebts: null,
     paradox: world.paradox,
     colonies: world.colonies,
+    commissions: world.commissions,
   }
 }
 

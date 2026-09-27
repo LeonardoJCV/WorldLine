@@ -63,7 +63,7 @@ function fakeSnapshot(shock: number): Snapshot {
     previous: null,
     eras: 0,
     active: [],
-    allocation: { agriculture: 25, industry: 25, research: 25, conservation: 25 },
+    allocation: { agriculture: 25, industry: 20, research: 25, conservation: 25, works: 5 },
     status: 'running',
     home: null,
     debts: [],
@@ -169,7 +169,7 @@ describe('simulation store', () => {
 
   it('records decisions made at the present', async () => {
     const { store } = setup()
-    const allocation = { agriculture: 60, industry: 20, research: 10, conservation: 10 }
+    const allocation = { agriculture: 60, industry: 15, research: 10, conservation: 10, works: 5 }
     store.getState().create(482913)
     store.getState().step(30)
     await flush()
@@ -211,7 +211,7 @@ describe('simulation store', () => {
 
   it('opens a shared world at its year with its decisions', async () => {
     const { store } = setup()
-    const allocation = { agriculture: 60, industry: 20, research: 10, conservation: 10 }
+    const allocation = { agriculture: 60, industry: 15, research: 10, conservation: 10, works: 5 }
     store.getState().open({
       version: 7,
       seed: 482913,
@@ -230,7 +230,7 @@ describe('simulation store', () => {
 
   it('branches from the observed year and focuses the new worldline', async () => {
     const { store } = setup()
-    const starved = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
+    const starved = { agriculture: 5, industry: 45, research: 40, conservation: 5, works: 5 }
     store.getState().create(482913)
     store.getState().step(100)
     await flush()
@@ -254,7 +254,9 @@ describe('simulation store', () => {
     store.getState().setCursor(40)
     await flush()
     expect(store.getState().branching).toBe(false)
-    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    store
+      .getState()
+      .branch({ agriculture: 5, industry: 45, research: 40, conservation: 5, works: 5 })
     expect(store.getState().branching).toBe(true)
     await flush()
     await flush()
@@ -268,7 +270,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(30)
     await flush()
-    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    store
+      .getState()
+      .branch({ agriculture: 5, industry: 45, research: 40, conservation: 5, works: 5 })
     await flush()
     await flush()
     store.getState().setCursor(60)
@@ -286,7 +290,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(10)
     await flush()
-    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    store
+      .getState()
+      .branch({ agriculture: 5, industry: 45, research: 40, conservation: 5, works: 5 })
     await flush()
     await flush()
     store.getState().remove('B')
@@ -305,9 +311,10 @@ describe('simulation store', () => {
     expect(before).toBeGreaterThan(0)
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     const crossing = await client.cross('A', id, 'knowledge', 1)
     await flush()
@@ -326,9 +333,10 @@ describe('simulation store', () => {
     await flush()
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     await client.cross('A', id, 'knowledge', 1)
     store.getState().step(1)
@@ -337,11 +345,14 @@ describe('simulation store', () => {
     const b = state.worlds.find((w) => w.info.id === id)
     expect(b?.debts.length).toBeGreaterThan(0)
     expect(b?.debts[0]).toMatchObject({ kind: 'knowledge' })
-    expect(b?.paradox).toBeNull()
+    // FEAT: com a era elétrica na escada, o presente salta um degrau e abre paradoxo em quem
+    // recebeu
+    expect(b?.paradox).toMatchObject({ kind: 'leap' })
     expect(state.worlds.find((w) => w.info.id === 'A')?.debts).toEqual([])
+    expect(state.worlds.find((w) => w.info.id === 'A')?.paradox).toBeNull()
     store.getState().setFocus(id)
     expect(store.getState().debts).toEqual(b?.debts)
-    expect(store.getState().paradox).toBeNull()
+    expect(store.getState().paradox).toEqual(b?.paradox)
   })
 
   it('remembers the debts from the last year that differed, not from every progress message', async () => {
@@ -353,9 +364,10 @@ describe('simulation store', () => {
     await flush()
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     // FIX: uma travessia por si só reporta um progresso sem o ano mudar; não deve mexer na âncora
     await client.cross('A', id, 'knowledge', 1)
@@ -385,7 +397,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setMode('cross')
@@ -407,7 +421,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setMode('cross')
@@ -432,7 +448,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setMode('cross')
@@ -450,7 +468,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(40)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setMode('cross')
@@ -484,7 +504,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(40)
     await flush()
-    store.getState().branch({ agriculture: 5, industry: 50, research: 40, conservation: 5 })
+    store
+      .getState()
+      .branch({ agriculture: 5, industry: 45, research: 40, conservation: 5, works: 5 })
     await flush()
     await flush()
     store.getState().setMode('cross')
@@ -506,7 +528,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setFocus('A')
@@ -527,12 +551,16 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setCursor(200)
     await flush()
-    store.getState().branch({ agriculture: 10, industry: 50, research: 30, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 10, industry: 45, research: 30, conservation: 10, works: 5 })
     await flush()
     await flush()
     expect(store.getState().focus).toBe('C')
@@ -552,7 +580,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setMode('cross')
@@ -584,9 +614,10 @@ describe('simulation store', () => {
     await flush()
     const id = await client.branch('A', 100, {
       agriculture: 40,
-      industry: 30,
+      industry: 25,
       research: 20,
       conservation: 10,
+      works: 5,
     })
     await client.cross(id, 'A', 'knowledge', 1)
     await flush()
@@ -600,6 +631,30 @@ describe('simulation store', () => {
     )
   })
 
+  // FEAT: o gesto inteiro, do hospedeiro ao link e de volta: o mundo reaberto vive a mesma obra
+  it('reopens the commissions its own link describes', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const store = createSimulationStore(client)
+    store.getState().create(482913)
+    store.getState().step(600)
+    await flush()
+    client.commission('A', 'irrigation')
+    store.getState().step(30)
+    await flush()
+    expect(store.getState().worlds[0]?.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+    const link = currentLink(store.getState())
+    if (link === null) throw new Error('no link')
+    expect(link.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+    const { store: reopened } = setup()
+    reopened.getState().open(link)
+    await flush()
+    expect(reopened.getState().worlds.map((world) => world.commissions)).toEqual(
+      store.getState().worlds.map((world) => world.commissions),
+    )
+    expect(reopened.getState().present).toEqual(store.getState().present)
+  })
+
   // FIX: a sobrevivente é sempre quem está em foco; trocar os dois argumentos pediria a costura ao contrário
   it('asks the host to preview the focus as survivor and the given world as departing', async () => {
     const { port, sent } = recordingPort()
@@ -607,7 +662,9 @@ describe('simulation store', () => {
     store.getState().create(482913)
     store.getState().step(2000)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     expect(store.getState().focus).toBe('B')
@@ -669,7 +726,9 @@ describe('simulation store', () => {
     store.getState().create(482913)
     store.getState().step(2000)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setFocus('A')
@@ -709,7 +768,9 @@ describe('simulation store', () => {
     store.getState().create(482913)
     store.getState().step(2000)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setFocus('A')
@@ -764,7 +825,9 @@ describe('simulation store', () => {
     await flush()
     store.getState().setCursor(100)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setFocus('A')
@@ -786,7 +849,9 @@ describe('simulation store', () => {
     store.getState().create(482913)
     store.getState().step(2000)
     await flush()
-    store.getState().branch({ agriculture: 40, industry: 30, research: 20, conservation: 10 })
+    store
+      .getState()
+      .branch({ agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 })
     await flush()
     await flush()
     store.getState().setFocus('A')

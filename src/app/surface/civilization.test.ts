@@ -13,7 +13,13 @@ import { findSites } from './sites.ts'
 import { createTerrain } from './terrain.ts'
 
 const sites = findSites(createTerrain(482913, planetPalette(482913)))
-const allocation: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+const allocation: Allocation = {
+  agriculture: 40,
+  industry: 25,
+  research: 20,
+  conservation: 10,
+  works: 5,
+}
 const values: Record<Variable, number> = {
   population: 2_000_000,
   food: 800_000,
@@ -104,7 +110,9 @@ describe('surfaceModel', () => {
     const light = surfaceModel(input({ ...industrial }, { energy: 9 }))
     expect(heavy.factories).toBeGreaterThan(light.factories)
     const green = surfaceModel(
-      input({ allocation: { ...allocation, conservation: 60, research: 0, industry: 0 } }),
+      input({
+        allocation: { ...allocation, conservation: 60, research: 0, industry: 0, works: 0 },
+      }),
     )
     expect(green.forest).toBeGreaterThan(plain.forest)
     expect(green.clearing).toBeLessThan(plain.clearing)

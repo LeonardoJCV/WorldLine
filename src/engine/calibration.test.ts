@@ -12,15 +12,46 @@ import { causalDistance } from './distance.ts'
 import { worldMetrics, type EventId } from './events.ts'
 import { genesis } from './genesis.ts'
 import { GOLDEN_SCRIPTS, type GoldenScript } from './golden.ts'
-import { PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
+import {
+  DEFAULT_ALLOCATION,
+  HORIZON,
+  PARADOX_GRACE,
+  PARADOX_PATIENCE,
+  PARADOX_RATIO,
+} from './params.ts'
 import { step } from './step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from './state.ts'
+import { PRESENTATION_ORDER, WORKS, isCommissionable, workIndex, type Work } from './work.ts'
 import { Worldline } from './worldline.ts'
 
-const balanced: Allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
-const industrial: Allocation = { agriculture: 25, industry: 60, research: 15, conservation: 0 }
-const starved: Allocation = { agriculture: 5, industry: 50, research: 40, conservation: 5 }
-const research: Allocation = { agriculture: 35, industry: 20, research: 40, conservation: 5 }
+const balanced: Allocation = {
+  agriculture: 40,
+  industry: 25,
+  research: 20,
+  conservation: 10,
+  works: 5,
+}
+const industrial: Allocation = {
+  agriculture: 25,
+  industry: 55,
+  research: 15,
+  conservation: 0,
+  works: 5,
+}
+const starved: Allocation = {
+  agriculture: 5,
+  industry: 45,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
+const research: Allocation = {
+  agriculture: 35,
+  industry: 15,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
 
 function run(seed: number, allocation: Allocation, years: number): Worldline {
   const w = new Worldline(seed, [{ tick: 0, allocation }])
@@ -75,24 +106,31 @@ const DEBT_KINDS: readonly CrossingKind[] = ['knowledge', 'resource', 'doctrine'
 const DEBT_HORIZON = 2000
 const ELDER_GAP = 2000
 
-const donorAllocation: Allocation = { agriculture: 35, industry: 20, research: 40, conservation: 5 }
+const donorAllocation: Allocation = {
+  agriculture: 35,
+  industry: 15,
+  research: 40,
+  conservation: 5,
+  works: 5,
+}
 const invests: Readonly<Record<CrossingKind, Allocation>> = {
-  knowledge: { agriculture: 35, industry: 20, research: 40, conservation: 5 },
-  resource: { agriculture: 55, industry: 35, research: 5, conservation: 5 },
-  doctrine: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+  knowledge: { agriculture: 35, industry: 15, research: 40, conservation: 5, works: 5 },
+  resource: { agriculture: 55, industry: 30, research: 5, conservation: 5, works: 5 },
+  doctrine: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   people: donorAllocation,
 }
 const neglects: Readonly<Record<CrossingKind, Allocation>> = {
-  knowledge: { agriculture: 50, industry: 45, research: 0, conservation: 5 },
-  resource: { agriculture: 15, industry: 5, research: 50, conservation: 30 },
-  doctrine: { agriculture: 40, industry: 30, research: 20, conservation: 10 },
+  knowledge: { agriculture: 50, industry: 40, research: 0, conservation: 5, works: 5 },
+  resource: { agriculture: 15, industry: 0, research: 50, conservation: 30, works: 5 },
+  doctrine: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
   people: donorAllocation,
 }
 const droppedDoctrine: Allocation = {
   agriculture: 35,
-  industry: 35,
+  industry: 30,
   research: 20,
   conservation: 10,
+  works: 5,
 }
 
 interface Borrowed {
@@ -307,14 +345,26 @@ describe('debt calibration', () => {
 // FEAT: a grade do espaço, a mesma de `npm run probe space`, reduzida para caber num teste
 const SPACE_SEEDS = [1, 7, 42, 4242, 482913, 99991, 1597463007, 0xffffffff]
 const SPACE_HORIZON = 5000
-const SPACER: Allocation = { agriculture: 20, industry: 50, research: 30, conservation: 0 }
+const SPACER: Allocation = {
+  agriculture: 15,
+  industry: 50,
+  research: 30,
+  conservation: 0,
+  works: 5,
+}
 const TURN: readonly Decision[] = [
   { tick: 0, allocation: balanced },
-  { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
+  {
+    tick: 400,
+    allocation: { agriculture: 20, industry: 45, research: 30, conservation: 0, works: 5 },
+  },
 ]
 const RETREAT: readonly Decision[] = [
   ...TURN,
-  { tick: 3200, allocation: { agriculture: 40, industry: 15, research: 20, conservation: 25 } },
+  {
+    tick: 3200,
+    allocation: { agriculture: 40, industry: 10, research: 20, conservation: 25, works: 5 },
+  },
 ]
 
 interface Left {
@@ -328,6 +378,10 @@ interface Left {
   readonly population: number
   readonly peakEnergy: number
 }
+
+// FEAT: o foguete pronto, de efeito vazio: os critérios abaixo medem a energia, o sustento e a
+// superlotação, não o portão, então o mundo recebe a obra de graça no ano em que a era o autoriza
+const FLOWN: readonly Work[] = [{ def: workIndex('rocket'), done: 0, record: 0 }]
 
 function leave(
   seed: number,
@@ -357,13 +411,8 @@ function leave(
       if (entry) arriving.push(entry)
       crossed++
     }
-    const result = step(
-      grounded ? { ...s, eras: s.eras & ~Era.space } : s,
-      origin.world,
-      records,
-      due,
-      arriving,
-    )
+    const flown = !grounded && (s.eras & Era.space) !== 0
+    const result = step(flown ? { ...s, works: FLOWN } : s, origin.world, records, due, arriving)
     records += result.started.length
     s = result.state
     if (eraAt < 0 && (s.eras & Era.space) !== 0) eraAt = s.tick
@@ -387,18 +436,134 @@ function leave(
   }
 }
 
+// FEAT: as duas alocações do plano; o laço que as conduz é o mesmo, então só a alocação as separa
+const WORKS_PATH: Allocation = {
+  agriculture: 25,
+  industry: 25,
+  research: 20,
+  conservation: 5,
+  works: 25,
+}
+const NO_WORKS: Allocation = {
+  agriculture: 40,
+  industry: 30,
+  research: 20,
+  conservation: 10,
+  works: 0,
+}
+const ROCKET = workIndex('rocket')
+// FEAT: a subida ao céu, em ordem de pré-requisito — a cadeia que a E8 partiu do foguete único
+const CLIMB = (['launchpad', 'telemetry', 'propellant', 'rocket'] as const).map(workIndex)
+
+interface Conducted {
+  // FEAT: o ano de conclusão de cada obra, porque um mundo sem obra nenhuma é uma lista vazia
+  readonly works: readonly number[]
+  // FEAT: e o ano de cada obra por índice, para medir o degrau que cada conquista custou
+  readonly done: ReadonlyMap<number, number>
+  readonly rocketAt: number
+  readonly founded: number
+  readonly alive: boolean
+}
+
+// FEAT: conduzir é abrir a próxima obra possível em todo ano de canteiro livre, na ordem que o jogo
+// apresenta — e é ela, não a ordem do catálogo, porque é a que um observador de fato veria
+function conduct(seed: number, allocation: Allocation): Conducted {
+  const w = new Worldline(seed, [{ tick: 0, allocation }])
+  let founded = 0
+  // FEAT: a chave é corpo e ano de fundação, não o tamanho da frota: perder uma e fundar outra no
+  // mesmo ano deixa o tamanho igual, e uma fundação que o critério precisa ver passaria batida
+  let fleet = new Set<string>()
+  for (let year = 0; year < SPACE_HORIZON && !w.ended; year++) {
+    if (!w.present.building) {
+      const next = PRESENTATION_ORDER.find((def) => isCommissionable(w.present, def))
+      const work = next === undefined ? undefined : WORKS[next]
+      if (work) w.commission(work.id)
+    }
+    w.advance(1)
+    const now = new Set(w.present.colonies.map((c) => `${c.body}:${c.founded}`))
+    for (const fresh of now) if (!fleet.has(fresh)) founded++
+    fleet = now
+  }
+  return {
+    works: w.present.works.map((done) => done.done),
+    done: new Map(w.present.works.map((done) => [done.def, done.done])),
+    rocketAt: w.present.works.find((done) => done.def === ROCKET)?.done ?? -1,
+    founded,
+    alive: w.present.status === 'running',
+  }
+}
+
 describe('space calibration', () => {
-  it('no reference script ever reaches the space era, on any seed', () => {
-    // FEAT: a regra dura do plano — os doze fingerprints dependem de o portão nunca abrir aqui
+  // FEAT: a razão nova, que substitui a regra de o portão nunca abrir: o MVP inteiro existe para o
+  // céu ser alcançável, e o preço do foguete é o que decide em que milênio ele é alcançado
+  it('a history conducted for works finishes the rocket between year 2000 and 3000', () => {
+    const runs = SPACE_SEEDS.map((seed) => conduct(seed, WORKS_PATH))
+    const arrived = runs.filter((run) => run.rocketAt >= 0)
+    expect(arrived.length).toBeGreaterThanOrEqual(6)
+    for (const run of arrived) {
+      expect(run.rocketAt).toBeGreaterThan(2000)
+      expect(run.rocketAt).toBeLessThan(3000)
+      expect(run.alive).toBe(true)
+    }
+  })
+
+  // FEAT: a razão da E8 — o foguete era uma barra de progresso de seis séculos, e o primeiro da era
+  // dele na ordem apresentada; agora são quatro conquistas, e as quatro levam o mesmo tempo
+  it('gives the four rungs of the climb the same handful of decades each', () => {
+    for (const seed of SPACE_SEEDS) {
+      const run = conduct(seed, WORKS_PATH)
+      const label = `seed ${seed}`
+      const climb = CLIMB.map((def) => run.done.get(def) ?? -1)
+      expect(
+        climb.every((year) => year > 0),
+        label,
+      ).toBe(true)
+      // FEAT: o degrau começa quando a obra anterior fechou, e a primeira quando fechou a de antes dela
+      const opened = climb[0] ?? 0
+      const before = Math.max(...[...run.done.values()].filter((year) => year < opened))
+      const rungs = climb.map((year, rung) => year - (rung === 0 ? before : (climb[rung - 1] ?? 0)))
+      const spread = `${label} rungs ${rungs.join()}`
+      expect(Math.max(...rungs), spread).toBeLessThan(150)
+      // FEAT: e o mais longo não passa do mais curto por um quarto de século — é o tempo que é igual
+      expect(Math.max(...rungs) - Math.min(...rungs), spread).toBeLessThan(25)
+      // FEAT: e a subida inteira segue custando séculos, senão o céu teria ficado barato
+      expect((climb.at(-1) ?? 0) - before, label).toBeGreaterThan(300)
+    }
+  })
+
+  // FEAT: o preço de cada degrau é medido contra o tempo que ele custa, não contra o preço do vizinho:
+  // o ritmo de obra cresce com o mundo, então tempos iguais pedem preços crescentes
+  it('prices the climb as a rising ladder, and the whole of it at what the rocket used to cost', () => {
+    const climb = CLIMB.map((def) => WORKS[def]?.cost ?? 0)
+    expect(climb.reduce((sum, cost) => sum + cost, 0)).toBe(2_400_000)
+    for (let rung = 1; rung < climb.length; rung++) {
+      expect(climb[rung], `rung ${rung}`).toBeGreaterThan(climb[rung - 1] ?? 0)
+    }
+    // FEAT: e o foguete é o degrau mais caro dos quatro, porque é o que a escada toda tem por nome
+    expect(WORKS[ROCKET]?.cost).toBe(Math.max(...climb))
+    // FEAT: mas deixou de ser vinte vezes qualquer outra obra do catálogo
+    const others = WORKS.filter((_, def) => def !== ROCKET).map((work) => work.cost)
+    expect(WORKS[ROCKET]?.cost).toBeLessThan(2 * Math.max(...others))
+  })
+
+  // FEAT: a folga que explica por que preço de obra nenhum alcança os dezessete fingerprints — os
+  // roteiros de referência não comissionam nada, então a energia deles nem chega perto do portão
+  it('leaves the reference scripts far below the gate, on every seed', () => {
     for (const script of ['steady', 'shifting', 'crossed'] as readonly GoldenScript[]) {
       const plan = GOLDEN_SCRIPTS[script]
       for (const seed of SPACE_SEEDS) {
         const run = leave(seed, plan.decisions, plan.crossings)
-        expect(run.eraAt).toBe(-1)
-        expect(run.founded).toBe(0)
-        // FEAT: o pico das referências é 8,99 contra um portão de 12 — a folga medida no plano
-        expect(run.peakEnergy).toBeLessThan(10)
+        expect(run.peakEnergy, `${script} seed ${seed}`).toBeLessThan(10)
       }
+    }
+  })
+
+  it('a history that allocates nothing to works never finishes one, and never leaves', () => {
+    for (const seed of SPACE_SEEDS) {
+      const run = conduct(seed, NO_WORKS)
+      expect(run.works, `seed ${seed}`).toHaveLength(0)
+      expect(run.rocketAt, `seed ${seed}`).toBe(-1)
+      expect(run.founded, `seed ${seed}`).toBe(0)
     }
   })
 
@@ -452,6 +617,73 @@ describe('space calibration', () => {
       // FEAT: o mundo natal continua apertado, e continua com quase toda a gente
       expect(left.crowding).toBeGreaterThan(0.8)
       expect(left.population).toBeGreaterThan(0.9 * stayed.population)
+    }
+  })
+})
+
+// FEAT: o critério que a escada de mitigação existe para cumprir, e é o mais duro do ramo: o MVP
+// existe para recompensar construir, e antes desta grade construir extinguia oito sementes de oito
+const LADDER_SEEDS = [1, 2, 3, 7, 11, 42, 101, 777]
+// FEAT: a alocação medida é a que o jogo entrega, lida de `params.ts`, e não uma cópia à mão: senão
+// a calibração pode mexer no padrão e este critério segue certificando uma alocação que ninguém joga
+const LADDER_ALLOCATION = DEFAULT_ALLOCATION
+const CATALOGUE_ORDER: readonly number[] = WORKS.map((_, def) => def)
+
+interface Lived {
+  readonly alive: boolean
+  readonly population: number
+  readonly works: number
+}
+
+// FEAT: uma lista de ordem vazia É o mundo que nunca comissiona nada, e é a única forma de dizer
+// isso: com um booleano ao lado, uma ordem errada por digitação viraria um "construindo" sem obra
+function live(seed: number, allocation: Allocation, order: readonly number[]): Lived {
+  const w = new Worldline(seed, [{ tick: 0, allocation }])
+  for (let year = 0; year < HORIZON && !w.ended; year++) {
+    if (order.length > 0 && !w.present.building) {
+      const next = order.find((def) => isCommissionable(w.present, def))
+      const work = next === undefined ? undefined : WORKS[next]
+      if (work) w.commission(work.id)
+    }
+    w.advance(1)
+  }
+  return {
+    alive: w.present.status === 'running',
+    population: w.present.population,
+    works: w.present.works.length,
+  }
+}
+
+describe('the mitigation ladder', () => {
+  it('never makes building worse than not building, on any calibration seed', () => {
+    for (const seed of LADDER_SEEDS) {
+      const built = live(seed, LADDER_ALLOCATION, CATALOGUE_ORDER)
+      const bare = live(seed, LADDER_ALLOCATION, [])
+      const label = `seed ${seed}`
+      expect(bare.alive, label).toBe(true)
+      expect(built.alive, label).toBe(true)
+      expect(built.population, label).toBeGreaterThan(bare.population)
+      expect(built.works, label).toBe(WORKS.length)
+      expect(bare.works, label).toBe(0)
+    }
+  })
+
+  // FEAT: com a fatia de conservação em ZERO as DUAS sustentam o caso, a escada e a ordem: medido,
+  // esta ordem sem a escada extingue as oito sementes, a escada na ordem do catálogo extingue as
+  // oito, e uma ordem sorteada, cerca de um terço das corridas
+  it('still saves a world that puts nothing at all into conservation', () => {
+    const spendthrift: Allocation = {
+      agriculture: 40,
+      industry: 25,
+      research: 25,
+      conservation: 0,
+      works: 10,
+    }
+    for (const seed of LADDER_SEEDS) {
+      const built = live(seed, spendthrift, PRESENTATION_ORDER)
+      const bare = live(seed, spendthrift, [])
+      expect(built.alive, `seed ${seed}`).toBe(true)
+      expect(built.population, `seed ${seed}`).toBeGreaterThan(bare.population)
     }
   })
 })

@@ -22,9 +22,10 @@ import { TEST_WORLD, makeState } from './testing.ts'
 
 const GIFTED_ALLOCATION: Allocation = {
   agriculture: 20,
-  industry: 40,
+  industry: 35,
   research: 30,
   conservation: 10,
+  works: 5,
 }
 
 function makeCrossing(overrides: Partial<Crossing> = {}): Crossing {
@@ -100,7 +101,13 @@ describe('addDebt', () => {
   })
 
   it('adopts the allocation of the newest doctrine gift, the one the world is now asked to keep', () => {
-    const kept: Allocation = { agriculture: 10, industry: 40, research: 30, conservation: 20 }
+    const kept: Allocation = {
+      agriculture: 10,
+      industry: 35,
+      research: 30,
+      conservation: 20,
+      works: 5,
+    }
     const first: Debt = {
       kind: 'doctrine',
       owed: 2,
@@ -170,10 +177,10 @@ describe('repay', () => {
   it('abates knowledge by the technology gain of the own research sector', () => {
     const debts: Debt[] = [{ kind: 'knowledge', owed: 5, since: 0, origin: 'B' }]
     const researching = makeState({
-      allocation: { agriculture: 20, industry: 20, research: 60, conservation: 0 },
+      allocation: { agriculture: 20, industry: 15, research: 60, conservation: 0, works: 5 },
     })
     const idle = makeState({
-      allocation: { agriculture: 60, industry: 20, research: 0, conservation: 20 },
+      allocation: { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 },
     })
     const afterResearch = repay(debts, researching, makeDerived(), 1)
     const afterIdle = repay(debts, idle, makeDerived(), 1)

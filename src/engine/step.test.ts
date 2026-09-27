@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colonyCost, type Colony } from './colony.ts'
+import { ROCKET, colonyCost, type Colony } from './colony.ts'
 import type { Crossing, CrossingKind } from './crossing.ts'
 import type { Debt, Paradox } from './debt.ts'
 import { EVENTS, worldMetrics } from './events.ts'
@@ -21,12 +21,15 @@ import {
   PARAMS,
 } from './params.ts'
 import { step } from './step.ts'
-import { Era, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
+import { Era, NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
 import { colonisable, system, type Body } from './system.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
+import { WORKS, findWork, workIndex, type Work } from './work.ts'
 
 const { world, state } = genesis(482913)
-const shift = { agriculture: 20, industry: 50, research: 20, conservation: 10 }
+const shift = { agriculture: 20, industry: 45, research: 20, conservation: 10, works: 5 }
+// FEAT: o foguete pronto é o portão da colonização, e o efeito dele é vazio: só o portão muda
+const FLOWN: readonly Work[] = [{ def: ROCKET, done: 0, record: 0 }]
 
 describe('step', () => {
   it('advances one year deterministically', () => {
@@ -119,7 +122,7 @@ describe('crossings', () => {
   })
 
   it('takes the allocation of a doctrine crossing', () => {
-    const allocation = { agriculture: 10, industry: 10, research: 70, conservation: 10 }
+    const allocation = { agriculture: 10, industry: 5, research: 70, conservation: 10, works: 5 }
     const result = step(state, world, 0, undefined, [at('doctrine', [], { allocation })])
     expect(result.state.allocation).toEqual(allocation)
   })
@@ -184,12 +187,12 @@ describe('debt', () => {
     const researching = {
       ...state,
       debts,
-      allocation: { agriculture: 20, industry: 20, research: 60, conservation: 0 },
+      allocation: { agriculture: 20, industry: 15, research: 60, conservation: 0, works: 5 },
     }
     const idle = {
       ...state,
       debts,
-      allocation: { agriculture: 60, industry: 20, research: 0, conservation: 20 },
+      allocation: { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 },
     }
     const afterResearch = step(researching, world, 0)
     const afterIdle = step(idle, world, 0)
@@ -219,7 +222,7 @@ describe('paradox and collapse', () => {
   })
 
   const heavy: Debt = { kind: 'knowledge', owed: 500, since: 0, origin: 'B' }
-  const idle = { agriculture: 60, industry: 20, research: 0, conservation: 20 }
+  const idle = { agriculture: 60, industry: 15, research: 0, conservation: 20, works: 5 }
 
   it('installs a leap paradox the year a gift alone would unlock an era out of reach', () => {
     // FEAT: tecnologia já acima da porta industrial; só a energia falta, e o presente a vence sozinho
@@ -318,6 +321,7 @@ describe('colonies', () => {
   const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
     makeState({
       eras: Era.space,
+      works: FLOWN,
       energy: 14,
       technology: 95,
       economy: 9,
@@ -335,18 +339,25 @@ describe('colonies', () => {
     expect(result.state.colonies[0]?.body).toBe(best.index)
   })
 
-  it('founds nothing in the very year the era opens: the door comes first', () => {
-    const opening = step(spacefaring({ eras: 0 }), TEST_WORLD, 0)
-    expect(opening.started.map((r) => r.event)).toContain('space_era')
-    expect(opening.state.colonies).toEqual([])
-    expect(opening.state.eras & Era.space).toBe(Era.space)
+  it('founds nothing in the very year the rocket is done: the work comes first', () => {
+    const cost = WORKS[ROCKET]?.cost ?? 0
+    const nearly = spacefaring({
+      works: [],
+      building: { def: ROCKET, progress: cost - 50, since: 0 },
+    })
+    const landed = step(nearly, TEST_WORLD, 0)
+    expect(landed.started.map((r) => r.event)).toContain('work_done')
+    expect(landed.state.works.map((done) => done.def)).toEqual([ROCKET])
+    expect(landed.state.colonies).toEqual([])
+    // FEAT: a camada das colônias corre antes do ano de obra, então a frota parte no ano seguinte
+    expect(step(landed.state, TEST_WORLD, landed.started.length).state.colonies).toHaveLength(1)
   })
 
   it('runs the year exactly as a grounded world would when there is nothing to spare', () => {
-    const grounded = step({ ...state, eras: 0 }, world, 0)
-    const reached = step({ ...state, eras: Era.space }, world, 0)
-    expect(reached.state.colonies).toEqual([])
-    expect({ ...reached.state, eras: grounded.state.eras }).toEqual(grounded.state)
+    const grounded = step(state, world, 0)
+    const flown = step({ ...state, works: FLOWN }, world, 0)
+    expect(flown.state.colonies).toEqual([])
+    expect({ ...flown.state, works: grounded.state.works }).toEqual(grounded.state)
   })
 
   it('charges the home world a flow, not a hoard, for every colony that cannot support itself', () => {
@@ -377,16 +388,26 @@ describe('colonies', () => {
 })
 
 describe('leaving the planet, end to end', () => {
-  const SPACER: Allocation = { agriculture: 20, industry: 50, research: 30, conservation: 0 }
+  const SPACER: Allocation = {
+    agriculture: 15,
+    industry: 50,
+    research: 30,
+    conservation: 0,
+    works: 5,
+  }
   const YEARS = 3000
 
   function run(grounded: boolean): { world: typeof world; state: WorldState } {
     const born = genesis(482913)
-    let current: WorldState = { ...born.state, allocation: SPACER }
+    // FEAT: o mundo preso é o mesmo mundo sem o foguete, porque é a obra que abre o portão
+    let current: WorldState = {
+      ...born.state,
+      allocation: SPACER,
+      works: grounded ? [] : FLOWN,
+    }
     let records = 0
     for (let year = 0; year < YEARS && current.status === 'running'; year++) {
-      const input = grounded ? { ...current, eras: current.eras & ~Era.space } : current
-      const result = step(input, born.world, records)
+      const result = step(current, born.world, records)
       records += result.started.length
       current = result.state
     }
@@ -420,6 +441,7 @@ describe('the events a colony writes', () => {
   const reached = (overrides: Partial<WorldState> = {}): WorldState =>
     makeState({
       eras: Era.space,
+      works: FLOWN,
       energy: 14,
       technology: 95,
       economy: 9,
@@ -460,7 +482,7 @@ describe('the events a colony writes', () => {
   })
 
   it('leaves both moments out of a world that never left the planet', () => {
-    const grounded = step({ ...state, eras: 0 }, world, 0)
+    const grounded = step({ ...state, works: [] }, world, 0)
     expect(grounded.started.map((record) => record.event)).not.toContain('colony_founded')
     expect(grounded.started.map((record) => record.event)).not.toContain('colony_lost')
   })
@@ -536,7 +558,13 @@ describe('inheritance', () => {
   })
 
   it('saves a collapsing world as readily as a dying one, and takes the paradox off it', () => {
-    const idle: Allocation = { agriculture: 40, industry: 60, research: 0, conservation: 0 }
+    const idle: Allocation = {
+      agriculture: 40,
+      industry: 55,
+      research: 0,
+      conservation: 0,
+      works: 5,
+    }
     const heavy: Debt = { kind: 'knowledge', owed: 40, since: 0, origin: 'B' }
     const overdue: Paradox = { kind: 'debt', since: 0, deadline: 0 }
     const falling = (colonies: readonly Colony[]) =>
@@ -668,6 +696,83 @@ describe('step, with a merge', () => {
     return { tick: 0, self: 'A', other: 'B', direction: 'out', natal: 0, ...rest }
   }
 
+  // FEAT: e o ano corre já sobre a árvore unida — a obra que só a outra tinha vale neste mesmo ano
+  it('lets the year run on the united work list, and keeps its own site', () => {
+    const site = { def: 3, progress: 200, since: 0 }
+    const result = step(
+      running({ works: [{ def: 0, done: 0, record: 1 }], building: site }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({ population: 1_000_000 }, { works: [{ def: 2, done: 0, record: 8 }] }),
+    )
+    expect(result.state.works.map((work) => work.def)).toEqual([0, 2])
+    expect(result.state.works.find((work) => work.def === 2)?.record).toBe(NEVER)
+    expect(result.state.building?.def).toBe(site.def)
+  })
+
+  // FIX: a lista de saída não diz sobre qual lista a ARITMÉTICA do ano correu, e o ano lê a camada
+  // das obras em dois lugares — uma costura que só traz obra separa os dois, um coeficiente por vez
+  it('runs the arithmetic of the seam year on the united list, in both places that read it', () => {
+    const before = running({ works: [{ def: 0, done: 0, record: 1 }] })
+    const seam = (works: readonly Work[]) =>
+      step(before, config, 0, undefined, [], mergeIn({}, { works })).state
+    const bare = seam([])
+    const moved = (works: readonly Work[]) => {
+      const after = seam(works)
+      return VARIABLES.filter((variable) => after[variable] !== bare[variable])
+    }
+    // FEAT: o celeiro só move `spoil`, que é coeficiente do derive e de mais nada
+    expect(moved([{ def: workIndex('granary'), done: 0, record: 8 }])).toEqual(['food'])
+    // FEAT: a cerâmica só move `economy`, que o derive não lê: ela entra na integração e em mais nada
+    expect(moved([{ def: workIndex('pottery'), done: 0, record: 8 }])).toEqual(['economy'])
+  })
+
+  // FIX: a obra que fecha no ano da costura sobe pelo pré-requisito que a costura trouxe; ele não
+  // tem registro nesta história e sobe como NEVER, que é lacuna do leitor e não causa de outro
+  it('names the prerequisite the seam brought when the same year closes the work that needed it', () => {
+    const plough = workIndex('plough')
+    const nearly = { def: plough, progress: findWork('plough').cost - 1, since: 0 }
+    const result = step(
+      running({ works: [], building: nearly, population: 4e6, economy: 9 }),
+      config,
+      0,
+      undefined,
+      [],
+      mergeIn({}, { works: [{ def: workIndex('irrigation'), done: -5, record: 8 }] }),
+    )
+    expect(result.state.works.map((work) => work.def)).toEqual([0, plough])
+    const done = result.started.find((record) => record.event === 'work_done')
+    expect(done?.causes).toEqual([{ kind: 'event', record: NEVER }])
+  })
+
+  // FIX: o portão da colônia é o foguete pronto, não a era, e a costura o entrega a quem nunca abriu
+  // a era espacial: a fundação sai com a lista de causas VAZIA, e aqui isso é resultado, não acidente
+  it('founds a colony with no cause at all when the seam is what handed it the rocket', () => {
+    const grounded = running({
+      eras: Era.agricultural | Era.classical | Era.industrial | Era.electric,
+      energy: 14,
+      technology: 60,
+      economy: 9,
+      population: 4_000_000,
+      food: 8_000_000,
+    })
+    const result = step(
+      grounded,
+      config,
+      7,
+      undefined,
+      [],
+      mergeIn({}, { works: [{ def: ROCKET, done: -5, record: 3 }] }),
+    )
+    expect(result.state.eras & Era.space).toBe(0)
+    expect(result.state.works.map((work) => work.def)).toEqual([ROCKET])
+    expect(result.state.works[0]?.record).toBe(NEVER)
+    expect(result.state.colonies).toHaveLength(1)
+    expect(result.started.find((record) => record.event === 'colony_founded')?.causes).toEqual([])
+  })
+
   it('seams the other history in and keeps running', () => {
     const result = step(
       running({ population: 3_000_000 }),
@@ -741,10 +846,12 @@ describe('step, with a merge', () => {
   })
 
   it('numbers the records right when a merge year also founds a colony and starts a condition', () => {
-    // FEAT: todas as eras já abertas, para só a confluência e o desassossego disputarem o número
+    // FEAT: todas as eras já abertas, para a confluência, a colônia e as condições do ano serem os
+    // únicos a disputar o número
     const spacefaring = (overrides: Partial<WorldState> = {}): WorldState =>
       makeState({
-        eras: Era.agricultural | Era.industrial | Era.demographic | Era.space,
+        eras: Era.agricultural | Era.classical | Era.industrial | Era.electric | Era.space,
+        works: FLOWN,
         energy: 14,
         technology: 95,
         economy: 9,
@@ -770,8 +877,9 @@ describe('step, with a merge', () => {
     expect(result.state.colonies).toHaveLength(1)
     // FEAT: a colônia nasce depois dos dois acontecimentos da confluência, não em cima deles
     expect(result.state.colonies[0]?.record).toBe(nextRecord + mergeCount)
-    const unrest = result.state.active.find((entry) => EVENTS[entry.def]?.id === 'civil_unrest')
-    // FEAT: e o desassossego nasce depois da confluência e da colônia, na mesma fila
-    expect(unrest?.record).toBe(nextRecord + mergeCount + 1)
+    // FEAT: e as condições nascem depois da confluência e da colônia, na ordem da tabela
+    const find = (id: string) => result.state.active.find((entry) => EVENTS[entry.def]?.id === id)
+    expect(find('demographic_transition')?.record).toBe(nextRecord + mergeCount + 1)
+    expect(find('civil_unrest')?.record).toBe(nextRecord + mergeCount + 2)
   })
 })

@@ -145,12 +145,12 @@ describe('validateCrossings', () => {
   it('refuses a doctrine crossing without a valid allocation', () => {
     const doctrine: Crossing = { ...one, kind: 'doctrine', amounts: [] }
     expect(() => validateCrossings([doctrine])).toThrow(RangeError)
-    const uneven = { agriculture: 40, industry: 30, research: 20, conservation: 5 }
+    const uneven = { agriculture: 40, industry: 25, research: 20, conservation: 5, works: 5 }
     expect(() => validateCrossings([{ ...doctrine, allocation: uneven }])).toThrow(RangeError)
   })
 
   it('refuses an allocation on a crossing that is not doctrine', () => {
-    const allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+    const allocation = { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 }
     expect(() => validateCrossings([{ ...one, allocation }])).toThrow(RangeError)
     expect(() => validateCrossings([{ ...one, kind: 'people', amounts: [2], allocation }])).toThrow(
       RangeError,
@@ -158,7 +158,7 @@ describe('validateCrossings', () => {
   })
 
   it('accepts a doctrine crossing with a valid allocation and deep-copies it', () => {
-    const allocation = { agriculture: 40, industry: 30, research: 20, conservation: 10 }
+    const allocation = { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 }
     const doctrine: Crossing = { ...one, kind: 'doctrine', amounts: [], allocation }
     const list = validateCrossings([doctrine])
     expect(list).toHaveLength(1)

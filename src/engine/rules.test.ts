@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import type { Commission } from './commission.ts'
 import { crossingAmounts, crossingCost, type Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
 import { EVENTS, METRICS, worldMetrics } from './events.ts'
 import { PARAMS as K } from './params.ts'
 import { NEUTRAL_MODIFIERS, SimulationError, derive, integrate } from './rules.ts'
-import { Era, VARIABLES } from './state.ts'
+import { Era, VARIABLES, type WorldState } from './state.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
+import {
+  FACTOR_KEYS,
+  NEUTRAL_MODS,
+  TERM_KEYS,
+  WORKS,
+  workIndex,
+  workMods,
+  type Work,
+  type WorkKey,
+} from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const neutral = NEUTRAL_MODIFIERS
@@ -20,7 +31,9 @@ describe('derive', () => {
 
   it('produces more food with more agriculture', () => {
     const low = derive(
-      makeState({ allocation: { agriculture: 10, industry: 50, research: 30, conservation: 10 } }),
+      makeState({
+        allocation: { agriculture: 10, industry: 45, research: 30, conservation: 10, works: 5 },
+      }),
       TEST_WORLD,
       neutral,
       calm,
@@ -45,7 +58,9 @@ describe('derive', () => {
     const base = derive(makeState(), TEST_WORLD, neutral, calm)
     const industrial = derive(makeState({ eras: Era.industrial }), TEST_WORLD, neutral, calm)
     const heavy = derive(
-      makeState({ allocation: { agriculture: 20, industry: 60, research: 10, conservation: 10 } }),
+      makeState({
+        allocation: { agriculture: 20, industry: 55, research: 10, conservation: 10, works: 5 },
+      }),
       TEST_WORLD,
       neutral,
       calm,
@@ -122,7 +137,7 @@ describe('integrate', () => {
     const s = makeState({
       technology: 99.99,
       economy: 50,
-      allocation: { agriculture: 0, industry: 0, research: 100, conservation: 0 },
+      allocation: { agriculture: 0, industry: 0, research: 100, conservation: 0, works: 0 },
     })
     const next = integrate(s, derive(s, TEST_WORLD, neutral, calm), { ...neutral, research: 5 })
     expect(next.technology).toBeLessThanOrEqual(100)
@@ -262,6 +277,311 @@ describe('a world emptied by an out-crossing where the land already collapsed', 
     if (!crowdingTrigger) throw new Error('epidemic must trigger on crowding')
     expect(crowdingTrigger.op).toBe('>')
     expect(crowded.crowding).toBeGreaterThan(crowdingTrigger.value)
+  })
+})
+
+// FEAT: a segunda camada — permanente, separada dos eventos e feita só da lista de obras prontas
+describe('the permanent layer of the works', () => {
+  const WORK_KEYS: readonly WorkKey[] = [...FACTOR_KEYS, ...TERM_KEYS]
+  const lean = 0
+
+  // FEAT: um probe com colônia, tecnologia e economia para toda leitura da tabela ser mensurável
+  function probe(works: readonly Work[]): WorldState {
+    return makeState({
+      works,
+      technology: 30,
+      economy: 2,
+      colonies: [{ body: 1, founded: 0, population: 1000, support: 0, record: 0 }],
+    })
+  }
+
+  const derived = (s: WorldState, noise = lean) => derive(s, TEST_WORLD, neutral, noise)
+  const year = (s: WorldState) => integrate(s, derived(s), neutral)
+
+  interface Reading {
+    readonly read: (s: WorldState) => number
+    readonly rises: (value: number) => boolean
+  }
+
+  // FEAT: onde cada chave do catálogo aterra, e para que lado ela empurra cada grandeza que toca —
+  // uma chave pode ter mais de um alvo, e cada alvo tem de ser medido
+  const READINGS: Readonly<Record<WorkKey, readonly Reading[]>> = {
+    harvest: [{ read: (s) => derived(s).foodProduction, rises: (v) => v > 1 }],
+    // FEAT: production aterra duas vezes, como mods.production: na colheita e no alvo da economia
+    production: [
+      { read: (s) => derived(s).foodProduction, rises: (v) => v > 1 },
+      { read: (s) => year(s).economy, rises: (v) => v > 1 },
+    ],
+    research: [{ read: (s) => year(s).technology, rises: (v) => v > 1 }],
+    energy: [{ read: (s) => derived(s).energyTarget, rises: (v) => v > 1 }],
+    economy: [{ read: (s) => year(s).economy, rises: (v) => v > 1 }],
+    capacity: [{ read: (s) => derived(s).carryingCapacity, rises: (v) => v > 1 }],
+    colonyCost: [{ read: (s) => derived(s).energyTarget, rises: (v) => v < 1 }],
+    mortality: [{ read: (s) => derived(s).deathRate, rises: (v) => v > 0 }],
+    spoil: [{ read: (s) => derived(s).foodAvailable, rises: (v) => v < 0 }],
+    harvestNoise: [{ read: (s) => derived(s).foodProduction, rises: (v) => v < 0 }],
+    pollution: [{ read: (s) => derived(s).pollution, rises: (v) => v > 0 }],
+    // FEAT: fator sobre o termo inteiro, então o alvo dele é a mesma poluição que a parcela move —
+    // dois caminhos para a mesma grandeza, e cada um com o seu neutro
+    smoke: [{ read: (s) => derived(s).pollution, rises: (v) => v > 1 }],
+  }
+
+  it('derives differently for two worlds identical except their works', () => {
+    const bare = makeState({ works: [] })
+    const irrigated = makeState({ works: [{ def: workIndex('irrigation'), done: 100, record: 0 }] })
+    expect(derived(irrigated).foodProduction).toBeGreaterThan(derived(bare).foodProduction)
+  })
+
+  // FEAT: o teste que separa obra de evento — nenhum modificador temporário sobrevive a isto,
+  // porque o ano é mil anos depois do fim da obra e não existe acontecimento ativo nenhum
+  it('keeps the effect a thousand years after the work was done, with no active event', () => {
+    const old = makeState({
+      tick: 1100,
+      active: [],
+      works: [{ def: workIndex('irrigation'), done: 100, record: 0 }],
+    })
+    const none = makeState({ tick: 1100, active: [], works: [] })
+    expect(old.active).toEqual([])
+    expect(derived(old).foodProduction).toBeGreaterThan(derived(none).foodProduction)
+  })
+
+  it('is exactly neutral with no works, so the seventeen fingerprints cannot move', () => {
+    expect(workMods([])).toEqual(NEUTRAL_MODS)
+    for (const key of FACTOR_KEYS) expect(NEUTRAL_MODS[key]).toBe(1)
+    for (const key of TERM_KEYS) expect(NEUTRAL_MODS[key]).toBe(0)
+
+    // FEAT: as duas contas que a camada reescreveu, afirmadas com === contra a fórmula de antes
+    const s = makeState()
+    const d = derive(s, TEST_WORLD, neutral, calm)
+    expect(d.foodAvailable).toBe(s.food * (1 - K.spoil) + d.foodProduction)
+    expect(d.carryingCapacity).toBe(d.capacity * (1 - 1 / (K.laborShare * K.y0)))
+  })
+
+  it('reads all twelve keys of the layer and all thirteen landings, so none lands nowhere', () => {
+    expect(WORK_KEYS).toHaveLength(12)
+    expect(Object.keys(READINGS).sort()).toEqual([...WORK_KEYS].sort())
+    const landings = WORK_KEYS.reduce((sum, key) => sum + READINGS[key].length, 0)
+    expect(landings).toBe(13)
+  })
+
+  const EFFECTFUL = WORKS.map((work, def) => ({ id: work.id, def, effect: work.effect })).filter(
+    (work) => Object.keys(work.effect).length > 0,
+  )
+
+  // FEAT: o foguete é a única obra de efeito vazio de propósito — o portão da era espacial é a
+  // prova dele, e por isso ele é o único que fica fora desta tabela
+  it('leaves only the rocket out of the table, because only the rocket moves no coefficient', () => {
+    expect(EFFECTFUL).toHaveLength(31)
+    expect(EFFECTFUL.map((work) => work.id)).not.toContain('rocket')
+  })
+
+  it.each(EFFECTFUL)('carries the effect of $id into the derived world', ({ id, def, effect }) => {
+    const before = probe([])
+    const after = probe([{ def, done: 0, record: 0 }])
+    for (const key of WORK_KEYS) {
+      const value = effect[key]
+      if (value === undefined) continue
+      // FIX: a direção esperada sai do próprio valor, então sem esta linha uma chave escrita no seu
+      // próprio neutro — 1 num fator, 0 numa parcela — passaria por "não sobe" em vez de reprovar
+      expect(value, `${id}.${key}`).not.toBe(TERM_KEYS.includes(key as never) ? 0 : 1)
+      for (const [target, reading] of READINGS[key].entries()) {
+        const label = `${id}.${key}#${target}`
+        if (reading.rises(value)) {
+          expect(reading.read(after), label).toBeGreaterThan(reading.read(before))
+        } else {
+          expect(reading.read(after), label).toBeLessThan(reading.read(before))
+        }
+      }
+    }
+  })
+
+  // FEAT: o teste que separa fator de parcela, e é o único que importa: uma parcela constante
+  // subtrairia o mesmo de todo mundo, e o fator morde proporcionalmente ao veneno que existe
+  it('bites the smoke in proportion, which a parcel could never do', () => {
+    const rungs = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
+      (id, i) => ({ def: workIndex(id), done: 0, record: i }),
+    )
+    const at = (energy: number, works: readonly Work[]) =>
+      derived(makeState({ energy, population: 4e6, technology: 20, works })).pollution
+    const lean = at(6, []) - at(6, rungs)
+    const poisoned = at(6 * 6.336, []) - at(6 * 6.336, rungs)
+    expect(lean).toBeGreaterThan(0)
+    // FEAT: a escada de energia é 6,336×, e o corte cresce na mesma proporção — uma parcela daria 1
+    expect(poisoned / lean).toBeCloseTo(6.336, 6)
+  })
+
+  // FEAT: `smoke` multiplica o termo INTEIRO, inclusive a parcela que a química acrescenta
+  it('holds back the chemical parcel too, because the factor is over the whole term', () => {
+    const chemistry = { def: workIndex('chemistry'), done: 0, record: 0 }
+    const filters = { def: workIndex('filters'), done: 0, record: 1 }
+    const state = (works: readonly Work[]) =>
+      makeState({ energy: 0, population: 0, technology: 0, works })
+    // FEAT: sem energia e sem gente o termo base é zero, então o que resta é a parcela sozinha
+    const parcel = derived(state([chemistry])).pollution
+    // FIX: os dois valores saem do catálogo, e o que o teste afirma é que o fator morde a parcela —
+    // com dois literais o teste passaria igual num degrau de mitigação que não mitigasse nada
+    const added = WORKS[workIndex('chemistry')]?.effect.pollution ?? 0
+    const factor = WORKS[workIndex('filters')]?.effect.smoke ?? 1
+    const held = derived(state([chemistry, filters])).pollution
+    expect(parcel).toBeCloseTo(added, 12)
+    expect(held).toBeCloseTo(added * factor, 12)
+    expect(held).toBeLessThan(parcel)
+    expect(derived(state([filters])).pollution).toBe(0)
+  })
+
+  // FEAT: fator positivo nunca deixa a poluição negativa, e é por isso que esta chave é a única da
+  // camada que não precisa de piso — `spoil` e `mortality` precisam porque são parcelas
+  it('needs no floor, because a positive factor can never turn the pollution negative', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      def: workIndex('closedCycle'),
+      done: 0,
+      record: i,
+    }))
+    // FIX: o comportamento primeiro, para o diagnóstico ser sobre o veneno e não sobre um número do
+    // catálogo: doze degraus cortam a poluição do mesmo mundo sem nunca a levar a zero
+    const s = makeState({ energy: 40, population: 4e6, technology: 20, works: many })
+    expect(derived(s).pollution).toBeLessThan(derived({ ...s, works: [] }).pollution)
+    expect(derived(s).pollution).toBeGreaterThan(0)
+    // FIX: e a composição depois, comparada a um degrau só em vez de a um limiar tirado de 0,7^12
+    const one = [{ def: workIndex('closedCycle'), done: 0, record: 0 }]
+    expect(workMods(one).smoke).toBeLessThan(1)
+    expect(workMods(many).smoke).toBeLessThan(workMods(one).smoke)
+    expect(workMods(many).smoke).toBeGreaterThan(0)
+  })
+
+  // FEAT: a escada de mitigação contra a escada de energia, medida uma contra a outra — e ela NÃO
+  // apaga o veneno: sobram 2,26×, a tensão fica, e é aí que a conservação passa a decidir o fim
+  it('holds the energy ladder back without ever cancelling it', () => {
+    const energy = (['steam', 'electrification', 'reactor'] as const).map((id, i) => ({
+      def: workIndex(id),
+      done: 0,
+      record: i,
+    }))
+    const clean = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
+      (id, i) => ({ def: workIndex(id), done: 0, record: 3 + i }),
+    )
+    const rise = workMods(energy).energy
+    const cut = workMods(clean).smoke
+    // FEAT: a escada de energia multiplica o ALVO e é o NÍVEL que a poluição lê, então a medida é a
+    // mesma civilização no nível que cada uma alcança — 7,8 sem obra nenhuma, e 6,336× disso com elas
+    const s = (level: number, works: readonly Work[]) =>
+      makeState({ energy: level, population: 4e6, technology: 20, works })
+    const bare = derived(s(7.8, [])).pollution
+    const held = derived(s(7.8 * rise, [...energy, ...clean])).pollution
+    // FIX: o comportamento primeiro: o veneno sobe, e sobe MENOS que a energia — é esta linha que
+    // reprova uma escada de mitigação neutra, e as de baixo só dizem por quanto
+    expect(held).toBeGreaterThan(bare)
+    expect(held).toBeLessThan(3 * bare)
+    expect(rise).toBeCloseTo(6.336, 10)
+    expect(cut).toBeLessThan(1)
+    expect(held / bare).toBeCloseTo(rise * cut, 6)
+  })
+
+  // FIX: uma taxa de perda negativa criaria comida do nada, então ela para em zero
+  it('never lets the granaries spoil less than nothing and create food', () => {
+    const granary = workIndex('granary')
+    const works = Array.from({ length: 5 }, (_, i) => ({ def: granary, done: 0, record: i }))
+    expect(K.spoil + workMods(works).spoil).toBeLessThan(0)
+    // FEAT: sem gente e sem terra a colheita do ano é zero, então o que sobra é o estoque puro
+    const s = makeState({ population: 0, environment: 0, food: 1e6, works })
+    const d = derived(s)
+    expect(d.foodProduction).toBe(0)
+    expect(d.foodAvailable).toBe(s.food)
+    expect(d.foodAvailable).toBeLessThanOrEqual(s.food)
+  })
+
+  // FIX: uma mortalidade negativa ressuscitaria gente, então ela para em zero
+  it('never raises the dead, however many works push mortality down', () => {
+    const healers = ['aqueduct', 'sanitation', 'medicine'] as const
+    const works = healers.map((id, i) => ({ def: workIndex(id), done: 0, record: i }))
+    const s = makeState({ technology: 100, economy: 50, environment: 100, food: 4e6, works })
+    expect(workMods(works).mortality).toBeLessThan(0)
+    const d = derived(s)
+    expect(d.deathRate).toBe(0)
+    expect(integrate(s, d, neutral).population).toBe(s.population * (1 + d.birthRate))
+  })
+
+  // FEAT: a queixa que o MVP responde, medida pela API pública: o ano 3000 de um mundo que
+  // construiu não é o ano 3000 do mesmo mundo que não construiu — e as obras ficaram lá atrás
+  it('makes the year three thousand differ from the same year without the works', () => {
+    const orders: readonly Commission[] = [
+      { tick: 100, work: 'irrigation' },
+      { tick: 400, work: 'granary' },
+      { tick: 700, work: 'pottery' },
+      { tick: 1000, work: 'plough' },
+    ]
+    const bare = new Worldline(1)
+    const built = new Worldline(1, [], null, [], [], orders)
+    bare.advance(3000)
+    built.advance(3000)
+    expect(built.present.works.length).toBeGreaterThan(0)
+    for (const work of built.present.works) expect(work.done).toBeLessThan(2000)
+    expect(built.hashAt(3000)).not.toBe(bare.hashAt(3000))
+    expect(built.present.population).not.toBe(bare.present.population)
+  })
+
+  // FIX: uma variância negativa não existe: com o piso, o ano magro nunca fica melhor que o calmo
+  it('never turns the calendars into a negative variance', () => {
+    const calendar = workIndex('calendar')
+    const many = probe(Array.from({ length: 4 }, (_, i) => ({ def: calendar, done: 0, record: i })))
+    expect(K.harvestNoise + workMods(many.works).harvestNoise).toBeLessThan(0)
+    expect(derived(many, 0).foodProduction).toBe(derived(many, 1).foodProduction)
+    expect(derived(many, 0).foodProduction).toBeLessThanOrEqual(derived(many, 0.5).foodProduction)
+  })
+})
+
+// FEAT: 0/0 já alcançou uma métrica neste motor uma vez, e agora existe uma camada permanente que
+// multiplica capacidade, colheita e alvo de energia — a varredura mede os dois lados juntos
+describe('no metric goes NaN, in any combination', () => {
+  const EXTREMES = [0, 1e-12, 1e12] as const
+  const EVERY_WORK: readonly Work[] = WORKS.map((_, def) => ({ def, done: 0, record: def }))
+
+  const clean = (state: WorldState, label: string) => {
+    const metrics = worldMetrics(state, TEST_WORLD)
+    for (const metric of METRICS)
+      expect(Number.isNaN(metrics[metric]), `${label}/${metric}`).toBe(false)
+  }
+
+  it('sweeps every variable at zero, at nearly nothing and at enormous, built and unbuilt', () => {
+    for (const works of [[], EVERY_WORK]) {
+      const label = works.length === 0 ? 'bare' : 'built'
+      for (const variable of VARIABLES) {
+        for (const value of EXTREMES) {
+          clean(makeState({ works, [variable]: value }), `${label}/${variable}=${value}`)
+          // FEAT: 0/0 precisa de dois zeros, então cada variável é medida de novo sem ninguém vivo
+          clean(
+            makeState({ works, population: 0, [variable]: value }),
+            `${label}/empty/${variable}=${value}`,
+          )
+          // FIX: `recentEconomy` é a referência de economyTrend e não está em VARIABLES, então sem
+          // esta volta a varredura nunca alcança o 0/0 dele por conta própria
+          clean(
+            makeState({
+              works,
+              [variable]: value,
+              recentEconomy: [value, value, value, value, value],
+            }),
+            `${label}/recent=${value}/${variable}=${value}`,
+          )
+        }
+      }
+    }
+  })
+
+  it('reads a world with no one left and every work standing without a single NaN', () => {
+    clean(makeState({ population: 0, works: EVERY_WORK }), 'emptied/built')
+    const nothing = makeState({
+      population: 0,
+      food: 0,
+      energy: 0,
+      technology: 0,
+      economy: 0,
+      environment: 0,
+      stability: 0,
+      recentEconomy: [0, 0, 0, 0, 0],
+      works: EVERY_WORK,
+    })
+    clean(nothing, 'nothing/built')
   })
 })
 

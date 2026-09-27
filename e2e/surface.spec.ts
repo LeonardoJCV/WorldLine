@@ -263,7 +263,7 @@ test('describes the planet keys and follows the live hour', async ({ page }) => 
 
 test('drops the planet from the link when the stage is 2D', async ({ page }) => {
   await useGraphics(page, '2d')
-  await page.goto('/#/w/AQAHXmEAAAAA/planet')
+  await page.goto('/#/w/BAAHXmEAAAAA/planet')
   await expect(page.getByTestId('seed')).toHaveText('482913')
   await expect(page).not.toHaveURL(/\/planet$/)
 })

@@ -1,9 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../src/engine/golden.ts'
-import { MODEL_VERSION } from '../src/engine/params.ts'
-import { encodeMultiverse } from '../src/app/world/link.ts'
+import { INHERITANCE_CASE } from '../src/engine/golden.ts'
 import { useGraphics } from './stage.ts'
 import {
+  inheritanceLink,
   installParadox,
   pickOrigin,
   runToCollapse,
@@ -299,47 +298,17 @@ test('state debt', async ({ page }) => {
 })
 
 test('state colonies', async ({ page }) => {
+  test.slow()
   test.setTimeout(120_000)
   await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/?seed=482913')
-  // FIX: com o presente ainda no ano 0 a régua não tem para onde voltar e "Home" não dispara o
-  // cursor; um passo antes dá à régua uma faixa de verdade para escolher o ano 0 como passado
-  await page.getByRole('button', { name: 'Advance one year' }).click()
-  await page.getByRole('button', { name: 'Intervene' }).click()
-  const history = page.getByRole('slider', { name: /Worldline history/ })
-  await history.focus()
-  await history.press('Home')
-  const branch = page.getByRole('button', { name: 'Branch from year 0000' })
-  await expect(branch).toBeEnabled()
-  // FEAT: mesma alocação do roteiro dourado SPACEFARING, a única calibrada a abrir a era espacial
-  // perto do ano 1800 nesta semente (calibration.test.ts, "the quickest path to the sky")
-  await page.getByRole('slider', { name: /Agriculture/ }).fill('20')
-  await page.getByRole('slider', { name: /Research/ }).fill('30')
-  await page.getByRole('slider', { name: /Conservation/ }).fill('0')
-  await page.getByRole('slider', { name: /Industry/ }).fill('50')
-  await branch.click()
-  await page.getByRole('button', { name: 'Observe' }).click()
-  await page.getByRole('button', { name: '×64' }).click()
-  await page.getByRole('button', { name: 'Play' }).click()
-  await expect(page.locator('.state__colonies')).toBeVisible({ timeout: 90_000 })
-  await page.getByRole('button', { name: 'Pause' }).click()
-
-  // FEAT: uma dívida ao lado das colônias, para a captura mostrar as duas linhas convivendo
-  await page.getByRole('button', { name: 'Cross', exact: true }).click()
-  await pickOrigin(page)
-  await page.getByRole('button', { name: 'Knowledge' }).click()
-  await page.getByRole('button', { name: 'A little' }).click()
-  await expect(page.getByRole('button', { name: 'Open the crossing' })).toBeEnabled()
-  await page.getByRole('button', { name: 'Open the crossing' }).click()
-  await expect(page.getByText('Knowledge arrived from A.')).toBeVisible()
-  await page.getByRole('button', { name: 'Observe' }).click()
-  // FIX: a dívida entra na engine só no passo que segue a chegada, não no ano em que a travessia abre
-  await page.getByRole('button', { name: 'Advance one year' }).click()
+  // FEAT: o roteiro dourado da herança carrega as duas linhas de uma vez — a colônia fundada no ano
+  // seguinte ao do foguete e a dívida do empréstimo em ciclo, que chega trinta e dois anos antes
+  await page.goto(inheritanceLink(INHERITANCE_CASE.founded + 120))
 
   const panel = page.locator('.panel.state')
+  await expect(panel.locator('.state__colonies')).toBeVisible({ timeout: 90_000 })
   await expect(panel.locator('.state__debt')).toBeVisible()
-  await expect(panel.locator('.state__colonies')).toBeVisible()
   await panel.scrollIntoViewIfNeeded()
   await page.waitForTimeout(300)
   await panel.screenshot({ path: 'screens/state-colonies.png' })
@@ -351,16 +320,7 @@ for (const viewport of VIEWPORTS) {
     await useGraphics(page, '2d')
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     // FEAT: o roteiro dourado da herança (golden.ts), aberto treze anos antes da queda do mundo natal
-    const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-    const link = encodeMultiverse({
-      version: MODEL_VERSION,
-      seed: INHERITANCE_CASE.seed,
-      tick: INHERITANCE_CASE.ended - 13,
-      decisions: plan.decisions,
-      crossings: plan.crossings,
-      branches: [],
-    })
-    await page.goto(`/#/m/${link}`)
+    await page.goto(inheritanceLink(INHERITANCE_CASE.ended - 13))
     await expect(page.getByRole('button', { name: '×16' })).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: '×16' }).click()
     await page.getByRole('button', { name: 'Play' }).click()
@@ -386,7 +346,7 @@ test('inheritance causal', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   // FEAT: semente 4242 (support.ts) — duas colônias fundadas, uma vira a herdeira, a outra se perde
   // com o planeta; a captura mostra a cadeia inteira e a irmã perdida na mesma lista
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const events = page.locator('.panel.events')
   await expect(events.locator('.events__item').first()).toContainText('Inheritance', {
     timeout: 90_000,
@@ -1176,8 +1136,8 @@ test('system colony', async ({ page }) => {
   test.slow()
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })
-  // FEAT: semente 4242 (support.ts), ano 2500 — as duas colônias já fundadas, ainda jovens
-  await page.goto(siblingInheritanceLink(2500))
+  // FEAT: semente 4242 (support.ts), um século antes da queda — as duas colônias já de pé
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended - 100))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 30_000 })
   await enter.click()
@@ -1193,8 +1153,8 @@ test('system inherited', async ({ page }) => {
   test.setTimeout(120_000)
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })
-  // FEAT: cinco anos depois do prazo, o natal já caiu e o herdeiro já é o lar (colonies.spec.ts)
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  // FEAT: dois anos depois do prazo, o natal já caiu e o herdeiro já é o lar (colonies.spec.ts)
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 90_000 })
   await enter.click()

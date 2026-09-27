@@ -19,8 +19,17 @@ export default defineConfig({
         launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
       },
     },
-    { name: 'firefox', testMatch: /verify\.spec\.ts/, use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', testMatch: /verify\.spec\.ts/, use: { ...devices['Desktop Safari'] } },
+    // FEAT: chain.spec.ts mede a tinta do tipo, que muda de motor para motor — corre nos três
+    {
+      name: 'firefox',
+      testMatch: /(verify|chain)\.spec\.ts/,
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      testMatch: /(verify|chain)\.spec\.ts/,
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',

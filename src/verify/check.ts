@@ -5,12 +5,16 @@ import {
   GOLDEN_SCRIPTS,
   INHERITANCE_CASE,
   MERGE_CASE,
+  WORKS_CASE,
+  goldenWorld,
   mergeSeam,
   type GoldenCase,
   type InheritanceCase,
   type MergeCase,
+  type WorksCase,
 } from '../engine/golden.ts'
 import type { Decision, Status } from '../engine/state.ts'
+import { WORKS, type WorkId } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
 
 export interface GoldenResult extends GoldenCase {
@@ -25,7 +29,7 @@ export function runGoldenChecks(): GoldenResult[] {
     let world = worlds.get(key)
     if (!world) {
       const plan = GOLDEN_SCRIPTS[golden.script]
-      world = new Worldline(golden.seed, plan.decisions, null, plan.crossings)
+      world = goldenWorld(golden.seed, plan)
       worlds.set(key, world)
     }
     if (world.present.tick < golden.year) world.advance(golden.year - world.present.tick)
@@ -36,7 +40,10 @@ export function runGoldenChecks(): GoldenResult[] {
 
 // FEAT: um presente de conhecimento que ninguém pesquisa nunca quita, e o ano é o do próprio colapso
 export const COLLAPSE_DECISIONS: readonly Decision[] = [
-  { tick: 0, allocation: { agriculture: 40, industry: 60, research: 0, conservation: 0 } },
+  {
+    tick: 0,
+    allocation: { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 },
+  },
 ]
 export const COLLAPSE_CROSSINGS: readonly Crossing[] = [
   {
@@ -56,7 +63,7 @@ export interface CollapseCase {
   readonly hash: string
 }
 
-export const COLLAPSE_CASE: CollapseCase = { seed: 482913, year: 280, hash: '56b2e732' }
+export const COLLAPSE_CASE: CollapseCase = { seed: 482913, year: 280, hash: '6b856253' }
 
 export interface CollapseResult extends CollapseCase {
   readonly computed: string
@@ -93,7 +100,7 @@ export interface InheritanceResult extends InheritanceCase {
 // virou lar e a cadeia causal que liga o momento à fundação da colônia que salvou a história
 export function runInheritanceCheck(): InheritanceResult {
   const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
-  const world = new Worldline(INHERITANCE_CASE.seed, plan.decisions, null, plan.crossings)
+  const world = goldenWorld(INHERITANCE_CASE.seed, plan)
   world.advance(INHERITANCE_CASE.year)
   const moments = world.records.filter((record) => record.event === 'inheritance')
   const moved = moments.length === 1 ? (moments[0]?.start ?? -1) : -1
@@ -136,8 +143,8 @@ export interface MergeResult extends MergeCase {
 export function runMergeCheck(): MergeResult {
   const host = GOLDEN_SCRIPTS[MERGE_CASE.script]
   const guest = GOLDEN_SCRIPTS[MERGE_CASE.other]
-  const receives = new Worldline(MERGE_CASE.seed, host.decisions, null, host.crossings)
-  const departs = new Worldline(MERGE_CASE.seed, guest.decisions, null, guest.crossings)
+  const receives = goldenWorld(MERGE_CASE.seed, host)
+  const departs = goldenWorld(MERGE_CASE.seed, guest)
   receives.advance(MERGE_CASE.tick)
   departs.advance(MERGE_CASE.tick)
 
@@ -172,5 +179,41 @@ export function runMergeCheck(): MergeResult {
       settled &&
       totalOwed(receives.present.debts) === 0 &&
       computed === MERGE_CASE.hash,
+  }
+}
+
+export interface WorksResult extends WorksCase {
+  readonly computed: string
+  readonly status: Status
+  readonly finished: number
+  readonly site: WorkId | null
+  readonly ok: boolean
+}
+
+// FEAT: prova a obra inteira, não só o hash: a história segue correndo num mundo comum, as obras que
+// o roteiro encomendou estão de pé e a última ficou no canteiro — os dois blocos condicionais que os
+// dezessete deixam vazios, fixados aqui num mundo que ninguém herdou nem costurou
+export function runWorksCheck(): WorksResult {
+  const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+  const world = goldenWorld(WORKS_CASE.seed, plan)
+  world.advance(WORKS_CASE.year)
+  const present = world.present
+  const site = present.building ? (WORKS[present.building.def]?.id ?? null) : null
+  const computed = world.hashAt(Math.min(WORKS_CASE.year, present.tick))
+  return {
+    ...WORKS_CASE,
+    computed,
+    status: present.status,
+    finished: present.works.length,
+    site,
+    ok:
+      present.status === 'running' &&
+      present.tick === WORKS_CASE.year &&
+      present.works.length === WORKS_CASE.done &&
+      site === WORKS_CASE.under &&
+      present.colonies.length === 0 &&
+      present.home === null &&
+      present.lastMerge === null &&
+      computed === WORKS_CASE.hash,
   }
 }

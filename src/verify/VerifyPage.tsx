@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { formatYear } from '../app/i18n/format.ts'
 import { useT } from '../app/i18n/index.ts'
-import { INHERITANCE_CASE, MERGE_CASE } from '../engine/golden.ts'
+import { INHERITANCE_CASE, MERGE_CASE, WORKS_CASE } from '../engine/golden.ts'
 import {
   runCollapseCheck,
   runGoldenChecks,
   runInheritanceCheck,
   runMergeCheck,
+  runWorksCheck,
   type CollapseResult,
   type GoldenResult,
   type InheritanceResult,
   type MergeResult,
+  type WorksResult,
 } from './check.ts'
 
 export function VerifyPage() {
@@ -19,6 +21,7 @@ export function VerifyPage() {
   const [collapse, setCollapse] = useState<CollapseResult | null>(null)
   const [inheritance, setInheritance] = useState<InheritanceResult | null>(null)
   const [merge, setMerge] = useState<MergeResult | null>(null)
+  const [works, setWorks] = useState<WorksResult | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -26,6 +29,7 @@ export function VerifyPage() {
       setCollapse(runCollapseCheck())
       setInheritance(runInheritanceCheck())
       setMerge(runMergeCheck())
+      setWorks(runWorksCheck())
     }, 50)
     return () => clearTimeout(timer)
   }, [])
@@ -194,6 +198,48 @@ export function VerifyPage() {
                 <code>{merge.computed}</code>
               </td>
               <td>{merge.ok ? t('verify.match') : t('verify.mismatch')}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      <h2 className="verify__title">{t('verify.works.title')}</h2>
+      <p className="verify__lead">
+        {t('verify.works.lead', {
+          done: WORKS_CASE.done,
+          year: formatYear(WORKS_CASE.year),
+        })}
+      </p>
+      <p className="verify__status" role="status">
+        {works === null
+          ? t('verify.works.running')
+          : works.ok
+            ? t('verify.works.passed')
+            : t('verify.works.mismatch')}
+      </p>
+      {works && (
+        <table className="verify__table">
+          <thead>
+            <tr>
+              <th scope="col">{t('verify.seed')}</th>
+              <th scope="col">{t('verify.decisions')}</th>
+              <th scope="col">{t('verify.year')}</th>
+              <th scope="col">{t('verify.expected')}</th>
+              <th scope="col">{t('verify.computed')}</th>
+              <th scope="col">{t('verify.result')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-ok={works.ok}>
+              <td>{works.seed}</td>
+              <td>{t('verify.works.script')}</td>
+              <td>{formatYear(works.year)}</td>
+              <td>
+                <code>{works.hash}</code>
+              </td>
+              <td>
+                <code>{works.computed}</code>
+              </td>
+              <td>{works.ok ? t('verify.match') : t('verify.mismatch')}</td>
             </tr>
           </tbody>
         </table>

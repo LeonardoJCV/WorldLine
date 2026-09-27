@@ -29,6 +29,8 @@ export function makeState(overrides: Partial<WorldState> = {}): WorldState {
     colonies: [],
     home: null,
     lastMerge: null,
+    works: [],
+    building: null,
     ...overrides,
   }
 }

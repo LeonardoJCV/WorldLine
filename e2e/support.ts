@@ -1,8 +1,22 @@
 import { expect, type Page } from '@playwright/test'
-import type { Crossing } from '../src/engine/crossing.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, SIBLING_CASE } from '../src/engine/golden.ts'
 import { MODEL_VERSION } from '../src/engine/params.ts'
-import type { Decision } from '../src/engine/state.ts'
 import { encodeMultiverse } from '../src/app/world/link.ts'
+
+// FEAT: o roteiro dourado da herança (golden.ts) aberto direto no ano pedido, comissões e tudo, para
+// o navegador assistir ao ano que interessa sem reviver vinte e cinco séculos em tempo real
+export function inheritanceLink(tick: number): string {
+  const plan = GOLDEN_SCRIPTS[INHERITANCE_CASE.script]
+  return `/#/m/${encodeMultiverse({
+    version: MODEL_VERSION,
+    seed: INHERITANCE_CASE.seed,
+    tick,
+    decisions: plan.decisions,
+    crossings: plan.crossings,
+    commissions: plan.commissions,
+    branches: [],
+  })}`
+}
 
 export async function worldAtYear(page: Page, years: number) {
   await page.goto('/?seed=482913')
@@ -84,39 +98,19 @@ export async function runToCollapse(page: Page) {
   await settlePause(page)
 }
 
-// FEAT: fora do roteiro dourado (golden.ts não precisa de mais um fingerprint para uma tela) — a
-// semente 4242 tem duas luas colonizáveis; esta alocação funda as duas antes do colapso, para a
-// herança orfanar uma colônia irmã de verdade, não a única que o mundo natal chegou a ter
-export const SIBLING_CASE = {
-  seed: 4242,
-  ended: 6676,
-} as const
-
-const SIBLING_DECISIONS: readonly Decision[] = [
-  { tick: 0, allocation: { agriculture: 40, industry: 30, research: 20, conservation: 10 } },
-  { tick: 400, allocation: { agriculture: 25, industry: 45, research: 30, conservation: 0 } },
-  { tick: 2600, allocation: { agriculture: 15, industry: 65, research: 20, conservation: 0 } },
-]
-
-const SIBLING_CROSSINGS: readonly Crossing[] = [
-  {
-    tick: 3000,
-    kind: 'knowledge',
-    dose: 3,
-    amounts: [5],
-    origin: { world: 'B', tick: 3000 },
-    cost: 30,
-    direction: 'in',
-  },
-]
+// FEAT: a mesma porta do roteiro acima, para a irmã órfã: o caso mora em golden.ts, guardado pelo
+// vitest, e as especificações que o abrem continuam entrando por aqui
+export { SIBLING_CASE } from '../src/engine/golden.ts'
 
 export function siblingInheritanceLink(tick: number): string {
+  const { seed, plan } = SIBLING_CASE
   return `/#/m/${encodeMultiverse({
     version: MODEL_VERSION,
-    seed: SIBLING_CASE.seed,
+    seed,
     tick,
-    decisions: SIBLING_DECISIONS,
-    crossings: SIBLING_CROSSINGS,
+    decisions: plan.decisions,
+    crossings: plan.crossings,
+    commissions: plan.commissions,
     branches: [],
   })}`
 }

@@ -1,10 +1,11 @@
 import { openDB, type IDBPDatabase } from 'idb'
-import { isValidMultiverse, type MultiverseLink } from './link.ts'
+import { isCompatibleVersion, isValidMultiverse, type MultiverseLink } from './link.ts'
 
 export interface SavedWorld {
   readonly id: string
   readonly name: string
-  readonly link: MultiverseLink
+  // FEAT: null quando o registro é de um modelo anterior; a linha fica na lista só para ser apagada
+  readonly link: MultiverseLink | null
   readonly savedAt: number
 }
 
@@ -29,9 +30,10 @@ export function toSavedWorld(value: unknown): SavedWorld | null {
   }
   const raw = world.link as Partial<MultiverseLink>
   const link = { ...raw, branches: raw.branches ?? [] } as MultiverseLink
-  return isValidMultiverse(link)
-    ? { id: world.id, name: world.name, savedAt: world.savedAt, link }
-    : null
+  const named = { id: world.id, name: world.name, savedAt: world.savedAt }
+  // FIX: um registro de modelo anterior era descartado aqui e ficava no banco sem quem o apagasse
+  if (!isCompatibleVersion(link.version)) return { ...named, link: null }
+  return isValidMultiverse(link) ? { ...named, link } : null
 }
 
 export async function listWorlds(): Promise<SavedWorld[]> {

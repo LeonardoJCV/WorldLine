@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Commission } from '../../engine/commission.ts'
 import type { Crossing } from '../../engine/crossing.ts'
 import type { Merge } from '../../engine/merge.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
@@ -10,11 +11,11 @@ import { SEAMED_VERSION } from './link.ts'
 const present = { tick: 90 } as Snapshot
 const early = {
   tick: 10,
-  allocation: { agriculture: 30, industry: 30, research: 30, conservation: 10 },
+  allocation: { agriculture: 30, industry: 25, research: 30, conservation: 10, works: 5 },
 }
 const late = {
   tick: 50,
-  allocation: { agriculture: 10, industry: 40, research: 40, conservation: 10 },
+  allocation: { agriculture: 10, industry: 35, research: 40, conservation: 10, works: 5 },
 }
 
 const fromC: Crossing = {
@@ -47,6 +48,7 @@ const worlds: WorldView[] = [
     paradox: null,
     colonies: [],
     merges: [],
+    commissions: [],
   },
   {
     info: { id: 'C', parent: 'A', fork: 40, generation: 3 },
@@ -59,6 +61,7 @@ const worlds: WorldView[] = [
     paradox: null,
     colonies: [],
     merges: [],
+    commissions: [],
   },
   {
     info: { id: 'B', parent: 'C', fork: 60, generation: 4 },
@@ -71,8 +74,19 @@ const worlds: WorldView[] = [
     paradox: null,
     colonies: [],
     merges: [],
+    commissions: [],
   },
 ]
+
+// FEAT: uma comissão do ano 20 é passado herdado por C, que bifurcou no 40; a do 50 é dela
+const early20: Commission = { tick: 20, work: 'granary' }
+const own50: Commission = { tick: 50, work: 'irrigation' }
+
+const built: WorldView[] = worlds.map((world, index) => {
+  if (index === 0) return { ...world, commissions: [early20] }
+  if (index === 1) return { ...world, commissions: [early20, own50] }
+  return world
+})
 
 const seamed: WorldView[] = worlds.map((world, index) => {
   if (index === 0) return { ...world, merges: [withGone, seam] }
@@ -119,6 +133,19 @@ describe('currentLink', () => {
       { tick: 88, self: 'B', other: 'A', direction: 'out' },
     ])
     expect(link?.branches[1]?.merges).toBeUndefined()
+  })
+
+  it('keeps the commissions each world ordered after its fork', () => {
+    const link = currentLink({ seed: 7, now: 90, worlds: built })
+    expect(link?.commissions).toEqual([early20])
+    expect(link?.branches[0]?.commissions).toEqual([own50])
+    expect(link?.branches[1]?.commissions).toBeUndefined()
+  })
+
+  it('leaves a multiverse that commissioned nothing without the field', () => {
+    const link = currentLink({ seed: 7, now: 90, worlds })
+    expect(link?.commissions).toBeUndefined()
+    expect(link?.branches.map((branch) => branch.commissions)).toEqual([undefined, undefined])
   })
 
   it('leaves a multiverse that never sewed anything on the version it had', () => {

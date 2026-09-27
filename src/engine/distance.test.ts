@@ -12,7 +12,10 @@ describe('causalDistance', () => {
 
   it('is symmetric and bounded', () => {
     const w = new Worldline(482913, [
-      { tick: 0, allocation: { agriculture: 25, industry: 60, research: 15, conservation: 0 } },
+      {
+        tick: 0,
+        allocation: { agriculture: 25, industry: 55, research: 15, conservation: 0, works: 5 },
+      },
     ])
     w.advance(1200)
     const d = causalDistance(base, w.present)
