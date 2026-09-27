@@ -40,6 +40,13 @@ export function validateCommissions(commissions: readonly Commission[]): Commiss
   return commissions.map((c) => ({ tick: c.tick, work: c.work }))
 }
 
+// FIX: a obra fechada entra em ordem de `def`, não de conclusão, para haver uma ordem só: multiplicar
+// em ponto flutuante não é comutativo no último bit, e a costura une por `def` e reordenaria a lista
+function filed(works: readonly Work[], done: Work): readonly Work[] {
+  const at = works.findIndex((work) => work.def > done.def)
+  return at < 0 ? [...works, done] : [...works.slice(0, at), done, ...works.slice(at)]
+}
+
 export interface WorkYear {
   readonly works: readonly Work[]
   readonly building: Building | null
@@ -66,7 +73,7 @@ export function tickWork(s: WorldState, nextRecord: number, commission?: Commiss
     return { works: s.works, building: { ...building, progress }, finished: null }
   }
   return {
-    works: [...s.works, { def: building.def, done: s.tick, record: nextRecord }],
+    works: filed(s.works, { def: building.def, done: s.tick, record: nextRecord }),
     building: null,
     finished: building.def,
   }

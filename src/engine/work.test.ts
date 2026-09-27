@@ -90,8 +90,8 @@ describe('the works catalogue', () => {
     }
   })
 
-  // FIX: a aciclicidade é propriedade do grafo e a ordem do array é contrato de hash; provar a
-  // primeira pela segunda proibia a árvore de crescer para cima, porque só folhas podem ser apendadas
+  // FIX: a busca é detector de ciclo igualmente forte, e é só isso — a prova antiga afirmava TAMBÉM a
+  // ordem topológica do array, e era essa afirmação a mais que proibia a árvore de crescer para cima
   it('has no cycle, proved by a depth-first search that ignores the catalogue order', () => {
     expect(
       ring(
@@ -101,10 +101,11 @@ describe('the works catalogue', () => {
     ).toBeNull()
   })
 
-  // FEAT: e a busca tem dentes — a mesma varredura acha um ciclo que ordem nenhuma denunciaria
-  it('finds a cycle in a tree whose every prerequisite still comes earlier', () => {
+  // FEAT: e a busca tem dentes sem consultar posição nenhuma — a entrada aqui é só um mapa de
+  // pré-requisitos, onde não existe array em que uma ordem de armazenamento pudesse ser lida
+  it('finds a cycle given nothing but a prerequisite lookup', () => {
     const needs: Readonly<Record<string, readonly string[]>> = { a: ['c'], b: ['a'], c: ['b'] }
-    expect(ring(['a', 'b', 'c'], (id) => needs[id] ?? [])).not.toBeNull()
+    expect(ring(['a', 'b', 'c'], (id) => needs[id] ?? [])).toEqual(['a', 'c', 'b', 'a'])
   })
 
   it('never needs a work from a later era than its own', () => {
@@ -287,16 +288,22 @@ describe('workMods', () => {
     expect(two.mortality).toBeCloseTo(-0.017, 10)
   })
 
-  it('does not care about the order of the list', () => {
-    const a = workMods([
+  // FIX: multiplicar em ponto flutuante NÃO é comutativo no último bit — com o catálogo inteiro,
+  // inverter a lista move `research` em cerca de 2 ULP, então a indiferência à ordem é aproximada e
+  // não exata, e é por isso que `tickWork` arquiva em ordem de `def`: para haver uma ordem só
+  it('reads the same factors in any order, to the last decimal but not to the last bit', () => {
+    const two = [
       { def: 0, done: 1, record: 0 },
       { def: 12, done: 2, record: 1 },
-    ])
-    const b = workMods([
-      { def: 12, done: 2, record: 1 },
-      { def: 0, done: 1, record: 0 },
-    ])
-    expect(a).toEqual(b)
+    ]
+    expect(workMods(two)).toEqual(workMods([...two].reverse()))
+
+    const every = WORKS.map((_, def) => ({ def, done: def, record: def }))
+    const forward = workMods(every)
+    const backward = workMods([...every].reverse())
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) {
+      expect(backward[key], key).toBeCloseTo(forward[key], 10)
+    }
   })
 })
 

@@ -165,6 +165,11 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
       ? s.population
       : value('population')
 
+  // FIX: obra pronta não se comissiona, e a união é o único caminho por que um `def` entra em `works`
+  // sem passar por esse portão — então o canteiro daquilo que a história agora tem é abandonado
+  const works = mergeWorks(s.works, incoming.works ?? [])
+  const standing = works.some((work) => work.def === s.building?.def)
+
   return {
     ...s,
     home,
@@ -180,7 +185,7 @@ export function mergeStates(s: WorldState, incoming: Merge): WorldState {
     echoes: [...s.echoes, ...(incoming.echoes ?? [])],
     paradox: nearerParadox(s.paradox, incoming.paradox ?? null),
     strain: Math.max(s.strain, incoming.strain ?? 0),
-    // FEAT: as duas listas se unem, mas o canteiro é da sobrevivente: `building` vem do espalhamento
-    works: mergeWorks(s.works, incoming.works ?? []),
+    works,
+    building: standing ? null : s.building,
   }
 }

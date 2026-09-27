@@ -13,8 +13,17 @@ import {
 } from './merge.ts'
 import { INHERIT_SHOCK, MERGE_SHOCK } from './params.ts'
 import { Era, NEVER, VARIABLES, type Allocation, type Variable, type WorldState } from './state.ts'
+import { step } from './step.ts'
 import { TEST_WORLD, makeState } from './testing.ts'
-import { WORKS, isCommissionable, workIndex, type Work } from './work.ts'
+import {
+  FACTOR_KEYS,
+  TERM_KEYS,
+  WORKS,
+  isCommissionable,
+  workIndex,
+  workMods,
+  type Work,
+} from './work.ts'
 
 function world(overrides: Partial<WorldState> = {}): WorldState {
   return makeState(overrides)
@@ -486,6 +495,47 @@ describe('mergeWorks', () => {
     expect(seamed.building).toEqual(site)
   })
 
+  // FIX: a regra que o motor já tinha é que obra pronta não se comissiona, e a união é o primeiro
+  // caminho por que um `def` entra em `works` sem passar por `isCommissionable` — o canteiro é largado
+  it('abandons the site when the union already has the work it was building', () => {
+    const site = { def: 19, progress: 41_000, since: 400 }
+    const seamed = mergeStates(
+      world({ works: [{ def: 2, done: 30, record: 1 }], building: site }),
+      incoming({}, { works: [{ def: 19, done: 100, record: 7 }] }),
+    )
+    expect(seamed.building).toBeNull()
+    expect(seamed.works.map((work) => work.def)).toEqual([2, 19])
+  })
+
+  // FIX: e a prova de que importa: sem largar o canteiro o ano seguinte fecha a obra de novo, a lista
+  // guarda o mesmo `def` duas vezes e o coeficiente dela fica multiplicado ao quadrado para sempre
+  it('never lets one work be finished twice, nor its factor be squared', () => {
+    const computer = workIndex('computer')
+    const cost = WORKS[computer]?.cost ?? 0
+    const research = WORKS[computer]?.effect.research ?? 1
+    const result = step(
+      makeState({
+        tick: 500,
+        population: 4e6,
+        economy: 9,
+        works: [{ def: 2, done: 30, record: 1 }],
+        building: { def: computer, progress: cost - 1, since: 400 },
+      }),
+      TEST_WORLD,
+      0,
+      undefined,
+      [],
+      incoming(
+        { population: 1000 },
+        { tick: 500, works: [{ def: computer, done: 100, record: 7 }] },
+      ),
+    )
+    const built = result.state.works.filter((work) => work.def === computer)
+    expect(built).toHaveLength(1)
+    expect(workMods(result.state.works).research).toBeCloseTo(research, 10)
+    expect(result.state.building).toBeNull()
+  })
+
   // FEAT: o prêmio que o MVP 7 não tinha: duas metades de uma árvore viram uma árvore inteira
   it('lets the union satisfy a prerequisite neither history could satisfy alone', () => {
     const own = [{ def: workIndex('electrification'), done: 100, record: 0 }]
@@ -498,6 +548,17 @@ describe('mergeWorks', () => {
       incoming({}, { works: other }),
     )
     expect(isCommissionable(seamed, reactor)).toBe(true)
+  })
+
+  // FIX: `tickWork` já entrega a lista em ordem de `def`, então uma costura que não traz obra nenhuma
+  // devolve a MESMA sequência — e o produto dos fatores sai bit a bit igual, sem perturbação alheia
+  it('perturbs nothing at all when the guest brings no works, whatever the survivor built', () => {
+    const everything = WORKS.map((_, def) => ({ def, done: 100 + def, record: def }))
+    const before = workMods(everything)
+    const after = mergeStates(world({ works: everything }), incoming({})).works
+    expect(after).toEqual(everything)
+    const mods = workMods(after)
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) expect(mods[key], key).toBe(before[key])
   })
 
   it('leaves a survivor that built alone with exactly what it had', () => {

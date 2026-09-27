@@ -466,8 +466,8 @@ interface Conducted {
   readonly alive: boolean
 }
 
-// FEAT: conduzir é abrir a próxima obra possível em todo ano de canteiro livre, na ordem em que o
-// jogo as apresenta, e nenhuma obra da subida vem antes do degrau que a abre
+// FEAT: conduzir é abrir a próxima obra possível em todo ano de canteiro livre, na ordem que o jogo
+// apresenta — ainda a mais pessimista, porque ela oferece o foguete antes do propelente que o abre
 function conduct(seed: number, allocation: Allocation): Conducted {
   const w = new Worldline(seed, [{ tick: 0, allocation }])
   let founded = 0
@@ -508,8 +508,8 @@ describe('space calibration', () => {
     }
   })
 
-  // FEAT: a razão da E8 — o foguete era uma barra de progresso de seis séculos, e a única obra da era
-  // dele que o jogador podia abrir; agora são quatro conquistas, e as quatro levam o mesmo tempo
+  // FEAT: a razão da E8 — o foguete era uma barra de progresso de seis séculos, e o primeiro da era
+  // dele na ordem apresentada; agora são quatro conquistas, e as quatro levam o mesmo tempo
   it('gives the four rungs of the climb the same handful of decades each', () => {
     for (const seed of SPACE_SEEDS) {
       const run = conduct(seed, WORKS_PATH)
@@ -525,7 +525,7 @@ describe('space calibration', () => {
       const rungs = climb.map((year, rung) => year - (rung === 0 ? before : (climb[rung - 1] ?? 0)))
       const spread = `${label} rungs ${rungs.join()}`
       expect(Math.max(...rungs), spread).toBeLessThan(150)
-      // FEAT: e nenhum degrau é o dobro do vizinho mais curto — é o tempo que é igual, não o preço
+      // FEAT: e o mais longo não passa do mais curto por um quarto de século — é o tempo que é igual
       expect(Math.max(...rungs) - Math.min(...rungs), spread).toBeLessThan(25)
       // FEAT: e a subida inteira segue custando séculos, senão o céu teria ficado barato
       expect((climb.at(-1) ?? 0) - before, label).toBeGreaterThan(300)

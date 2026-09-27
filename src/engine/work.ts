@@ -252,8 +252,8 @@ export const WORKS: readonly WorkDef[] = [
     cost: 120000,
     effect: { smoke: 0.7 },
   },
-  // FEAT: a subida, apendada ao fim mas encaixada ANTES do foguete, gasta sem lucrar — e o custo sobe
-  // a cada degrau porque o ritmo de obra sobe com o mundo, e é assim que os quatro levam o mesmo tempo
+  // FEAT: a subida, apendada ao fim mas encaixada ANTES do foguete, lucra pouco de propósito, e custa
+  // mais a cada degrau porque o ritmo sobe com o mundo — é assim que os quatro levam o mesmo tempo
   {
     id: 'launchpad',
     era: Era.space,

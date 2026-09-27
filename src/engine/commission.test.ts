@@ -139,6 +139,23 @@ describe('a year of work', () => {
     expect(result.started[index]).toMatchObject({ event: 'work_done', start: 0, end: 0 })
   })
 
+  // FIX: a lista tem uma ordem só, a de `def`, e é aqui que ela nasce — a obra mais nova entra no lugar
+  // dela e não no fim, senão a costura, que une por `def`, reordenaria a lista da sobrevivente
+  it('files each finished work in def order, never in the order they were finished', () => {
+    const late = workIndex('pottery')
+    const early = workIndex('granary')
+    expect(late).toBeGreaterThan(early)
+    const first = tickWork({ ...quick, tick: 10 }, 1, at('pottery', 10))
+    expect(first.works.map((work) => work.def)).toEqual([late])
+    const second = tickWork(
+      { ...quick, tick: 20, works: first.works, building: null },
+      2,
+      at('granary', 20),
+    )
+    expect(second.works.map((work) => work.def)).toEqual([early, late])
+    expect(second.works.map((work) => work.done)).toEqual([20, 10])
+  })
+
   // FEAT: sobre um mundo congelado, para a lei medida ser a do acúmulo e não a da economia que cresce
   it('accumulates year after year, and finishes in the year the cost is met and not before', () => {
     const rate = progressWork(slow, NEUTRAL_MODS)
