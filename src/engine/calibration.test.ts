@@ -453,17 +453,21 @@ const NO_WORKS: Allocation = {
   works: 0,
 }
 const ROCKET = workIndex('rocket')
+// FEAT: a subida ao céu, em ordem de pré-requisito — a cadeia que a E8 partiu do foguete único
+const CLIMB = (['launchpad', 'telemetry', 'propellant', 'rocket'] as const).map(workIndex)
 
 interface Conducted {
   // FEAT: o ano de conclusão de cada obra, porque um mundo sem obra nenhuma é uma lista vazia
   readonly works: readonly number[]
+  // FEAT: e o ano de cada obra por índice, para medir o degrau que cada conquista custou
+  readonly done: ReadonlyMap<number, number>
   readonly rocketAt: number
   readonly founded: number
   readonly alive: boolean
 }
 
 // FEAT: conduzir é abrir a próxima obra possível em todo ano de canteiro livre, na ordem em que o
-// jogo as apresenta — que é a ordem mais pessimista, porque o foguete vem antes de tudo que o barato
+// jogo as apresenta, e nenhuma obra da subida vem antes do degrau que a abre
 function conduct(seed: number, allocation: Allocation): Conducted {
   const w = new Worldline(seed, [{ tick: 0, allocation }])
   let founded = 0
@@ -483,6 +487,7 @@ function conduct(seed: number, allocation: Allocation): Conducted {
   }
   return {
     works: w.present.works.map((done) => done.done),
+    done: new Map(w.present.works.map((done) => [done.def, done.done])),
     rocketAt: w.present.works.find((done) => done.def === ROCKET)?.done ?? -1,
     founded,
     alive: w.present.status === 'running',
@@ -500,6 +505,41 @@ describe('space calibration', () => {
       expect(run.rocketAt).toBeGreaterThan(2000)
       expect(run.rocketAt).toBeLessThan(3000)
       expect(run.alive).toBe(true)
+    }
+  })
+
+  // FEAT: a razão da E8 — antes de a subida ser partida o foguete era uma barra de progresso de seis
+  // séculos, e a única obra da era dele que o jogador podia abrir; agora são quatro conquistas
+  it('never leaves the conductor two centuries on one rung of the climb', () => {
+    for (const seed of SPACE_SEEDS) {
+      const run = conduct(seed, WORKS_PATH)
+      const label = `seed ${seed}`
+      const climb = CLIMB.map((def) => run.done.get(def) ?? -1)
+      expect(
+        climb.every((year) => year > 0),
+        label,
+      ).toBe(true)
+      // FEAT: o degrau começa quando a obra anterior fechou, e a primeira quando fechou a de antes dela
+      const opened = climb[0] ?? 0
+      const before = Math.max(...[...run.done.values()].filter((year) => year < opened))
+      const rungs = climb.map((year, rung) => year - (rung === 0 ? before : (climb[rung - 1] ?? 0)))
+      expect(Math.max(...rungs), `${label} rungs ${rungs.join()}`).toBeLessThan(200)
+      // FEAT: e a subida inteira segue custando séculos, senão o céu teria ficado barato
+      expect((climb.at(-1) ?? 0) - before, label).toBeGreaterThan(300)
+    }
+  })
+
+  // FEAT: o foguete deixou de ser vinte vezes qualquer outra obra, mas a subida inteira ainda pesa
+  it('prices the rocket at the scale of its era, and the whole climb at what it used to cost', () => {
+    const climb = CLIMB.map((def) => WORKS[def]?.cost ?? 0)
+    expect(climb.reduce((sum, cost) => sum + cost, 0)).toBe(2_400_000)
+    const era = WORKS.filter(
+      (work) => work.era === Era.space && !CLIMB.includes(workIndex(work.id)),
+    )
+    expect(WORKS[ROCKET]?.cost).toBeLessThan(2 * Math.max(...era.map((work) => work.cost)))
+    // FEAT: e nenhum degrau é mais caro que o anterior, então a parede não voltou disfarçada
+    for (let rung = 1; rung < climb.length; rung++) {
+      expect(climb[rung]).toBeLessThan(climb[rung - 1] ?? 0)
     }
   })
 

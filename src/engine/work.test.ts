@@ -14,10 +14,36 @@ import {
 } from './work.ts'
 import { Era } from './state.ts'
 
+// FEAT: devolve o caminho do primeiro ciclo, ou null; a varredura é a prova e não a ordem do array
+function ring(
+  ids: readonly string[],
+  needs: (id: string) => readonly string[],
+): readonly string[] | null {
+  const open: string[] = []
+  const closed = new Set<string>()
+  const visit = (id: string): readonly string[] | null => {
+    if (closed.has(id)) return null
+    if (open.includes(id)) return [...open, id]
+    open.push(id)
+    for (const need of needs(id)) {
+      const found = visit(need)
+      if (found) return found
+    }
+    open.pop()
+    closed.add(id)
+    return null
+  }
+  for (const id of ids) {
+    const found = visit(id)
+    if (found) return found
+  }
+  return null
+}
+
 describe('the works catalogue', () => {
-  it('has twenty-nine works with unique ids', () => {
-    expect(WORKS).toHaveLength(29)
-    expect(new Set(WORKS.map((w) => w.id)).size).toBe(29)
+  it('has thirty-two works with unique ids', () => {
+    expect(WORKS).toHaveLength(32)
+    expect(new Set(WORKS.map((w) => w.id)).size).toBe(32)
   })
 
   it('pins the catalogue order, because work.def enters a hash later', () => {
@@ -51,6 +77,9 @@ describe('the works catalogue', () => {
       'filters',
       'cleanGrid',
       'closedCycle',
+      'launchpad',
+      'telemetry',
+      'propellant',
     ])
   })
 
@@ -61,12 +90,21 @@ describe('the works catalogue', () => {
     }
   })
 
-  it('has no cycle, because every prerequisite comes earlier in the catalogue', () => {
-    const seen = new Set<string>()
-    for (const work of WORKS) {
-      for (const need of work.needs) expect(seen.has(need)).toBe(true)
-      seen.add(work.id)
-    }
+  // FIX: a aciclicidade é propriedade do grafo e a ordem do array é contrato de hash; provar a
+  // primeira pela segunda proibia a árvore de crescer para cima, porque só folhas podem ser apendadas
+  it('has no cycle, proved by a depth-first search that ignores the catalogue order', () => {
+    expect(
+      ring(
+        WORKS.map((work) => work.id),
+        (id) => findWork(id as WorkId).needs,
+      ),
+    ).toBeNull()
+  })
+
+  // FEAT: e a busca tem dentes — a mesma varredura acha um ciclo que ordem nenhuma denunciaria
+  it('finds a cycle in a tree whose every prerequisite still comes earlier', () => {
+    const needs: Readonly<Record<string, readonly string[]>> = { a: ['c'], b: ['a'], c: ['b'] }
+    expect(ring(['a', 'b', 'c'], (id) => needs[id] ?? [])).not.toBeNull()
   })
 
   it('never needs a work from a later era than its own', () => {
@@ -113,7 +151,7 @@ describe('the works catalogue', () => {
     chemistry: { needs: ['metallurgy'], effect: { harvest: 1.25, pollution: 0.04 } },
     medicine: { needs: ['sanitation'], effect: { mortality: -0.02 } },
     computer: { needs: ['telegraph'], effect: { research: 1.5 } },
-    rocket: { needs: ['computer'], effect: {} },
+    rocket: { needs: ['propellant'], effect: {} },
     orbit: { needs: ['rocket'], effect: { research: 1.2 } },
     shipyard: { needs: ['rocket'], effect: { colonyCost: 0.7 } },
     arcology: { needs: ['computer'], effect: { capacity: 1.3 } },
@@ -122,6 +160,9 @@ describe('the works catalogue', () => {
     filters: { needs: ['steam'], effect: { smoke: 0.8 } },
     cleanGrid: { needs: ['electrification'], effect: { smoke: 0.75 } },
     closedCycle: { needs: ['reactor'], effect: { smoke: 0.7 } },
+    launchpad: { needs: ['computer'], effect: { production: 1.08 } },
+    telemetry: { needs: ['launchpad'], effect: { research: 1.15 } },
+    propellant: { needs: ['telemetry'], effect: { production: 1.08 } },
   }
 
   it('pins every work to its exact needs list and its exact effect map', () => {
@@ -309,9 +350,24 @@ describe('isCommissionable', () => {
   })
 
   it('accepts a space-era work when the state carries the real space bit', () => {
-    const rocket = workIndex('rocket')
+    const launchpad = workIndex('launchpad')
     const works = [{ def: workIndex('computer'), done: 1, record: 0 }]
-    expect(isCommissionable({ eras: Era.space, works }, rocket)).toBe(true)
+    expect(isCommissionable({ eras: Era.space, works }, launchpad)).toBe(true)
+  })
+
+  // FEAT: a subida é uma sequência, então o foguete não é mais a primeira obra da era dele: o
+  // computador abre a plataforma, e é o propelente que abre o foguete
+  it('opens the climb one rung at a time, and the rocket only at the top', () => {
+    const rocket = workIndex('rocket')
+    const climbed: { def: number; done: number; record: number }[] = [
+      { def: workIndex('computer'), done: 1, record: 0 },
+    ]
+    for (const id of ['launchpad', 'telemetry', 'propellant'] as const) {
+      expect(isCommissionable({ eras: Era.space, works: climbed }, rocket), id).toBe(false)
+      expect(isCommissionable({ eras: Era.space, works: climbed }, workIndex(id)), id).toBe(true)
+      climbed.push({ def: workIndex(id), done: 1, record: climbed.length })
+    }
+    expect(isCommissionable({ eras: Era.space, works: climbed }, rocket)).toBe(true)
   })
 
   // FIX: com os dois espaços de bits misturados, um mundo com as quatro eras antigas abertas

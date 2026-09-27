@@ -698,7 +698,7 @@ describe('the works in the causal chain', () => {
     expect(crisis(yesterday)).toContainEqual({ kind: 'event', record: 12 })
   })
 
-  // FEAT: o teto, com as vinte e cinco obras de pé: a era espacial nomeia as catorze que empurraram
+  // FEAT: o teto, com as trinta e duas obras de pé: a era espacial nomeia as dezessete que empurraram
   // os três portões dela para cima, e as mentiras seguem valendo zero
   it('bounds how many works one record can ever name', () => {
     const all = WORKS.map((_, def) => ({ def, done: 40, record: 100 + def }))
@@ -712,8 +712,8 @@ describe('the works in the causal chain', () => {
     )
     const era = reached.started.find((r) => r.event === 'space_era')
     expect(reached.started.map((r) => r.event)).toEqual(['space_era'])
-    expect(era?.causes.filter((cause) => cause.kind === 'event')).toHaveLength(14)
-    expect(era?.causes).toHaveLength(17)
+    expect(era?.causes.filter((cause) => cause.kind === 'event')).toHaveLength(17)
+    expect(era?.causes).toHaveLength(20)
 
     // FEAT: as três que levantam o alvo respondem pela falta, e mais nenhuma
     expect(named(all, short, 'energy_crisis')).toBe(3)

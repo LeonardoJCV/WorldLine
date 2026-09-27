@@ -30,6 +30,9 @@ export type WorkId =
   | 'filters'
   | 'cleanGrid'
   | 'closedCycle'
+  | 'launchpad'
+  | 'telemetry'
+  | 'propellant'
 
 export const FACTOR_KEYS = [
   'harvest',
@@ -70,6 +73,8 @@ export interface Building {
   readonly since: number
 }
 
+// FIX: ordem de armazenamento e aciclicidade são coisas separadas — a primeira é contrato de hash e
+// append-only, e provar a segunda por ela proibia a árvore de crescer para cima, só de ganhar folhas
 export const WORKS: readonly WorkDef[] = [
   { id: 'irrigation', era: Era.agricultural, needs: [], cost: 600, effect: { harvest: 1.12 } },
   {
@@ -188,7 +193,7 @@ export const WORKS: readonly WorkDef[] = [
     effect: { research: 1.5 },
   },
   // FEAT: efeito vazio de propósito — o foguete não move coeficiente, só habilita orbit e shipyard
-  { id: 'rocket', era: Era.space, needs: ['computer'], cost: 2400000, effect: {} },
+  { id: 'rocket', era: Era.space, needs: ['propellant'], cost: 150000, effect: {} },
   {
     id: 'orbit',
     era: Era.space,
@@ -246,6 +251,29 @@ export const WORKS: readonly WorkDef[] = [
     needs: ['reactor'],
     cost: 120000,
     effect: { smoke: 0.7 },
+  },
+  // FEAT: a subida ao céu, apendada ao fim mas encaixada ANTES do foguete na árvore — os efeitos são
+  // modestos de propósito, porque a escada é onde a civilização gasta e não onde ela lucra
+  {
+    id: 'launchpad',
+    era: Era.space,
+    needs: ['computer'],
+    cost: 1000000,
+    effect: { production: 1.08 },
+  },
+  {
+    id: 'telemetry',
+    era: Era.space,
+    needs: ['launchpad'],
+    cost: 750000,
+    effect: { research: 1.15 },
+  },
+  {
+    id: 'propellant',
+    era: Era.space,
+    needs: ['telemetry'],
+    cost: 500000,
+    effect: { production: 1.08 },
   },
 ]
 

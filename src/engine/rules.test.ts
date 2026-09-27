@@ -371,7 +371,7 @@ describe('the permanent layer of the works', () => {
   // FEAT: o foguete é a única obra de efeito vazio de propósito — o portão da era espacial é a
   // prova dele, e por isso ele é o único que fica fora desta tabela
   it('leaves only the rocket out of the table, because only the rocket moves no coefficient', () => {
-    expect(EFFECTFUL).toHaveLength(28)
+    expect(EFFECTFUL).toHaveLength(31)
     expect(EFFECTFUL.map((work) => work.id)).not.toContain('rocket')
   })
 
