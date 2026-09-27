@@ -303,7 +303,7 @@ test('state colonies', async ({ page }) => {
   await useGraphics(page, '2d')
   await page.setViewportSize({ width: 1440, height: 900 })
   // FEAT: o roteiro dourado da herança carrega as duas linhas de uma vez — a colônia fundada no ano
-  // seguinte ao do foguete e a dívida do empréstimo em ciclo, que chega trinta anos antes deste ano
+  // seguinte ao do foguete e a dívida do empréstimo em ciclo, que chega trinta e dois anos antes
   await page.goto(inheritanceLink(INHERITANCE_CASE.founded + 120))
 
   const panel = page.locator('.panel.state')
@@ -346,7 +346,7 @@ test('inheritance causal', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   // FEAT: semente 4242 (support.ts) — duas colônias fundadas, uma vira a herdeira, a outra se perde
   // com o planeta; a captura mostra a cadeia inteira e a irmã perdida na mesma lista
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const events = page.locator('.panel.events')
   await expect(events.locator('.events__item').first()).toContainText('Inheritance', {
     timeout: 90_000,
@@ -1153,8 +1153,8 @@ test('system inherited', async ({ page }) => {
   test.setTimeout(120_000)
   await useGraphics(page, 'high')
   await page.setViewportSize({ width: 1440, height: 900 })
-  // FEAT: cinco anos depois do prazo, o natal já caiu e o herdeiro já é o lar (colonies.spec.ts)
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  // FEAT: dois anos depois do prazo, o natal já caiu e o herdeiro já é o lar (colonies.spec.ts)
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 90_000 })
   await enter.click()

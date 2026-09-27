@@ -318,8 +318,8 @@ test('reads the natal body as ended and the heir as home after the inheritance',
   page,
 }) => {
   test.slow()
-  // FEAT: cinco anos depois do prazo, a herança já rodou (colonies.spec.ts explica o +5)
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  // FEAT: dois anos depois do prazo, a herança já rodou (colonies.spec.ts explica o +2)
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const enter = page.getByRole('button', { name: 'View planet' })
   await expect(enter).toBeVisible({ timeout: 60_000 })
   await enter.click()

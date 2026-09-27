@@ -70,7 +70,7 @@ function colony(overrides: Partial<Colony> = {}): Colony {
 }
 
 describe('foundColony', () => {
-  it('refuses to colonise in the space era with no rocket', () => {
+  it('refuses to colonise with no rocket, however far up the climb the world got', () => {
     expect(foundColony(world({ works: [] }), BODIES, 2400, 7)).toBeNull()
     // FEAT: a subida inteira menos o último degrau ainda não leva ninguém a nenhum corpo
     const climbing = (['launchpad', 'telemetry', 'propellant'] as const).map((id, record) => ({

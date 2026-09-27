@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { Commission } from './commission.ts'
 import type { Crossing } from './crossing.ts'
 import type { Debt } from './debt.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE, goldenWorld } from './golden.ts'
+import { GOLDEN_SCRIPTS, INHERITANCE_CASE, SIBLING_CASE, goldenWorld } from './golden.ts'
 import { hashState } from './hash.ts'
 import type { Merge } from './merge.ts'
 import { DEFAULT_ALLOCATION, HORIZON, PARADOX_GRACE } from './params.ts'
 import { Era, hasEra } from './state.ts'
-import { workIndex, type WorkId } from './work.ts'
+import { WORKS, workIndex, type WorkId } from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const SEED = 482913
@@ -352,6 +352,26 @@ describe('a worldline that outlives its world', () => {
     late.advance(INHERITANCE_CASE.year - late.present.tick)
     expect(late.present.home).toBe(line.present.home)
     expect(hashState(late.present)).toBe(line.hashAt(INHERITANCE_CASE.year))
+  })
+})
+
+// FEAT: a única guarda de unidade do caso da irmã órfã, que quatro especificações de navegador abrem
+// pelo link: uma comissão num ano de canteiro ocupado zera a obra em silêncio, e sem este teste o
+// único sinal seria um navegador esperando por uma linha de herança que nunca chega
+describe('a history that leaves a sister behind', () => {
+  const line = goldenWorld(SIBLING_CASE.seed, SIBLING_CASE.plan)
+  line.advance(SIBLING_CASE.refounded + 1)
+  const years = (event: string) =>
+    line.records.filter((record) => record.event === event).map((record) => record.start)
+
+  it('builds the whole climb, founds both sisters, loses one and settles the body again', () => {
+    expect(SIBLING_CASE.plan.commissions).toHaveLength(WORKS.length)
+    expect(line.present.works).toHaveLength(WORKS.length)
+    expect(years('colony_founded')).toEqual([...SIBLING_CASE.founded, SIBLING_CASE.refounded])
+    expect(years('inheritance')).toEqual([SIBLING_CASE.ended])
+    expect(years('colony_lost')).toEqual([SIBLING_CASE.ended])
+    expect(line.present.status).toBe('running')
+    expect(line.present.home).not.toBeNull()
   })
 })
 

@@ -296,10 +296,18 @@ function worldIndex(world: string): number {
   return index === -1 ? 0xff : index
 }
 
+// FIX: a contagem e o custo viajam num byte cada, então um valor acima do teto voltaria truncado e
+// em silêncio — um custo 500 relido como 244 é um caso publicado corrompido, não um link inválido
 function writeCrossings(view: DataView, at: number, crossings: readonly Crossing[] = []): number {
+  if (crossings.length > MAX_CROSSINGS) {
+    throw new RangeError(`a link carries at most ${MAX_CROSSINGS} crossings`)
+  }
   view.setUint8(at, crossings.length)
   let cursor = at + 1
   for (const crossing of crossings) {
+    if (!Number.isInteger(crossing.cost) || crossing.cost < 0 || crossing.cost > MAX_COST) {
+      throw new RangeError(`a crossing costs from 0 to ${MAX_COST} credits in a link`)
+    }
     view.setUint16(cursor, crossing.tick)
     view.setUint8(cursor + 2, CROSSING_KINDS.indexOf(crossing.kind))
     view.setUint8(cursor + 3, crossing.dose)

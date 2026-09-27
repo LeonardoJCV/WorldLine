@@ -101,14 +101,15 @@ describe('runMergeCheck', () => {
 })
 
 describe('the works the reference histories build, and the ones they never do', () => {
-  // FEAT: quinze dos dezessete não comissionam nada, então têm de sair com a obra vazia; a herança
-  // é a única que constrói, porque sem o foguete pronto ela não colonizaria e não herdaria
+  // FEAT: dezesseis dos dezessete não comissionam nada, então têm de sair com a obra vazia — os
+  // catorze, o colapso e as DUAS histórias da confluência; a herança é a única que constrói, porque
+  // sem o foguete pronto ela não colonizaria e não herdaria
   const idle = (world: Worldline) => {
     expect(world.present.works).toEqual([])
     expect(world.present.building).toBeNull()
   }
 
-  it('leaves the fifteen grounded fingerprints alone, with no work done and none under way', () => {
+  it('leaves the sixteen grounded fingerprints alone, with no work done and none under way', () => {
     for (const { seed, script, year, hash } of GOLDEN_CASES) {
       const plan = GOLDEN_SCRIPTS[script]
       expect(plan.commissions, script).toEqual([])
@@ -148,7 +149,10 @@ describe('the works the reference histories build, and the ones they never do', 
     const heir = goldenWorld(INHERITANCE_CASE.seed, plan)
     heir.advance(INHERITANCE_CASE.year)
     expect(heir.present.works).toHaveLength(WORKS.length)
-    expect(plan.commissions).toHaveLength(WORKS.length)
+    // FEAT: uma comissão num ano de canteiro ocupado é ignorada em silêncio, então a guarda é que
+    // toda obra que o roteiro encomenda esteja de pé, não que a lista tenha o tamanho do catálogo
+    const standing = new Set(heir.present.works.map((done) => WORKS[done.def]?.id))
+    expect(plan.commissions.filter((ordered) => !standing.has(ordered.work))).toEqual([])
     const rocket = heir.present.works.find((work) => work.def === ROCKET)
     expect(rocket?.done).toBeLessThan(INHERITANCE_CASE.founded)
     expect(heir.hashAt(INHERITANCE_CASE.year)).toBe(INHERITANCE_CASE.hash)

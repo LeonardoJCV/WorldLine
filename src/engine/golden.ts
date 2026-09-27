@@ -119,8 +119,8 @@ const CLIMB: readonly Commission[] = [
 
 // FEAT: um empréstimo que fecha um ciclo entre duas histórias: o paradoxo chega com a travessia e
 // a tecnologia saturada nunca quita a dívida que o desfaria, então o prazo vence e o mundo natal
-// cai — com uma colônia de pé. Medido: num mundo que constrói, dívida cobrável nenhuma pesa o
-// bastante para o paradoxo da dívida, porque a razão dela cai com o tamanho do mundo
+// cai — com uma colônia de pé. O ciclo, e não a dívida grande, porque `credit()` limita o gasto de
+// um multiverso inteiro a 72 e a razão de 72 só alcança o limiar num mundo de tamanho abaixo de 186
 const UNPAYABLE: readonly Crossing[] = [
   {
     tick: 2270,
@@ -204,6 +204,90 @@ export const INHERITANCE_CASE: InheritanceCase = {
   ended: 2470,
   year: 2471,
   hash: '3681f2a0',
+}
+
+// FEAT: a mesma herança com uma irmã: a semente 4242 tem dois corpos que comportam uma colônia, e
+// esta alocação funda as duas antes da queda, para o luto orfanar uma irmã de verdade
+const SISTERLY: readonly Decision[] = [
+  {
+    tick: 0,
+    allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+  },
+  // FEAT: a virada para o céu, na mesma alocação que a calibração conduz até o foguete
+  {
+    tick: 400,
+    allocation: { agriculture: 25, industry: 25, research: 20, conservation: 5, works: 25 },
+  },
+]
+
+// FEAT: o catálogo inteiro, nos anos em que o canteiro ficou livre nesta semente, que são outros
+const SISTERLY_CLIMB: readonly Commission[] = [
+  { tick: 432, work: 'irrigation' },
+  { tick: 440, work: 'plough' },
+  { tick: 450, work: 'granary' },
+  { tick: 456, work: 'calendar' },
+  { tick: 464, work: 'pottery' },
+  { tick: 914, work: 'writing' },
+  { tick: 924, work: 'roads' },
+  { tick: 937, work: 'coinage' },
+  { tick: 950, work: 'aqueduct' },
+  { tick: 963, work: 'navigation' },
+  { tick: 977, work: 'reforestation' },
+  { tick: 1041, work: 'printing' },
+  { tick: 1063, work: 'metallurgy' },
+  { tick: 1084, work: 'steam' },
+  { tick: 1104, work: 'railway' },
+  { tick: 1124, work: 'sanitation' },
+  { tick: 1133, work: 'filters' },
+  { tick: 1513, work: 'electrification' },
+  { tick: 1524, work: 'telegraph' },
+  { tick: 1536, work: 'chemistry' },
+  { tick: 1548, work: 'medicine' },
+  { tick: 1560, work: 'computer' },
+  { tick: 1572, work: 'cleanGrid' },
+  { tick: 1766, work: 'arcology' },
+  { tick: 1790, work: 'reactor' },
+  { tick: 1818, work: 'closedCycle' },
+  { tick: 1845, work: 'launchpad' },
+  { tick: 1932, work: 'telemetry' },
+  { tick: 2017, work: 'propellant' },
+  { tick: 2105, work: 'rocket' },
+  { tick: 2195, work: 'orbit' },
+  { tick: 2204, work: 'shipyard' },
+]
+
+// FEAT: o mesmo ciclo de `UNPAYABLE`, e pelo mesmo motivo, duzentos anos antes da queda
+const SISTERLY_CYCLE: readonly Crossing[] = [
+  {
+    tick: 2300,
+    kind: 'knowledge',
+    dose: 3,
+    amounts: [5],
+    origin: { world: 'B', tick: 2300 },
+    cost: 30,
+    direction: 'in',
+    circular: true,
+  },
+]
+
+// FEAT: fica fora dos dezessete porque não fixa fingerprint nenhum — fixa anos, e mora aqui em vez
+// do diretório do e2e para o vitest poder guardá-los; sem guarda, uma comissão perdida só apareceria
+// como um teste de navegador esperando noventa segundos por uma linha que nunca chega
+export interface SiblingCase {
+  readonly seed: number
+  readonly plan: GoldenPlan
+  // FEAT: os anos das duas fundações, o da queda, e o da refundação que o herdeiro faz depois dela
+  readonly founded: readonly number[]
+  readonly ended: number
+  readonly refounded: number
+}
+
+export const SIBLING_CASE: SiblingCase = {
+  seed: 4242,
+  plan: { decisions: SISTERLY, crossings: SISTERLY_CYCLE, commissions: SISTERLY_CLIMB },
+  founded: [2195, 2196],
+  ended: 2500,
+  refounded: 2506,
 }
 
 // FEAT: um GoldenPlan descreve UMA história, e uma confluência são duas; o caso nomeia os dois

@@ -100,9 +100,10 @@ test('reaches the colony that saved the history, and tells the whole story of th
   await useGraphics(page, '2d')
   // FEAT: a semente 4242 (support.ts) funda duas colônias antes do colapso, ao contrário do roteiro
   // dourado da herança (uma só) — só assim a lista tem uma irmã para perder de verdade
-  // FIX: +5 anos depois do colapso — no próprio ano do prazo o passo que resolve o paradoxo ainda
-  // não rodou, e a herança daquele ano ainda não teria aparecido na lista
-  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 5))
+  // FIX: +2 anos depois do colapso — no próprio ano do prazo o passo que resolve o paradoxo ainda
+  // não rodou, e a herança daquele ano ainda não teria aparecido na lista; e mais do que +4 e o
+  // herdeiro já teria refundado a colônia no corpo que a herança orfanou
+  await page.goto(siblingInheritanceLink(SIBLING_CASE.ended + 2))
   const events = page.locator('.panel.events')
   await expect(events).toBeVisible({ timeout: 60_000 })
   // FIX: vinte e cinco séculos para calcular — o painel aparece antes de o worker chegar ao ano pedido

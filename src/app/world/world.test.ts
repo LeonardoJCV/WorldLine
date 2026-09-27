@@ -679,6 +679,18 @@ describe('multiverse link', () => {
     expect(decodeMultiverse(withExtraByte(SEAMLESS_TREE))).toBeNull()
   })
 
+  // FIX: o custo cabe num byte, e um crédito acima do teto voltava 244 em vez de 500, em silêncio
+  it('refuses to write a cost the byte could only carry truncated', () => {
+    const dear = (cost: number): MultiverseLink => ({
+      ...crossed,
+      crossings: [{ ...arrival, cost }],
+    })
+    expect(() => encodeMultiverse(dear(500))).toThrow(RangeError)
+    expect(() => encodeMultiverse(dear(-1))).toThrow(RangeError)
+    const most = decodeMultiverse(encodeMultiverse(dear(255)))
+    expect(most?.crossings?.[0]?.cost).toBe(255)
+  })
+
   it('refuses a corrupted crossing log without throwing', () => {
     const swapped: MultiverseLink = { ...crossed, crossings: [departure, arrival] }
     expect(decodeMultiverse(encodeMultiverse(swapped))).toBeNull()
