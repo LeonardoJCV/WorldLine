@@ -1,3 +1,4 @@
+import { validateCommissions, type Commission } from '../../engine/commission.ts'
 import {
   CROSSING_KINDS,
   DOSES,
@@ -7,6 +8,7 @@ import {
 } from '../../engine/crossing.ts'
 import { HORIZON, MAX_SEED, MODEL_VERSION } from '../../engine/params.ts'
 import { SECTORS, isValidAllocation, type Allocation, type Decision } from '../../engine/state.ts'
+import { WORKS } from '../../engine/work.ts'
 import {
   MAX_WORLDLINES,
   WORLDLINE_IDS,
@@ -20,6 +22,7 @@ export interface WorldLink {
   readonly tick: number
   readonly decisions: readonly Decision[]
   readonly crossings?: readonly Crossing[]
+  readonly commissions?: readonly Commission[]
 }
 
 export interface MultiverseLink extends WorldLink {
@@ -31,6 +34,8 @@ const HEADER = 9
 // FEAT: o ano em dois bytes e um byte por setor, então o registro cresce junto com os setores
 const DECISION = 2 + SECTORS.length
 const CROSSING = 10
+// FEAT: o ano em dois bytes e a obra no índice do catálogo, que já é contrato de hash e append-only
+const COMMISSION = 3
 // FEAT: a parcela vai em dupla precisão, para o mundo reaberto repetir a história byte a byte
 const AMOUNT = 8
 const MERGE = 5
@@ -73,6 +78,24 @@ function validCrossing(value: unknown, from: number): boolean {
   if (!Number.isInteger(origin.tick) || origin.tick < 0 || origin.tick >= HORIZON) return false
   if (!Array.isArray(amounts)) return false
   return allocation === undefined ? true : isValidAllocation(allocation)
+}
+
+// FIX: a engine recusa uma comissão fora de ordem com RangeError; aqui isso vira um link inválido
+function validCommissions(commissions: unknown, from: number): boolean {
+  if (commissions === undefined) return true
+  if (!Array.isArray(commissions)) return false
+  for (const value of commissions as unknown[]) {
+    if (typeof value !== 'object' || value === null) return false
+    const { tick, work } = value as Partial<Commission>
+    if (!Number.isInteger(tick) || (tick ?? -1) < from) return false
+    if (WORKS.every((def) => def.id !== work)) return false
+  }
+  try {
+    validateCommissions(commissions as readonly Commission[])
+  } catch {
+    return false
+  }
+  return true
 }
 
 // FIX: a engine recusa um registro corrompido com RangeError; aqui isso vira apenas um link inválido
@@ -134,6 +157,7 @@ export function isValidLink(link: WorldLink): boolean {
   if (!Number.isInteger(link.seed) || link.seed < 0 || link.seed > MAX_SEED) return false
   if (!Number.isInteger(link.tick) || link.tick < 0 || link.tick > HORIZON) return false
   if (!validCrossings(link.crossings, 0)) return false
+  if (!validCommissions(link.commissions, 0)) return false
   return validDecisions(link.decisions, 0)
 }
 
@@ -149,10 +173,11 @@ export function isValidMultiverse(link: MultiverseLink): boolean {
   if (!validMerges(link.merges, 0, link.tick, carried[0] ?? '', carried)) return false
   return link.branches.every((branch, i) => {
     if (typeof branch !== 'object' || branch === null) return false
-    const { parent, fork, decisions, crossings, merges } = branch
+    const { parent, fork, decisions, crossings, merges, commissions } = branch
     if (!Number.isInteger(parent) || parent < 0 || parent > i) return false
     if (!Number.isInteger(fork) || fork < 0 || fork > link.tick) return false
     if (!validCrossings(crossings, fork)) return false
+    if (!validCommissions(commissions, fork)) return false
     if (!validMerges(merges, fork, link.tick, carried[i + 1] ?? '', carried)) return false
     return validDecisions(decisions, fork)
   })
@@ -338,6 +363,46 @@ function readCrossings(view: DataView, at: number): { crossings: Crossing[]; nex
   return { crossings, next: cursor }
 }
 
+function commissionSize(commissions: readonly Commission[] = []): number {
+  return 2 + commissions.length * COMMISSION
+}
+
+function writeCommissions(
+  view: DataView,
+  at: number,
+  commissions: readonly Commission[] = [],
+): number {
+  view.setUint16(at, commissions.length)
+  let cursor = at + 2
+  for (const commission of commissions) {
+    view.setUint16(cursor, commission.tick)
+    view.setUint8(
+      cursor + 2,
+      WORKS.findIndex((def) => def.id === commission.work),
+    )
+    cursor += COMMISSION
+  }
+  return cursor
+}
+
+function readCommissions(
+  view: DataView,
+  at: number,
+): { commissions: Commission[]; next: number } | null {
+  if (at + 2 > view.byteLength) return null
+  const count = view.getUint16(at)
+  let cursor = at + 2
+  if (cursor + count * COMMISSION > view.byteLength) return null
+  const commissions: Commission[] = []
+  for (let i = 0; i < count; i++) {
+    const work = WORKS[view.getUint8(cursor + 2)]?.id
+    if (!work) return null
+    commissions.push({ tick: view.getUint16(cursor), work })
+    cursor += COMMISSION
+  }
+  return { commissions, next: cursor }
+}
+
 function mergeSize(merges: readonly MergeSpec[] = []): number {
   return 1 + merges.length * MERGE
 }
@@ -391,6 +456,8 @@ export function encodeMultiverse(link: MultiverseLink): string {
     link.branches.reduce((sum, b) => sum + 3 + 2 + b.decisions.length * DECISION, 0) +
     crossingSize(link.crossings) +
     link.branches.reduce((sum, b) => sum + crossingSize(b.crossings), 0) +
+    commissionSize(link.commissions) +
+    link.branches.reduce((sum, b) => sum + commissionSize(b.commissions), 0) +
     (version < SEAMED_VERSION
       ? 0
       : mergeSize(link.merges) + link.branches.reduce((sum, b) => sum + mergeSize(b.merges), 0))
@@ -409,6 +476,8 @@ export function encodeMultiverse(link: MultiverseLink): string {
   }
   cursor = writeCrossings(view, cursor, link.crossings)
   for (const branch of link.branches) cursor = writeCrossings(view, cursor, branch.crossings)
+  cursor = writeCommissions(view, cursor, link.commissions)
+  for (const branch of link.branches) cursor = writeCommissions(view, cursor, branch.commissions)
   if (version >= SEAMED_VERSION) {
     cursor = writeMerges(view, cursor, link.merges)
     for (const branch of link.branches) cursor = writeMerges(view, cursor, branch.merges)
@@ -448,6 +517,13 @@ export function decodeMultiverse(text: string): MultiverseLink | null {
       cursor = read.next
     }
   }
+  const ordered: Commission[][] = []
+  for (let i = 0; i <= plain.length; i++) {
+    const read = readCommissions(view, cursor)
+    if (!read) return null
+    ordered.push(read.commissions)
+    cursor = read.next
+  }
   const seams: MergeSpec[][] = []
   if (version >= SEAMED_VERSION) {
     for (let i = 0; i <= plain.length; i++) {
@@ -460,6 +536,7 @@ export function decodeMultiverse(text: string): MultiverseLink | null {
   if (cursor !== bytes.length) return null
   // FEAT: sem costura o campo nem aparece, então um link antigo volta com a forma que sempre teve
   const own = seams[0] ?? []
+  const commissions = ordered[0] ?? []
   const link: MultiverseLink = {
     version,
     seed: view.getUint32(1),
@@ -467,23 +544,27 @@ export function decodeMultiverse(text: string): MultiverseLink | null {
     decisions: root.decisions,
     crossings: logs[0] ?? [],
     ...(own.length === 0 ? {} : { merges: own }),
+    ...(commissions.length === 0 ? {} : { commissions }),
     branches: plain.map((branch, i) => {
       const sewn = seams[i + 1] ?? []
+      const built = ordered[i + 1] ?? []
       return {
         ...branch,
         crossings: logs[i + 1] ?? [],
         ...(sewn.length === 0 ? {} : { merges: sewn }),
+        ...(built.length === 0 ? {} : { commissions: built }),
       }
     }),
   }
   return isValidMultiverse(link) ? link : null
 }
 
-// FEAT: a forma curta não carrega travessia nem costura, então quem tem uma vai pela forma longa
+// FEAT: a forma curta não carrega travessia, costura nem comissão, então quem tem uma vai pela longa
 export function linkHash(link: MultiverseLink): string {
   const plain =
     link.branches.length === 0 &&
     (link.crossings?.length ?? 0) === 0 &&
-    (link.merges?.length ?? 0) === 0
+    (link.merges?.length ?? 0) === 0 &&
+    (link.commissions?.length ?? 0) === 0
   return plain ? `#/w/${encodeLink(link)}` : `#/m/${encodeMultiverse(link)}`
 }

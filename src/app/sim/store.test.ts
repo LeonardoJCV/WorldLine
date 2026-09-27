@@ -631,6 +631,30 @@ describe('simulation store', () => {
     )
   })
 
+  // FEAT: o gesto inteiro, do hospedeiro ao link e de volta: o mundo reaberto vive a mesma obra
+  it('reopens the commissions its own link describes', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const store = createSimulationStore(client)
+    store.getState().create(482913)
+    store.getState().step(600)
+    await flush()
+    client.commission('A', 'irrigation')
+    store.getState().step(30)
+    await flush()
+    expect(store.getState().worlds[0]?.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+    const link = currentLink(store.getState())
+    if (link === null) throw new Error('no link')
+    expect(link.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+    const { store: reopened } = setup()
+    reopened.getState().open(link)
+    await flush()
+    expect(reopened.getState().worlds.map((world) => world.commissions)).toEqual(
+      store.getState().worlds.map((world) => world.commissions),
+    )
+    expect(reopened.getState().present).toEqual(store.getState().present)
+  })
+
   // FIX: a sobrevivente é sempre quem está em foco; trocar os dois argumentos pediria a costura ao contrário
   it('asks the host to preview the focus as survivor and the given world as departing', async () => {
     const { port, sent } = recordingPort()

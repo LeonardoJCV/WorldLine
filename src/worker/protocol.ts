@@ -1,4 +1,5 @@
 import type { Colony } from '../engine/colony.ts'
+import type { Commission } from '../engine/commission.ts'
 import type { Crossing, CrossingKind, Dose } from '../engine/crossing.ts'
 import type { Debt, Paradox } from '../engine/debt.ts'
 import { EVENTS, type EventId, type EventRecord } from '../engine/events.ts'
@@ -11,6 +12,7 @@ import {
   type Variable,
   type WorldState,
 } from '../engine/state.ts'
+import type { WorkId } from '../engine/work.ts'
 
 export const SPEEDS = [1, 4, 16, 64, 256] as const
 export type Speed = (typeof SPEEDS)[number] | 'max'
@@ -69,6 +71,7 @@ export interface BranchSpec {
   readonly decisions: readonly Decision[]
   readonly crossings?: readonly Crossing[]
   readonly merges?: readonly MergeSpec[]
+  readonly commissions?: readonly Commission[]
 }
 
 export interface WorldlineInfo {
@@ -88,6 +91,7 @@ export interface WorldProgress {
   readonly debts: readonly Debt[]
   readonly paradox: Paradox | null
   readonly colonies: readonly Colony[]
+  readonly commissions: readonly Commission[]
 }
 
 export type Series = Readonly<Record<Variable, Float32Array>>
@@ -105,11 +109,13 @@ export type ToWorker =
       readonly crossings?: readonly Crossing[]
       // FEAT: as costuras da raiz, no mesmo formato que cada galho carrega as suas
       readonly merges?: readonly MergeSpec[]
+      readonly commissions?: readonly Commission[]
     }
   | { readonly type: 'play'; readonly speed: Speed }
   | { readonly type: 'pause' }
   | { readonly type: 'step'; readonly years: number }
   | { readonly type: 'decide'; readonly world: WorldlineId; readonly allocation: Allocation }
+  | { readonly type: 'commission'; readonly world: WorldlineId; readonly work: WorkId }
   | {
       readonly type: 'branch'
       readonly requestId: number

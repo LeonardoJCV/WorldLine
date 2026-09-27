@@ -58,6 +58,29 @@ describe('SimulationClient', () => {
     expect(received).toContainEqual({ type: 'error', message: 'crashed' })
   })
 
+  it('sends a commissioned work through to the host', async () => {
+    const { port } = connectInProcess()
+    const client = new SimulationClient(port)
+    const received: FromWorker[] = []
+    client.subscribe((message) => received.push(message))
+    client.open(
+      482913,
+      0,
+      [
+        {
+          tick: 0,
+          allocation: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+        },
+      ],
+      [],
+    )
+    client.step(600)
+    client.commission('A', 'irrigation')
+    await flush()
+    const progress = received.filter((m) => m.type === 'progress').at(-1)
+    expect(progress?.worlds[0]?.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+  })
+
   it('resolves branch and distance requests', async () => {
     const { port } = connectInProcess()
     const client = new SimulationClient(port)

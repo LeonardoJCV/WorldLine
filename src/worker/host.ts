@@ -1,3 +1,4 @@
+import type { Commission } from '../engine/commission.ts'
 import {
   CROSSING_KINDS,
   DOSES,
@@ -29,6 +30,7 @@ import {
   type WorldState,
 } from '../engine/state.ts'
 import { system } from '../engine/system.ts'
+import type { WorkId } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
   MAX_WORLDLINES,
@@ -96,6 +98,7 @@ export class SimulationHost {
             message.branches,
             message.crossings ?? [],
             message.merges ?? [],
+            message.commissions ?? [],
           )
           break
         case 'play':
@@ -109,6 +112,9 @@ export class SimulationHost {
           break
         case 'decide':
           this.#decide(message.world, message.allocation)
+          break
+        case 'commission':
+          this.#commission(message.world, message.work)
           break
         case 'branch':
           this.#branch(message.requestId, message.parent, message.tick, message.allocation)
@@ -203,20 +209,20 @@ export class SimulationHost {
     own: readonly Decision[],
     target: number,
     ownCrossings: readonly Crossing[] = [],
+    ownCommissions: readonly Commission[] = [],
   ): Worldline {
     if (!Number.isInteger(fork) || fork < 0 || fork > parent.worldline.present.tick) {
       throw new RangeError('fork outside the parent history')
     }
-    const inherited = parent.worldline.decisions.filter((decision) => decision.tick < fork)
-    const crossed = parent.worldline.crossings.filter((crossing) => crossing.tick < fork)
-    // FIX: uma costura antes da bifurcação é passado da filha; sem ela a filha não seria a mãe nesse ano
-    const seamed = parent.worldline.merges.filter((seam) => seam.tick < fork)
+    // FIX: a herança sai do motor, e não de uma segunda cópia dos filtros que perdia as comissões
+    const past = parent.worldline.inherited(fork)
     const line = new Worldline(
       seed,
-      [...inherited, ...own],
+      [...past.decisions, ...own],
       { parent: parent.worldline, tick: fork },
-      [...crossed, ...ownCrossings],
-      seamed,
+      [...past.crossings, ...ownCrossings],
+      past.merges,
+      [...past.commissions, ...ownCommissions],
     )
     line.advance(target)
     return line
@@ -311,12 +317,19 @@ export class SimulationHost {
     branches: readonly BranchSpec[],
     crossings: readonly Crossing[],
     merges: readonly MergeSpec[],
+    commissions: readonly Commission[],
   ): void {
     this.#stop()
     if (branches.length >= MAX_WORLDLINES) throw new RangeError('worldline limit reached')
     const base = this.#generation
     const slots: (Entry | undefined)[] = [
-      this.#make(base + 1, 'A', null, 0, new Worldline(seed, root, null, crossings)),
+      this.#make(
+        base + 1,
+        'A',
+        null,
+        0,
+        new Worldline(seed, root, null, crossings, [], commissions),
+      ),
       ...branches.map(() => undefined),
     ]
     const born = this.#born(branches)
@@ -340,7 +353,15 @@ export class SimulationHost {
         const own = spec.crossings ?? []
         // FIX: uma filha adiada nasce no ano da mãe, e tem de alcançá-lo, ou a costura dela naquele
         // mesmo ano cairia numa história parada no ano do fork, que é anterior ao de todo mundo
-        const line = this.#grow(seed, parent, spec.fork, spec.decisions, year, own)
+        const line = this.#grow(
+          seed,
+          parent,
+          spec.fork,
+          spec.decisions,
+          year,
+          own,
+          spec.commissions ?? [],
+        )
         slots[index + 1] = this.#make(base + 2 + index, id, parent.info.id, spec.fork, line)
       })
       for (const seam of queue) {
@@ -394,6 +415,12 @@ export class SimulationHost {
 
   #decide(world: WorldlineId, allocation: Allocation): void {
     this.#entry(world).worldline.decide(allocation)
+    this.#report()
+  }
+
+  // FEAT: a comissão segue o caminho da decisão — grava no ano presente, e o próximo avanço a lê
+  #commission(world: WorldlineId, work: WorkId): void {
+    this.#entry(world).worldline.commission(work)
     this.#report()
   }
 
@@ -925,6 +952,7 @@ export class SimulationHost {
       debts: worldline.present.debts,
       paradox: worldline.present.paradox,
       colonies: worldline.present.colonies,
+      commissions: worldline.commissions.map((c) => ({ tick: c.tick, work: c.work })),
     }
   }
 

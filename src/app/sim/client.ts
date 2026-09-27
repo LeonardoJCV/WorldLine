@@ -1,5 +1,7 @@
+import type { Commission } from '../../engine/commission.ts'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
+import type { WorkId } from '../../engine/work.ts'
 import type {
   BranchSpec,
   FromWorker,
@@ -68,8 +70,9 @@ export class SimulationClient {
     branches: readonly BranchSpec[],
     crossings: readonly Crossing[] = [],
     merges: readonly MergeSpec[] = [],
+    commissions: readonly Commission[] = [],
   ): void {
-    this.#port.send({ type: 'open', seed, tick, root, branches, crossings, merges })
+    this.#port.send({ type: 'open', seed, tick, root, branches, crossings, merges, commissions })
   }
 
   play(speed: Speed): void {
@@ -86,6 +89,10 @@ export class SimulationClient {
 
   decide(world: WorldlineId, allocation: Allocation): void {
     this.#port.send({ type: 'decide', world, allocation })
+  }
+
+  commission(world: WorldlineId, work: WorkId): void {
+    this.#port.send({ type: 'commission', world, work })
   }
 
   async branch(parent: WorldlineId, tick: number, allocation: Allocation): Promise<WorldlineId> {

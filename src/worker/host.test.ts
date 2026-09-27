@@ -10,7 +10,7 @@ import type { Allocation, WorldState } from '../engine/state.ts'
 import { system } from '../engine/system.ts'
 import { Worldline } from '../engine/worldline.ts'
 import { SimulationHost } from './host.ts'
-import type { FromWorker, ToWorker, WorldlineId } from './protocol.ts'
+import { toSnapshot, type FromWorker, type ToWorker, type WorldlineId } from './protocol.ts'
 import { FakeClock } from './testing.ts'
 
 const SEED = 482913
@@ -252,6 +252,120 @@ describe('SimulationHost: a single worldline', () => {
     const before = sent.length
     clock.advance(1000)
     expect(sent.length).toBe(before)
+  })
+})
+
+// FEAT: a era agrícola desta semente abre no ano 539, então nenhuma obra é possível antes disso
+const COMMISSION_YEAR = 600
+
+describe('SimulationHost: commissioned works', () => {
+  it('commissions a work on the focused worldline in the current year', () => {
+    const { host, sent, open } = setup()
+    open(0, [{ tick: 0, allocation: balanced }])
+    host.handle({ type: 'step', years: COMMISSION_YEAR })
+    host.handle({ type: 'commission', world: 'A', work: 'irrigation' })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'A')?.commissions).toEqual([{ tick: COMMISSION_YEAR, work: 'irrigation' }])
+    host.handle({ type: 'step', years: 30 })
+
+    const lived = new Worldline(
+      SEED,
+      [{ tick: 0, allocation: balanced }],
+      null,
+      [],
+      [],
+      [{ tick: COMMISSION_YEAR, work: 'irrigation' }],
+    )
+    lived.advance(COMMISSION_YEAR + 30)
+    // FEAT: a obra fica pronta dentro desses trinta anos, então a igualdade abaixo não é vazia
+    expect(lived.present.works).toEqual([{ def: 0, done: 623, record: 2 }])
+    expect(world(sent, 'A')?.present.values).toEqual(toSnapshot(lived.present).values)
+  })
+
+  // FIX: uma worldline COLAPSADA, não uma no horizonte — no horizonte o throw vinha do validador
+  it('refuses to commission on a worldline that has ended', () => {
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 0,
+      root: [
+        {
+          tick: 0,
+          allocation: { agriculture: 40, industry: 55, research: 0, conservation: 0, works: 5 },
+        },
+      ],
+      branches: [],
+      crossings: [
+        {
+          tick: 0,
+          kind: 'knowledge',
+          dose: 3,
+          amounts: [10],
+          origin: { world: 'B', tick: 0 },
+          cost: 9,
+          direction: 'in',
+        },
+      ],
+    })
+    host.handle({ type: 'step', years: 280 })
+    expect(world(sent, 'A')?.present.status).toBe('collapsed')
+    expect(world(sent, 'A')?.present.tick).toBeLessThan(HORIZON)
+    host.handle({ type: 'commission', world: 'A', work: 'irrigation' })
+    expect(last(sent, 'error')?.message).toMatch(/ended/)
+    expect(world(sent, 'A')?.commissions).toEqual([])
+  })
+
+  // FEAT: a regra das costuras, em comissão: `commission.tick < fork` é passado da filha
+  it('gives a daughter the commissions made before the fork, and not the ones after', () => {
+    const { host, sent, open } = setup()
+    open(0, [{ tick: 0, allocation: balanced }])
+    host.handle({ type: 'step', years: COMMISSION_YEAR })
+    host.handle({ type: 'commission', world: 'A', work: 'granary' })
+    host.handle({ type: 'step', years: 100 })
+    host.handle({ type: 'commission', world: 'A', work: 'irrigation' })
+    host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 650, allocation: balanced })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'A')?.commissions).toEqual([
+      { tick: 600, work: 'granary' },
+      { tick: 700, work: 'irrigation' },
+    ])
+    expect(world(sent, 'B')?.commissions).toEqual([{ tick: 600, work: 'granary' }])
+  })
+
+  it('rebuilds a commissioned multiverse from its link', () => {
+    const lived = setup()
+    lived.open(0, [{ tick: 0, allocation: balanced }])
+    lived.host.handle({ type: 'step', years: 300 })
+    lived.host.handle({ type: 'branch', requestId: 1, parent: 'A', tick: 300, allocation: starved })
+    lived.host.handle({ type: 'step', years: 300 })
+    lived.host.handle({ type: 'commission', world: 'A', work: 'granary' })
+    lived.host.handle({ type: 'commission', world: 'B', work: 'irrigation' })
+    lived.host.handle({ type: 'step', years: 100 })
+    expect(all(lived.sent, 'error')).toEqual([])
+    expect(last(lived.sent, 'progress')?.now).toBe(700)
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 700,
+      root: [{ tick: 0, allocation: balanced }],
+      commissions: [{ tick: 600, work: 'granary' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 300,
+          decisions: [{ tick: 300, allocation: starved }],
+          commissions: [{ tick: 600, work: 'irrigation' }],
+        },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'A')?.commissions).toEqual(world(lived.sent, 'A')?.commissions)
+    expect(world(sent, 'B')?.commissions).toEqual(world(lived.sent, 'B')?.commissions)
+    expect(world(sent, 'A')?.present).toEqual(world(lived.sent, 'A')?.present)
+    expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
   })
 })
 
@@ -1900,6 +2014,54 @@ describe('SimulationHost: what the arrival record carries', () => {
     expect(world(sent, 'B')?.colonies).toEqual(world(lived.sent, 'B')?.colonies)
     expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
     expect(world(sent, 'A')?.present.status).toBe('merged')
+  })
+
+  // FIX: `works: []` no recibo passava por todos os testes; a obra da que deságua pinça isso
+  it('carries the works of the departing history, and the link brings them back', () => {
+    const lived = setup()
+    lived.open(0, [{ tick: 0, allocation: balanced }])
+    lived.host.handle({ type: 'step', years: COMMISSION_YEAR })
+    lived.host.handle({ type: 'commission', world: 'A', work: 'irrigation' })
+    lived.host.handle({
+      type: 'branch',
+      requestId: 1,
+      parent: 'A',
+      tick: 100,
+      allocation: balanced,
+    })
+    lived.host.handle({ type: 'step', years: 30 })
+    lived.host.handle({ type: 'merge', requestId: 2, survivor: 'B', other: 'A' })
+    expect(all(lived.sent, 'error')).toEqual([])
+    expect(world(lived.sent, 'B')?.merges).toMatchObject([
+      {
+        tick: 630,
+        self: 'B',
+        other: 'A',
+        direction: 'in',
+        works: [{ def: 0, done: 623 }],
+      },
+    ])
+
+    const { host, sent } = setup()
+    host.handle({
+      type: 'open',
+      seed: SEED,
+      tick: 630,
+      root: [{ tick: 0, allocation: balanced }],
+      commissions: [{ tick: COMMISSION_YEAR, work: 'irrigation' }],
+      merges: [{ tick: 630, self: 'A', other: 'B', direction: 'out' }],
+      branches: [
+        {
+          parent: 0,
+          fork: 100,
+          decisions: [{ tick: 100, allocation: balanced }],
+          merges: [{ tick: 630, self: 'B', other: 'A', direction: 'in' }],
+        },
+      ],
+    })
+    expect(all(sent, 'error')).toEqual([])
+    expect(world(sent, 'B')?.merges).toEqual(world(lived.sent, 'B')?.merges)
+    expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
   })
 })
 

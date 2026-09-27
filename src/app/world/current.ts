@@ -1,3 +1,4 @@
+import type { Commission } from '../../engine/commission.ts'
 import type { Crossing } from '../../engine/crossing.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import { WORLDLINE_IDS, type MergeSpec } from '../../worker/protocol.ts'
@@ -20,6 +21,13 @@ function ownCrossings(worlds: Worlds, world: WorldView): Crossing[] {
     }))
 }
 
+// FEAT: a comissão herdada já vem no replay da mãe, então o link só carrega as próprias do mundo
+function ownCommissions(world: WorldView): Commission[] {
+  return world.commissions
+    .filter((commission) => commission.tick >= world.info.fork)
+    .map((commission) => ({ tick: commission.tick, work: commission.work }))
+}
+
 // FEAT: do recibo da costura só os nomes e o ano vão no link; o estado volta do replay da outra
 function ownMerges(worlds: Worlds, world: WorldView): MergeSpec[] {
   return world.merges
@@ -39,6 +47,7 @@ export function currentLink(
   if (state.seed === null || !root) return null
   const sewn = state.worlds.map((world) => ownMerges(state.worlds, world))
   const merges = sewn[0] ?? []
+  const commissions = ownCommissions(root)
   // FEAT: a versão sobe só se alguma história tem costura própria para carregar
   const seamed = sewn.some((list) => list.length > 0)
   return {
@@ -48,14 +57,17 @@ export function currentLink(
     decisions: root.decisions,
     crossings: ownCrossings(state.worlds, root),
     ...(merges.length === 0 ? {} : { merges }),
+    ...(commissions.length === 0 ? {} : { commissions }),
     branches: rest.map((world, i) => {
       const own = sewn[i + 1] ?? []
+      const built = ownCommissions(world)
       return {
         parent: state.worlds.findIndex((candidate) => candidate.info.id === world.info.parent),
         fork: world.info.fork,
         decisions: world.decisions.filter((decision) => decision.tick >= world.info.fork),
         crossings: ownCrossings(state.worlds, world),
         ...(own.length === 0 ? {} : { merges: own }),
+        ...(built.length === 0 ? {} : { commissions: built }),
       }
     }),
   }

@@ -22,6 +22,14 @@ export interface Lineage {
   readonly tick: number
 }
 
+// FEAT: o passado que uma filha que sai no ano do fork tem de reviver, nas quatro listas
+export interface Inheritance {
+  readonly decisions: readonly Decision[]
+  readonly crossings: readonly Crossing[]
+  readonly merges: readonly Merge[]
+  readonly commissions: readonly Commission[]
+}
+
 export interface Bucketed {
   readonly min: Float32Array
   readonly max: Float32Array
@@ -323,22 +331,28 @@ export class Worldline {
     return { min, max, mean }
   }
 
+  // FEAT: a regra da herança vive aqui só uma vez, porque o hospedeiro remonta uma filha sem passar
+  // por `fork()` — uma costura ou uma comissão ANTES do ponto de partida é passado que ela revive
+  inherited(tick: number): Inheritance {
+    return {
+      decisions: this.#decisions.filter((d) => d.tick < tick),
+      crossings: this.#crossings.filter((c) => c.tick < tick),
+      merges: this.#merges.filter((m) => m.tick < tick),
+      commissions: this.#commissions.filter((c) => c.tick < tick),
+    }
+  }
+
   // FEAT: nova linha temporal a partir de um ano desta
   fork(tick: number): Worldline {
     this.#assertRecorded(tick)
-    const inherited = this.#decisions.filter((d) => d.tick < tick)
-    const inheritedCrossings = this.#crossings.filter((c) => c.tick < tick)
-    // FEAT: uma costura antes do ponto de partida faz parte do passado que o filho tem de reviver
-    const inheritedMerges = this.#merges.filter((m) => m.tick < tick)
-    // FEAT: e uma comissão anterior também, senão a filha chegaria ao ano da bifurcação sem a obra
-    const inheritedCommissions = this.#commissions.filter((c) => c.tick < tick)
+    const past = this.inherited(tick)
     const child = new Worldline(
       this.seed,
-      inherited,
+      past.decisions,
       { parent: this, tick },
-      inheritedCrossings,
-      inheritedMerges,
-      inheritedCommissions,
+      past.crossings,
+      past.merges,
+      past.commissions,
     )
     child.advance(tick)
     return child

@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { Colony } from '../../engine/colony.ts'
+import type { Commission } from '../../engine/commission.ts'
 import type { Crossing, CrossingKind, Dose } from '../../engine/crossing.ts'
 import type { Debt, Paradox } from '../../engine/debt.ts'
 import type { EventRecord } from '../../engine/events.ts'
@@ -37,6 +38,7 @@ export interface WorldView {
   readonly previousDebts: readonly Debt[] | null
   readonly paradox: Paradox | null
   readonly colonies: readonly Colony[]
+  readonly commissions: readonly Commission[]
 }
 
 export interface SimulationState {
@@ -221,6 +223,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
         link.branches,
         link.crossings ?? [],
         link.merges ?? [],
+        link.commissions ?? [],
       )
     },
     togglePlay() {
@@ -421,6 +424,7 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
             ),
             paradox: update.paradox,
             colonies: update.colonies,
+            commissions: update.commissions,
           }
         })
         const current = store.getState().focus

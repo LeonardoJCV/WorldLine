@@ -1,5 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import type { Commission } from '../../engine/commission.ts'
 import {
   CROSSING_KINDS,
   crossingAmounts,
@@ -151,6 +152,13 @@ const log = fc
 function withExtraByte(text: string): string {
   const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
   return btoa(`${binary}\0`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function withByteAt(text: string, index: number, value: number): string {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
+  const bytes = [...binary]
+  bytes[index] = String.fromCharCode(value)
+  return btoa(bytes.join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 function withoutBytes(text: string, count: number): string {
@@ -372,10 +380,14 @@ const DECIDED_V1 = 'AQAHXmEBQAABAGQoHhQK'
 // FEAT: o mesmo, em árvore — os bytes que o novo passo de sete leria como uma obra em zero
 const DECIDED_V2_TREE = 'AgAHXmEBQAABAGQoHhQKAAA'
 
-// FEAT: os bytes que o escritor da versão 4 produz para uma árvore sem costura
-const SEAMLESS_TREE = 'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAA'
+// FEAT: os bytes que o escritor da versão 4 produz para uma árvore sem costura — os seis últimos
+// são os três contadores de comissão zerados, um por história, que toda árvore da versão 4 carrega
+const SEAMLESS_TREE = 'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAAAAAAAAAA'
 const SEAMLESS_CROSSED =
-  'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUtKAUFAA'
+  'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAACAHgBAgAGAQB4AkApAAAAAAAAP9AAAAAAAAABBAMDAQkCAQQBQLAAAAAAAAABAMgCAQACAADIAAUtKAUFAAAAAAAAAA'
+// FEAT: e a mesma árvore com três comissões, duas na raiz e uma no primeiro galho
+const COMMISSIONED_TREE =
+  'BAAHXmEBQAACAGQFLSgFBQD6KBkUCgUCAABkAAEAZAUtKAUFAQDIAAAAAAAAAgB4AgEEAAABAJYEAAA'
 
 // FEAT: os nomes são posições no link: a raiz é A, o primeiro galho é B, o segundo é C
 const arrived: MergeSpec = { tick: 320, self: 'A', other: 'B', direction: 'in' }
@@ -392,6 +404,25 @@ const confluence: MultiverseLink = {
       decisions: [{ tick: 100, allocation: starved }],
       crossings: [],
       merges: [flowed],
+    },
+    { parent: 1, fork: 200, decisions: [], crossings: [] },
+  ],
+}
+
+// FEAT: a mesma árvore com comissões próprias na raiz e no primeiro galho
+const commissioned: MultiverseLink = {
+  ...tree,
+  commissions: [
+    { tick: 120, work: 'granary' },
+    { tick: 260, work: 'irrigation' },
+  ],
+  branches: [
+    {
+      parent: 0,
+      fork: 100,
+      decisions: [{ tick: 100, allocation: starved }],
+      crossings: [],
+      commissions: [{ tick: 150, work: 'pottery' }],
     },
     { parent: 1, fork: 200, decisions: [], crossings: [] },
   ],
@@ -538,6 +569,86 @@ describe('multiverse link', () => {
     expect(decodeLink(DECIDED_V1)?.version).toBe(1)
   })
 
+  // FEAT: o teste que protege o invariante do projeto inteiro — um mundo que comissionou obra sai e
+  // volta nos mesmos bytes, e o replay do link reproduz a história ano por ano
+  it('reopens a link with commissions byte-identically', () => {
+    const text = encodeMultiverse(commissioned)
+    expect(text).toBe(COMMISSIONED_TREE)
+    const back = decodeMultiverse(text)
+    expect(back).toEqual(commissioned)
+    expect(encodeMultiverse(back as MultiverseLink)).toBe(text)
+
+    const ordered: Commission[] = [{ tick: 600, work: 'irrigation' }]
+    const value: MultiverseLink = {
+      version: MODEL_VERSION,
+      seed: 482913,
+      tick: 700,
+      decisions: [{ tick: 0, allocation: balanced }],
+      branches: [],
+      crossings: [],
+      commissions: ordered,
+    }
+    const reopened = decodeMultiverse(encodeMultiverse(value))
+    expect(reopened?.commissions).toEqual(ordered)
+    const built = new Worldline(value.seed, value.decisions, null, [], [], ordered)
+    const shared = new Worldline(value.seed, value.decisions, null, [], [], reopened?.commissions)
+    const idle = new Worldline(value.seed, value.decisions)
+    built.advance(700)
+    shared.advance(700)
+    idle.advance(700)
+    expect(built.present.works).toHaveLength(1)
+    expect(shared.hashAt(700)).toBe(built.hashAt(700))
+    // FEAT: e o controle: sem a comissão a obra não existe, então o teste sabe falhar
+    expect(idle.hashAt(700)).not.toBe(built.hashAt(700))
+  })
+
+  it('sends a commissioned world down the long form, because the short one cannot carry it', () => {
+    const alone: MultiverseLink = {
+      ...sample,
+      branches: [],
+      crossings: [],
+      commissions: [{ tick: 600, work: 'granary' }],
+    }
+    expect(linkHash(alone)).toBe(`#/m/${encodeMultiverse(alone)}`)
+    expect(decodeMultiverse(encodeMultiverse(alone))?.commissions).toEqual(alone.commissions)
+  })
+
+  it('refuses a corrupted commission log without throwing', () => {
+    const swapped: MultiverseLink = {
+      ...commissioned,
+      commissions: [
+        { tick: 260, work: 'irrigation' },
+        { tick: 120, work: 'granary' },
+      ],
+    }
+    expect(decodeMultiverse(encodeMultiverse(swapped))).toBeNull()
+    expect(isValidMultiverse(swapped)).toBe(false)
+    expect(
+      isValidMultiverse({
+        ...commissioned,
+        commissions: [{ tick: 120, work: 'obelisk' }] as unknown as Commission[],
+      }),
+    ).toBe(false)
+    expect(
+      isValidMultiverse({ ...commissioned, commissions: 'x' as unknown as readonly Commission[] }),
+    ).toBe(false)
+    // FIX: um contador mentiroso lia além do buffer e ESTOURAVA, em vez de recusar o link; o byte 45
+    // é a parte baixa do contador de comissões da raiz, que a fixação de COMMISSIONED_TREE ancora
+    const lying = withByteAt(COMMISSIONED_TREE, 45, 0xff)
+    expect(() => decodeMultiverse(lying)).not.toThrow()
+    expect(decodeMultiverse(lying)).toBeNull()
+    expect(decodeMultiverse(withoutBytes(COMMISSIONED_TREE, 4))).toBeNull()
+    // FEAT: uma comissão anterior à bifurcação não é do galho; ela chega pela mãe, no replay dela
+    expect(
+      isValidMultiverse({
+        ...commissioned,
+        branches: [
+          { parent: 0, fork: 100, decisions: [], commissions: [{ tick: 99, work: 'granary' }] },
+        ],
+      }),
+    ).toBe(false)
+  })
+
   it('refuses trailing bytes', () => {
     expect(decodeMultiverse(withExtraByte(encodeMultiverse(crossed)))).toBeNull()
     expect(decodeMultiverse(withExtraByte(SEAMLESS_TREE))).toBeNull()
@@ -625,6 +736,27 @@ describe('multiverse link', () => {
       '',
     )
     expect(parseWorldFile(legacy)?.link).toEqual(tree)
+  })
+
+  // FIX: um arquivo que não gravasse a comissão perdia a obra em silêncio, como o link perderia
+  it('writes commissions to world files and reads files without them', () => {
+    const text = serializeWorld({ name: 'Built', link: commissioned })
+    expect(JSON.parse(text)).toMatchObject({
+      commissions: [
+        { tick: 120, work: 'granary' },
+        { tick: 260, work: 'irrigation' },
+      ],
+    })
+    expect(parseWorldFile(text)).toEqual({ name: 'Built', link: commissioned })
+    const legacy = serializeWorld({ name: 'Old', link: tree }).replace(
+      /,?\s*"commissions": \[\]/g,
+      '',
+    )
+    expect(parseWorldFile(legacy)?.link).toEqual(tree)
+    expect(parseWorldFile(text.replace('"work": "granary"', '"work": "obelisk"'))).toBeNull()
+    expect(
+      parseWorldFile(text.replace('"commissions": [', '"commissions": "none", "spare": [')),
+    ).toBe(null)
   })
 
   it('rejects a world file whose crossings break the rules', () => {
@@ -790,6 +922,7 @@ function viewOf(world: WorldProgress): WorldView {
     previousDebts: null,
     paradox: world.paradox,
     colonies: world.colonies,
+    commissions: world.commissions,
   }
 }
 
