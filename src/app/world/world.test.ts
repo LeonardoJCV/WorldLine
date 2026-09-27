@@ -154,6 +154,17 @@ function withExtraByte(text: string): string {
   return btoa(`${binary}\0`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+// FEAT: o livro de acontecimentos com as referências de UM registro a outro, que são índices nele:
+// é por elas que uma troca de índice no meio da história aparece, e o hash do último ano não a vê
+function ledgerOf(world: Worldline) {
+  return world.records.map((record) => ({
+    event: record.event,
+    start: record.start,
+    end: record.end,
+    after: record.causes.flatMap((cause) => (cause.kind === 'event' ? [cause.record] : [])),
+  }))
+}
+
 function withByteAt(text: string, index: number, value: number): string {
   const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
   const bytes = [...binary]
@@ -570,7 +581,7 @@ describe('multiverse link', () => {
   })
 
   // FEAT: o teste que protege o invariante do projeto inteiro — um mundo que comissionou obra sai e
-  // volta nos mesmos bytes, e o replay do link reproduz a história ano por ano
+  // volta nos mesmos bytes, e o replay do link reproduz o livro de acontecimentos inteiro
   it('reopens a link with commissions byte-identically', () => {
     const text = encodeMultiverse(commissioned)
     expect(text).toBe(COMMISSIONED_TREE)
@@ -596,9 +607,23 @@ describe('multiverse link', () => {
     built.advance(700)
     shared.advance(700)
     idle.advance(700)
-    expect(built.present.works).toHaveLength(1)
-    expect(shared.hashAt(700)).toBe(built.hashAt(700))
-    // FEAT: e o controle: sem a comissão a obra não existe, então o teste sabe falhar
+    // FIX: o hash de um ano só não vê um registro trocado no meio da história, e `Work.record` fica
+    // fora do hash — então a promessa do link se afirma sobre o livro inteiro e sobre a obra
+    expect(ledgerOf(shared)).toEqual(ledgerOf(built))
+    expect(ledgerOf(built)).toEqual([
+      { event: 'golden_age', start: 43, end: null, after: [] },
+      { event: 'agricultural_revolution', start: 395, end: null, after: [0] },
+      { event: 'work_done', start: 623, end: 623, after: [1] },
+      { event: 'epidemic', start: 656, end: 659, after: [0] },
+    ])
+    expect(shared.present.works).toEqual(built.present.works)
+    expect(built.present.works).toEqual([{ def: 0, done: 623, record: 2 }])
+    for (let year = 0; year <= 700; year++) {
+      expect(shared.hashAt(year)).toBe(built.hashAt(year))
+    }
+    // FEAT: e o controle: sem a comissão não há obra nem recibo dela, então o teste sabe falhar
+    expect(idle.present.works).toEqual([])
+    expect(ledgerOf(idle)).not.toEqual(ledgerOf(built))
     expect(idle.hashAt(700)).not.toBe(built.hashAt(700))
   })
 

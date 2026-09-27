@@ -57,6 +57,17 @@ function world(sent: readonly FromWorker[], id: WorldlineId) {
   return last(sent, 'progress')?.worlds.find((w) => w.info.id === id)
 }
 
+// FEAT: o livro de acontecimentos que o observador de fato recebeu, remontado de TODOS os relatórios
+// como a tela o remonta — o `present` é um Snapshot e não carrega nem obra nem registro
+function ledger(sent: readonly FromWorker[], id: WorldlineId): (EventRecord | undefined)[] {
+  const records: (EventRecord | undefined)[] = []
+  for (const message of all(sent, 'progress')) {
+    const reported = message.worlds.find((w) => w.info.id === id)
+    for (const { index, record } of reported?.events ?? []) records[index] = record
+  }
+  return records
+}
+
 // FEAT: duas histórias vivas no mesmo ano, a base tanto das travessias quanto das costuras
 function pair() {
   const context = setup()
@@ -255,7 +266,8 @@ describe('SimulationHost: a single worldline', () => {
   })
 })
 
-// FEAT: a era agrícola desta semente abre no ano 539, então nenhuma obra é possível antes disso
+// FEAT: com o roteiro `balanced` desta semente a era agrícola abre no ano 396, e a irrigação é
+// comissionável de 396 em diante — o 600 dá folga, não é o limiar
 const COMMISSION_YEAR = 600
 
 describe('SimulationHost: commissioned works', () => {
@@ -366,6 +378,11 @@ describe('SimulationHost: commissioned works', () => {
     expect(world(sent, 'B')?.commissions).toEqual(world(lived.sent, 'B')?.commissions)
     expect(world(sent, 'A')?.present).toEqual(world(lived.sent, 'A')?.present)
     expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
+    // FIX: o livro INTEIRO, não o presente: um registro trocado no meio da história sai igual no
+    // Snapshot do último ano e diferente aqui, e é o livro que o link promete reproduzir
+    expect(ledger(sent, 'A')).toEqual(ledger(lived.sent, 'A'))
+    expect(ledger(sent, 'B')).toEqual(ledger(lived.sent, 'B'))
+    expect(ledger(sent, 'A').filter((r) => r?.event === 'work_done')).toHaveLength(1)
   })
 })
 
@@ -1819,6 +1836,7 @@ describe('SimulationHost: reopening a branch older than its own parent', () => {
       merges: latest.merges,
       debts: latest.debts,
       colonies: latest.colonies,
+      commissions: latest.commissions,
     }
   }
 
@@ -2038,7 +2056,8 @@ describe('SimulationHost: what the arrival record carries', () => {
         self: 'B',
         other: 'A',
         direction: 'in',
-        works: [{ def: 0, done: 623 }],
+        // FEAT: `record` entra na afirmação porque ele fica FORA do hash, e é o que `filed()` ordena
+        works: [{ def: 0, done: 623, record: 2 }],
       },
     ])
 
@@ -2062,6 +2081,8 @@ describe('SimulationHost: what the arrival record carries', () => {
     expect(all(sent, 'error')).toEqual([])
     expect(world(sent, 'B')?.merges).toEqual(world(lived.sent, 'B')?.merges)
     expect(world(sent, 'B')?.present).toEqual(world(lived.sent, 'B')?.present)
+    expect(ledger(sent, 'A')).toEqual(ledger(lived.sent, 'A'))
+    expect(ledger(sent, 'B')).toEqual(ledger(lived.sent, 'B'))
   })
 })
 

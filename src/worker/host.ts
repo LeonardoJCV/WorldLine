@@ -202,8 +202,9 @@ export class SimulationHost {
     return id
   }
 
+  // FIX: a semente sai da mãe, não de fora: com a herança já vindo do motor, ela era o último jeito
+  // de uma filha nascer noutro mundo do `genesis` afirmando `{ parent, tick }` desta
   #grow(
-    seed: number,
     parent: Entry,
     fork: number,
     own: readonly Decision[],
@@ -214,10 +215,9 @@ export class SimulationHost {
     if (!Number.isInteger(fork) || fork < 0 || fork > parent.worldline.present.tick) {
       throw new RangeError('fork outside the parent history')
     }
-    // FIX: a herança sai do motor, e não de uma segunda cópia dos filtros que perdia as comissões
     const past = parent.worldline.inherited(fork)
     const line = new Worldline(
-      seed,
+      parent.worldline.seed,
       [...past.decisions, ...own],
       { parent: parent.worldline, tick: fork },
       [...past.crossings, ...ownCrossings],
@@ -354,7 +354,6 @@ export class SimulationHost {
         // FIX: uma filha adiada nasce no ano da mãe, e tem de alcançá-lo, ou a costura dela naquele
         // mesmo ano cairia numa história parada no ano do fork, que é anterior ao de todo mundo
         const line = this.#grow(
-          seed,
           parent,
           spec.fork,
           spec.decisions,
@@ -431,7 +430,7 @@ export class SimulationHost {
       throw new RangeError('allocation must be whole percentages summing to 100')
     }
     const id = this.#freeId()
-    const line = this.#grow(this.#seed, parent, tick, [{ tick, allocation }], this.#now)
+    const line = this.#grow(parent, tick, [{ tick, allocation }], this.#now)
     this.#add(id, parentId, tick, line)
     this.#report()
     this.#send({ type: 'branched', requestId, world: id })
@@ -647,7 +646,7 @@ export class SimulationHost {
       ...(circular ? { circular: true } : {}),
     }
     const id = this.#freeId()
-    const line = this.#grow(this.#seed, parent, tick, [], this.#now, [crossing])
+    const line = this.#grow(parent, tick, [], this.#now, [crossing])
     this.#add(id, parentId, tick, line)
     this.#report()
     this.#send({ type: 'branched', requestId, world: id })
