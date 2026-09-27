@@ -11,6 +11,7 @@ import { debtRatio, totalOwed, worldSize } from './debt.ts'
 import { causalDistance } from './distance.ts'
 import { worldMetrics, type EventId } from './events.ts'
 import { genesis } from './genesis.ts'
+import { GOLDEN_SCRIPTS, type GoldenScript } from './golden.ts'
 import {
   DEFAULT_ALLOCATION,
   HORIZON,
@@ -375,6 +376,7 @@ interface Left {
   // FEAT: a superlotação de cada ano, porque o alívio da migração é um momento, não um fim de linha
   readonly crowdings: readonly number[]
   readonly population: number
+  readonly peakEnergy: number
 }
 
 function leave(
@@ -392,6 +394,7 @@ function leave(
   let founded = 0
   let lost = 0
   let selfAt = -1
+  let peakEnergy = 0
   let fleet = new Set<string>()
   const crowdings: number[] = []
   while (s.tick < SPACE_HORIZON && s.status === 'running') {
@@ -414,6 +417,7 @@ function leave(
     records += result.started.length
     s = result.state
     if (eraAt < 0 && (s.eras & Era.space) !== 0) eraAt = s.tick
+    if (s.energy > peakEnergy) peakEnergy = s.energy
     const now = new Set(s.colonies.map((c) => `${c.body}:${c.founded}`))
     for (const old of fleet) if (!now.has(old)) lost++
     for (const fresh of now) if (!fleet.has(fresh)) founded++
@@ -429,10 +433,11 @@ function leave(
     crowding: worldMetrics(s, origin.world).crowding,
     crowdings,
     population: s.population,
+    peakEnergy,
   }
 }
 
-// FEAT: a mesma condução nas duas alocações, porque a única diferença medida tem de ser a fatia
+// FEAT: as duas alocações do plano; o laço que as conduz é o mesmo, então só a alocação as separa
 const WORKS_PATH: Allocation = {
   agriculture: 25,
   industry: 25,
@@ -462,7 +467,9 @@ interface Conducted {
 function conduct(seed: number, allocation: Allocation): Conducted {
   const w = new Worldline(seed, [{ tick: 0, allocation }])
   let founded = 0
-  let fleet = 0
+  // FEAT: a chave é corpo e ano de fundação, não o tamanho da frota: perder uma e fundar outra no
+  // mesmo ano deixa o tamanho igual, e uma fundação que o critério precisa ver passaria batida
+  let fleet = new Set<string>()
   for (let year = 0; year < SPACE_HORIZON && !w.ended; year++) {
     if (!w.present.building) {
       const next = PRESENTATION_ORDER.find((def) => isCommissionable(w.present, def))
@@ -470,8 +477,9 @@ function conduct(seed: number, allocation: Allocation): Conducted {
       if (work) w.commission(work.id)
     }
     w.advance(1)
-    if (w.present.colonies.length > fleet) founded += w.present.colonies.length - fleet
-    fleet = w.present.colonies.length
+    const now = new Set(w.present.colonies.map((c) => `${c.body}:${c.founded}`))
+    for (const fresh of now) if (!fleet.has(fresh)) founded++
+    fleet = now
   }
   return {
     works: w.present.works.map((done) => done.done),
@@ -492,6 +500,18 @@ describe('space calibration', () => {
       expect(run.rocketAt).toBeGreaterThan(2000)
       expect(run.rocketAt).toBeLessThan(3000)
       expect(run.alive).toBe(true)
+    }
+  })
+
+  // FEAT: a folga que explica por que preço de obra nenhum alcança os dezessete fingerprints — os
+  // roteiros de referência não comissionam nada, então a energia deles nem chega perto do portão
+  it('leaves the reference scripts far below the gate, on every seed', () => {
+    for (const script of ['steady', 'shifting', 'crossed'] as readonly GoldenScript[]) {
+      const plan = GOLDEN_SCRIPTS[script]
+      for (const seed of SPACE_SEEDS) {
+        const run = leave(seed, plan.decisions, plan.crossings)
+        expect(run.peakEnergy, `${script} seed ${seed}`).toBeLessThan(10)
+      }
     }
   })
 

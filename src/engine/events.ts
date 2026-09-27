@@ -355,7 +355,8 @@ export const EVENTS: readonly EventDef[] = [
     id: 'space_era',
     kind: 'era',
     era: Era.space,
-    // FEAT: tecnologia e economia saturam em qualquer mundo maduro; energia é o portão real (spec §3)
+    // FEAT: o portão bifurcou — em mundo que não constrói energia é o gargalo (spec §3, medido no MVP
+    // 6); em mundo conduzido para obras ela sobra 4× e quem prende passa a ser a tecnologia
     trigger: [
       { metric: 'technology', op: '>', value: 90 },
       { metric: 'energy', op: '>', value: 12 },

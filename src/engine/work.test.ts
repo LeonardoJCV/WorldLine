@@ -75,7 +75,7 @@ describe('the works catalogue', () => {
     }
   })
 
-  it('charges every work a positive cost, left uncalibrated for now', () => {
+  it('charges every work a positive cost', () => {
     for (const work of WORKS) expect(work.cost).toBeGreaterThan(0)
   })
 
