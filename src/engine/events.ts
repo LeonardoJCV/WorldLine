@@ -471,6 +471,11 @@ const CROSSING_INFLUENCES: Readonly<Record<CrossingKind, readonly Metric[]>> = {
   ],
 }
 
+function economyTrend(s: WorldState): number {
+  const past = s.recentEconomy[0] ?? s.economy
+  return past === 0 && s.economy === 0 ? 1 : s.economy / past
+}
+
 export function computeMetrics(s: WorldState, d: Derived): Metrics {
   return {
     population: s.population,
@@ -486,7 +491,9 @@ export function computeMetrics(s: WorldState, d: Derived): Metrics {
     crowding:
       s.population === 0 && d.carryingCapacity === 0 ? 0 : s.population / d.carryingCapacity,
     energyRatio: s.energy / d.energyTarget,
-    economyTrend: s.economy / (s.recentEconomy[0] ?? s.economy),
+    // FIX: uma economia morta contra uma referência morta dava 0/0, e uma métrica NaN reprova toda
+    // condição em silêncio; sem referência a medir a tendência é 1, como já era com a entrada ausente
+    economyTrend: economyTrend(s),
     birthRate: d.birthRate,
     debtRatio: debtRatio(s.debts, s),
     paradoxActive: s.paradox ? 1 : 0,

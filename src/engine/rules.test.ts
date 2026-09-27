@@ -511,6 +511,61 @@ describe('the permanent layer of the works', () => {
   })
 })
 
+// FEAT: 0/0 já alcançou uma métrica neste motor uma vez, e agora existe uma camada permanente que
+// multiplica capacidade, colheita e alvo de energia — a varredura mede os dois lados juntos
+describe('no metric goes NaN, in any combination', () => {
+  const EXTREMES = [0, 1e-12, 1e12] as const
+  const EVERY_WORK: readonly Work[] = WORKS.map((_, def) => ({ def, done: 0, record: def }))
+
+  const clean = (state: WorldState, label: string) => {
+    const metrics = worldMetrics(state, TEST_WORLD)
+    for (const metric of METRICS)
+      expect(Number.isNaN(metrics[metric]), `${label}/${metric}`).toBe(false)
+  }
+
+  it('sweeps every variable at zero, at nearly nothing and at enormous, built and unbuilt', () => {
+    for (const works of [[], EVERY_WORK]) {
+      const label = works.length === 0 ? 'bare' : 'built'
+      for (const variable of VARIABLES) {
+        for (const value of EXTREMES) {
+          clean(makeState({ works, [variable]: value }), `${label}/${variable}=${value}`)
+          // FEAT: 0/0 precisa de dois zeros, então cada variável é medida de novo sem ninguém vivo
+          clean(
+            makeState({ works, population: 0, [variable]: value }),
+            `${label}/empty/${variable}=${value}`,
+          )
+          // FIX: `recentEconomy` é a referência de economyTrend e não está em VARIABLES, então sem
+          // esta volta a varredura nunca alcança o 0/0 dele por conta própria
+          clean(
+            makeState({
+              works,
+              [variable]: value,
+              recentEconomy: [value, value, value, value, value],
+            }),
+            `${label}/recent=${value}/${variable}=${value}`,
+          )
+        }
+      }
+    }
+  })
+
+  it('reads a world with no one left and every work standing without a single NaN', () => {
+    clean(makeState({ population: 0, works: EVERY_WORK }), 'emptied/built')
+    const nothing = makeState({
+      population: 0,
+      food: 0,
+      energy: 0,
+      technology: 0,
+      economy: 0,
+      environment: 0,
+      stability: 0,
+      recentEconomy: [0, 0, 0, 0, 0],
+      works: EVERY_WORK,
+    })
+    clean(nothing, 'nothing/built')
+  })
+})
+
 describe('parameter invariants', () => {
   it('keeps the carrying-capacity factor positive, or crowding loses its sign in every world', () => {
     // FEAT: carryingCapacity = capacity * (1 - 1/(laborShare*y0)); se o fator virasse negativo,
