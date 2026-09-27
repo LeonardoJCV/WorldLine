@@ -15,7 +15,7 @@ import { CAUSAL_WINDOW } from './params.ts'
 import { NEUTRAL_MODIFIERS, derive, integrate } from './rules.ts'
 import { Era, NEVER, type Work, type WorldState } from './state.ts'
 import { TEST_WORLD, makeMetrics, makeState } from './testing.ts'
-import { WORKS, isCommissionable, workIndex } from './work.ts'
+import { WORKS, isCommissionable, workIndex, type WorkId } from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const shortage: EventDef = {
@@ -560,10 +560,19 @@ describe('the works in the causal chain', () => {
 
   // FIX: e só para o lado do rompimento — uma obra que empurra a métrica para o lado bom não é
   // causa da quebra dela, senão toda crise vira culpa das melhorias que vieram antes
-  const named = (works: readonly Work[], metrics: Metrics, event: EventId) =>
-    evaluateEvents(world(EVENTS, { works }), metrics, 1, 30)
+  const named = (works: readonly Work[], metrics: Metrics, event: EventId, seed = 1) =>
+    evaluateEvents(world(EVENTS, { works }), metrics, seed, 30)
       .started.find((r) => r.event === event)
       ?.causes.filter((cause) => cause.kind === 'event').length ?? -1
+
+  // FEAT: a epidemia só dispara em 8% dos sorteios, então a varredura procura a semente que a abre
+  const namedOnce = (works: readonly Work[], metrics: Metrics, event: EventId) => {
+    for (let seed = 1; seed < 200; seed++) {
+      const count = named(works, metrics, event, seed)
+      if (count >= 0) return count
+    }
+    throw new Error(`${event} never fired`)
+  }
 
   it('never blames the healers for the die-off they spent centuries delaying', () => {
     const healers = ['aqueduct', 'sanitation', 'medicine'] as const
@@ -580,9 +589,11 @@ describe('the works in the causal chain', () => {
     expect(named(works, short, 'energy_crisis')).toBe(1)
   })
 
-  it('names the shipyard for it too, because a cheaper fleet raises the same target', () => {
+  // FIX: o estaleiro fica fora: medido, ele moveu o alvo em zero nas histórias sem frota e em 1e-9
+  // nas com frota pequena, contra um vão de 0,246 — o coeficiente dele multiplica uma soma vazia
+  it('never names the shipyard for it: its coefficient multiplies an empty sum', () => {
     const works = [{ def: workIndex('shipyard'), done: 40, record: 12 }]
-    expect(named(works, short, 'energy_crisis')).toBe(1)
+    expect(named(works, short, 'energy_crisis')).toBe(0)
   })
 
   it('never names a work that leaves the energy ratio alone', () => {
@@ -635,6 +646,29 @@ describe('the works in the causal chain', () => {
     expect(counted).toBeGreaterThan(10)
   })
 
+  // FEAT: uma chave cega é cega nos DOIS lados — a obra que só move variância (o calendário) ou só
+  // o preço da frota (o estaleiro) não é causa de acontecimento nenhum, em direção nenhuma
+  it('never names a work whose only effect is a blind one, whatever breaks', () => {
+    const sweep = (id: WorkId) => {
+      const works = [{ def: workIndex(id), done: 40, record: 12 }]
+      let count = 0
+      for (const def of EVENTS) {
+        const breached = { ...makeMetrics() } as Record<Metric, number>
+        for (const c of def.trigger)
+          breached[c.metric] = c.op === '<' ? c.value / 2 : c.value * 2 + 1
+        for (const record of evaluateEvents(world(EVENTS, { works }), breached as Metrics, 1, 30)
+          .started) {
+          count += record.causes.filter((c) => c.kind === 'event' && c.record === 12).length
+        }
+      }
+      return count
+    }
+    expect(sweep('calendar')).toBe(0)
+    expect(sweep('shipyard')).toBe(0)
+    // FEAT: e a varredura está viva, porque a química é nomeada por ela
+    expect(sweep('chemistry')).toBeGreaterThan(0)
+  })
+
   // FEAT: a obra que fechou neste ano só move coeficiente no ano seguinte, então não é causa hoje
   it('never names a work finished this very year', () => {
     const today = world(EVENTS, { works: [{ def: chemistry, done: 100, record: 12 }] })
@@ -644,7 +678,7 @@ describe('the works in the causal chain', () => {
     expect(crisis(yesterday)).toContainEqual({ kind: 'event', record: 12 })
   })
 
-  // FEAT: o teto, com as vinte e cinco obras de pé: a era espacial nomeia as quinze que empurraram
+  // FEAT: o teto, com as vinte e cinco obras de pé: a era espacial nomeia as catorze que empurraram
   // os três portões dela para cima, e as mentiras seguem valendo zero
   it('bounds how many works one record can ever name', () => {
     const all = WORKS.map((_, def) => ({ def, done: 40, record: 100 + def }))
@@ -658,18 +692,26 @@ describe('the works in the causal chain', () => {
     )
     const era = reached.started.find((r) => r.event === 'space_era')
     expect(reached.started.map((r) => r.event)).toEqual(['space_era'])
-    expect(era?.causes.filter((cause) => cause.kind === 'event')).toHaveLength(15)
-    expect(era?.causes).toHaveLength(18)
+    expect(era?.causes.filter((cause) => cause.kind === 'event')).toHaveLength(14)
+    expect(era?.causes).toHaveLength(17)
 
-    // FEAT: as quatro que movem a razão de energia respondem pela falta, e mais nenhuma
-    expect(named(all, short, 'energy_crisis')).toBe(4)
+    // FEAT: as três que levantam o alvo respondem pela falta, e mais nenhuma
+    expect(named(all, short, 'energy_crisis')).toBe(3)
 
-    for (const event of ['famine', 'extinction', 'recession', 'civil_unrest'] as const) {
+    // FIX: epidemic entra na lista porque inverter `capacity` faria o aqueduto e a arcologia —
+    // obras que só levantam a lotação possível — causarem a epidemia por superlotação
+    for (const event of [
+      'famine',
+      'extinction',
+      'recession',
+      'civil_unrest',
+      'epidemic',
+    ] as const) {
       const def = EVENTS.find((d) => d.id === event)
       if (!def) throw new Error(`missing ${event}`)
       const breached = { ...makeMetrics() } as Record<Metric, number>
       for (const c of def.trigger) breached[c.metric] = c.op === '<' ? c.value / 2 : c.value * 2 + 1
-      expect(named(all, breached as Metrics, event), event).toBe(0)
+      expect(namedOnce(all, breached as Metrics, event), event).toBe(0)
     }
   })
 

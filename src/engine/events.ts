@@ -94,9 +94,9 @@ const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly WorkPush[]>> = {
   energy: [up('energy'), down('environment'), down('energyRatio')],
   economy: [up('economy'), up('economyTrend')],
   capacity: [down('crowding')],
-  // FEAT: custo de frota mais alto derruba o alvo, então levanta a razão — e o estaleiro, que o
-  // baixa, derruba a razão pelo mesmo caminho do reator
-  colonyCost: [down('energy'), up('energyRatio')],
+  // FIX: é a única chave cujo coeficiente multiplica uma SOMA — o sustento da frota — que vale zero
+  // sem frota ou com frota autossuficiente, então ela nunca pode alegar magnitude nenhuma
+  colonyCost: [blind('energy'), blind('energyRatio')],
   mortality: [down('population')],
   spoil: [down('food'), down('foodSecurity')],
   // FEAT: variância não tem lado: ela alarga o ano, então toca sem nunca apontar direção
