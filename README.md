@@ -19,7 +19,7 @@ It is not a game with a win condition and it is not a dashboard. It is an instru
 
   ![A causal chain: the industrial revolution traced back to technology, energy and an earlier golden age](docs/images/causal.png)
 
-- **Intervene** by reallocating effort between agriculture, industry, research and conservation. The decision takes effect from the present year and the world diverges from there.
+- **Intervene** by reallocating effort between agriculture, industry, research, conservation and public works. The decision takes effect from the present year and the world diverges from there.
 
   ![Intervene mode: coupled sliders that always sum to 100%](docs/images/intervene.png)
 
@@ -40,11 +40,14 @@ The same seed and the same decisions always produce the same history, in every b
 - **Engine-independent math.** JavaScript engines may disagree in the last bit of `Math.exp`, `Math.log` or `Math.pow`. The engine implements its own `exp`, `ln` and `pow` using only operations IEEE 754 guarantees to be correctly rounded (`+ − × ÷` and bit manipulation), and lint rules forbid the native versions inside the engine.
 - **Counter-based randomness.** Every random draw is a pure hash of `(seed, year, channel)`. No draw can shift another, any year can be recomputed in isolation, and a branch that makes no new decision stays identical to its parent.
 - **Fingerprints.** Each world state hashes to an 8-character fingerprint. Reference fingerprints for several seeds and decision scripts are pinned in the repository and checked by the test suite in Node, and by end-to-end tests in Chromium, Firefox and WebKit.
+- **Links carry inputs, not state.** A shared link holds the seed, the year and everything the history received; opening it re-simulates the world from year zero, which is what makes it reopen the same history byte for byte. It also means the rules are part of the link: public works changed them, so a link shared before this version now opens a different history.
 - **Check it yourself.** The `/verify` page re-runs the reference worlds in your browser and compares every fingerprint.
 
 ## How the simulation works
 
-A world is six stocks (population, food reserve, energy, technology, economy and environment) plus a stability index with memory. Each year a fixed pipeline applies the current decision, derives quantities such as food security and pollution, updates every stock from the start-of-year state, and evaluates events. Causes always precede effects: an event triggered this year changes the world from next year on.
+A world is six stocks (population, food reserve, energy, technology, economy and environment) and a stability index with memory, together with what the civilization has permanently built: the eras it has opened, the public works that stand, and the one still on the site. Each year a fixed pipeline applies the current decision, spends that year's share of production on the work under way, derives quantities such as food security and pollution, updates every stock from the start-of-year state, and evaluates events. Causes always precede effects: an event triggered this year changes the world from next year on.
+
+Events open eras — agricultural, classical, industrial, electric, space — and an era is what puts a work within reach. A work costs years of production, needs the works it rests on, and once finished changes a coefficient of the world for good: harvests, energy, mortality, the price of settling another body. Unlike an event, that change never expires, which is why the year 3000 does not come out like the year 300. The catalogue answers itself: every rung of the energy climb has a work that holds back the smoke it makes, and the rocket that opens colonisation sits at the top of a launch climb a world has to finish first.
 
 The rules are few and coupled, so behaviour comes from feedback loops rather than scripted outcomes:
 
