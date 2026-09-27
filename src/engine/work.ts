@@ -26,6 +26,10 @@ export type WorkId =
   | 'shipyard'
   | 'arcology'
   | 'reactor'
+  | 'reforestation'
+  | 'filters'
+  | 'cleanGrid'
+  | 'closedCycle'
 
 export const FACTOR_KEYS = [
   'harvest',
@@ -35,6 +39,9 @@ export const FACTOR_KEYS = [
   'economy',
   'capacity',
   'colonyCost',
+  // FEAT: fator sobre o termo de poluição inteiro, e por ser fator positivo nunca fica negativo —
+  // é por isso que ele dispensa o piso que `spoil` e `mortality` precisam
+  'smoke',
 ] as const
 export const TERM_KEYS = ['mortality', 'spoil', 'harvestNoise', 'pollution'] as const
 export type FactorKey = (typeof FACTOR_KEYS)[number]
@@ -209,6 +216,36 @@ export const WORKS: readonly WorkDef[] = [
     needs: ['electrification', 'computer'],
     cost: 110000,
     effect: { energy: 2.2 },
+  },
+  // FEAT: a escada de mitigação, apendada ao fim porque o índice entra no hash — a resposta de cada
+  // degrau da escada de energia, e na árvore ela vem depois do problema que responde
+  {
+    id: 'reforestation',
+    era: Era.classical,
+    needs: ['roads'],
+    cost: 2800,
+    effect: { smoke: 0.85 },
+  },
+  {
+    id: 'filters',
+    era: Era.industrial,
+    needs: ['steam'],
+    cost: 12000,
+    effect: { smoke: 0.8 },
+  },
+  {
+    id: 'cleanGrid',
+    era: Era.electric,
+    needs: ['electrification'],
+    cost: 28000,
+    effect: { smoke: 0.75 },
+  },
+  {
+    id: 'closedCycle',
+    era: Era.space,
+    needs: ['reactor'],
+    cost: 120000,
+    effect: { smoke: 0.7 },
   },
 ]
 

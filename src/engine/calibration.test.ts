@@ -12,9 +12,10 @@ import { causalDistance } from './distance.ts'
 import { worldMetrics, type EventId } from './events.ts'
 import { genesis } from './genesis.ts'
 import { GOLDEN_SCRIPTS, type GoldenScript } from './golden.ts'
-import { PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
+import { HORIZON, PARADOX_GRACE, PARADOX_PATIENCE, PARADOX_RATIO } from './params.ts'
 import { step } from './step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from './state.ts'
+import { WORKS, isCommissionable } from './work.ts'
 import { Worldline } from './worldline.ts'
 
 const balanced: Allocation = {
@@ -495,6 +496,87 @@ describe('space calibration', () => {
       // FEAT: o mundo natal continua apertado, e continua com quase toda a gente
       expect(left.crowding).toBeGreaterThan(0.8)
       expect(left.population).toBeGreaterThan(0.9 * stayed.population)
+    }
+  })
+})
+
+// FEAT: o critério que a escada de mitigação existe para cumprir, e é o mais duro do ramo: o MVP
+// existe para recompensar construir, e antes desta grade construir extinguia oito sementes de oito
+const LADDER_SEEDS = [1, 2, 3, 7, 11, 42, 101, 777]
+const LADDER_HORIZON = HORIZON
+const BY_ERA: readonly number[] = WORKS.map((_, def) => def).sort((a, b) => {
+  const left = WORKS[a]
+  const right = WORKS[b]
+  if (!left || !right) return 0
+  return left.era === right.era ? a - b : left.era - right.era
+})
+
+interface Lived {
+  readonly alive: boolean
+  readonly population: number
+  readonly ended: number
+  readonly works: number
+}
+
+// FEAT: o observador que constrói tudo o que pode, contra o que nunca comissiona nada — a alocação é
+// a mesma nas duas, e a única diferença é comissionar
+function live(
+  seed: number,
+  allocation: Allocation,
+  builds: boolean,
+  order: readonly number[],
+): Lived {
+  const w = new Worldline(seed, [{ tick: 0, allocation }])
+  for (let year = 0; year < LADDER_HORIZON && !w.ended; year++) {
+    if (builds && !w.present.building) {
+      const next = order.find((def) => isCommissionable(w.present, def))
+      const work = next === undefined ? undefined : WORKS[next]
+      if (work) w.commission(work.id)
+    }
+    w.advance(1)
+  }
+  return {
+    alive: w.present.status === 'running',
+    population: w.present.population,
+    ended: w.present.tick,
+    works: w.present.works.length,
+  }
+}
+
+describe('the mitigation ladder', () => {
+  it('never makes building worse than not building, on any calibration seed', () => {
+    for (const seed of LADDER_SEEDS) {
+      const built = live(
+        seed,
+        balanced,
+        true,
+        WORKS.map((_, def) => def),
+      )
+      const bare = live(seed, balanced, false, [])
+      const label = `seed ${seed}`
+      expect(bare.alive, label).toBe(true)
+      expect(built.alive, label).toBe(true)
+      expect(built.population, label).toBeGreaterThan(bare.population)
+      expect(built.works, label).toBe(WORKS.length)
+      expect(bare.works, label).toBe(0)
+    }
+  })
+
+  // FEAT: e a resposta não depende de quem despeja em conservação: com a fatia em ZERO a escada
+  // ainda salva, desde que o observador tome o degrau de mitigação quando a era dele abre
+  it('still saves a world that puts nothing at all into conservation', () => {
+    const spendthrift: Allocation = {
+      agriculture: 40,
+      industry: 25,
+      research: 25,
+      conservation: 0,
+      works: 10,
+    }
+    for (const seed of LADDER_SEEDS) {
+      const built = live(seed, spendthrift, true, BY_ERA)
+      const bare = live(seed, spendthrift, false, [])
+      expect(built.alive, `seed ${seed}`).toBe(true)
+      expect(built.population, `seed ${seed}`).toBeGreaterThan(bare.population)
     }
   })
 })

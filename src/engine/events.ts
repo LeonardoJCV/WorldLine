@@ -97,6 +97,9 @@ const WORK_INFLUENCES: Readonly<Record<WorkKey, readonly WorkPush[]>> = {
   // FIX: é a única chave cujo coeficiente multiplica uma SOMA — o sustento da frota — que vale zero
   // sem frota ou com frota autossuficiente, então ela nunca pode alegar magnitude nenhuma
   colonyCost: [blind('energy'), blind('energyRatio')],
+  // FEAT: fumar mais é poluir mais, então a chave empurra o ambiente para baixo quando cresce — e a
+  // obra de mitigação, que a leva abaixo de 1, nunca é culpada pela crise ecológica
+  smoke: [down('environment')],
   mortality: [down('population')],
   spoil: [down('food'), down('foodSecurity')],
   // FEAT: variância não tem lado: ela alarga o ano, então toca sem nunca apontar direção

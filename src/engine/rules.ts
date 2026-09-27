@@ -100,9 +100,16 @@ export function derive(
       w.energy -
       colonyCost(s.colonies, w.colonyCost),
   )
+  // FEAT: `smoke` é fator sobre o termo INTEIRO — inclusive a parcela da química — porque parcela
+  // nenhuma segura um fator de 6,336×; e fator positivo nunca deixa a poluição negativa, sem piso
   const pollution =
-    K.pN * K.pollutionScale * s.energy * (1 - clean) * pow(s.population / K.P0, K.pollutionPopExp) +
-    w.pollution
+    (K.pN *
+      K.pollutionScale *
+      s.energy *
+      (1 - clean) *
+      pow(s.population / K.P0, K.pollutionPopExp) +
+      w.pollution) *
+    w.smoke
   const transition = s.economy / K.yDT
   const fed = smoothstep(K.fertilityFrom, K.fertilityTo, foodSecurity)
   const birthRate =

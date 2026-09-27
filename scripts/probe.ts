@@ -14,6 +14,7 @@ import { GOLDEN_SCRIPTS } from '../src/engine/golden.ts'
 import { PARADOX_RATIO } from '../src/engine/params.ts'
 import { step } from '../src/engine/step.ts'
 import { Era, type Allocation, type Decision, type WorldState } from '../src/engine/state.ts'
+import { WORKS, isCommissionable } from '../src/engine/work.ts'
 import { Worldline } from '../src/engine/worldline.ts'
 
 const STRATEGIES: Record<string, Allocation> = {
@@ -665,10 +666,71 @@ function spaceProbe(): void {
   )
 }
 
+// FEAT: a grade da escada de mitigação — construir tudo contra não construir nada, mesma alocação,
+// que é o critério do E7: em semente nenhuma construir pode terminar pior do que não construir
+const WORKS_SEEDS = [1, 2, 3, 7, 11, 42, 101, 777]
+const WORKS_HORIZON = 10_000
+const BY_INDEX: readonly number[] = WORKS.map((_, def) => def)
+// FEAT: a ordem da árvore, não a do catálogo: o índice é contrato de hash, a era é o desenho
+const BY_ERA: readonly number[] = [...BY_INDEX].sort((a, b) => {
+  const left = WORKS[a]
+  const right = WORKS[b]
+  if (!left || !right) return 0
+  return left.era === right.era ? a - b : left.era - right.era
+})
+const WORKS_PLANS: Record<string, Allocation> = {
+  balanced: { agriculture: 40, industry: 25, research: 20, conservation: 10, works: 5 },
+  spendthrift: { agriculture: 40, industry: 25, research: 25, conservation: 0, works: 10 },
+  thrifty: { agriculture: 40, industry: 25, research: 22, conservation: 3, works: 10 },
+  green: { agriculture: 35, industry: 20, research: 20, conservation: 20, works: 5 },
+}
+
+function worksRun(seed: number, allocation: Allocation, order: readonly number[]): WorldState {
+  const w = new Worldline(seed, [{ tick: 0, allocation }])
+  for (let year = 0; year < WORKS_HORIZON && !w.ended; year++) {
+    if (order.length > 0 && !w.present.building) {
+      const next = order.find((def) => isCommissionable(w.present, def))
+      const work = next === undefined ? undefined : WORKS[next]
+      if (work) w.commission(work.id)
+    }
+    w.advance(1)
+  }
+  return w.present
+}
+
+function worksProbe(): void {
+  for (const [plan, allocation] of Object.entries(WORKS_PLANS)) {
+    for (const [name, order] of [
+      ['catalogue', BY_INDEX],
+      ['era', BY_ERA],
+    ] as const) {
+      console.log(`\n-- ${plan} / ${name} order --`)
+      let worse = 0
+      for (const seed of WORKS_SEEDS) {
+        const built = worksRun(seed, allocation, order)
+        const bare = worksRun(seed, allocation, [])
+        const off =
+          (built.status !== 'running' && bare.status === 'running') ||
+          built.population < bare.population
+        if (off) worse++
+        console.log(
+          `  ${String(seed).padStart(4)}  built ${built.status}@${String(built.tick).padStart(5)}` +
+            ` P ${fixed(built.population / 1e6, 2)}M  N ${fixed(built.environment)}  E ${fixed(built.energy, 1)}` +
+            `  ${String(built.works.length).padStart(2)}w   |   bare ${bare.status} P ${fixed(bare.population / 1e6, 2)}M` +
+            `  N ${fixed(bare.environment)}${off ? '   WORSE' : ''}`,
+        )
+      }
+      console.log(`  worse building than not building: ${worse}/${WORKS_SEEDS.length}`)
+    }
+  }
+}
+
 const args = process.argv.slice(2)
 const seed = Number(args.find((a) => /^\d+$/.test(a)) ?? 482913)
-const mode = args.find((a) => a === 'debt' || a === 'strategies' || a === 'space') ?? 'all'
-if (mode === 'space') spaceProbe()
+const mode =
+  args.find((a) => a === 'debt' || a === 'strategies' || a === 'space' || a === 'works') ?? 'all'
+if (mode === 'works') worksProbe()
+else if (mode === 'space') spaceProbe()
 else {
   if (mode !== 'debt') strategyProbe(seed)
   if (mode !== 'strategies') debtProbe()

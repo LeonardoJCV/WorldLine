@@ -321,6 +321,9 @@ describe('the permanent layer of the works', () => {
     spoil: [{ read: (s) => derived(s).foodAvailable, rises: (v) => v < 0 }],
     harvestNoise: [{ read: (s) => derived(s).foodProduction, rises: (v) => v < 0 }],
     pollution: [{ read: (s) => derived(s).pollution, rises: (v) => v > 0 }],
+    // FEAT: fator sobre o termo inteiro, então o alvo dele é a mesma poluição que a parcela move —
+    // dois caminhos para a mesma grandeza, e cada um com o seu neutro
+    smoke: [{ read: (s) => derived(s).pollution, rises: (v) => v > 1 }],
   }
 
   it('derives differently for two worlds identical except their works', () => {
@@ -354,11 +357,11 @@ describe('the permanent layer of the works', () => {
     expect(d.carryingCapacity).toBe(d.capacity * (1 - 1 / (K.laborShare * K.y0)))
   })
 
-  it('reads all eleven keys of the layer and all twelve landings, so none lands nowhere', () => {
-    expect(WORK_KEYS).toHaveLength(11)
+  it('reads all twelve keys of the layer and all thirteen landings, so none lands nowhere', () => {
+    expect(WORK_KEYS).toHaveLength(12)
     expect(Object.keys(READINGS).sort()).toEqual([...WORK_KEYS].sort())
     const landings = WORK_KEYS.reduce((sum, key) => sum + READINGS[key].length, 0)
-    expect(landings).toBe(12)
+    expect(landings).toBe(13)
   })
 
   const EFFECTFUL = WORKS.map((work, def) => ({ id: work.id, def, effect: work.effect })).filter(
@@ -368,7 +371,7 @@ describe('the permanent layer of the works', () => {
   // FEAT: o foguete é a única obra de efeito vazio de propósito — o portão da era espacial é a
   // prova dele, e por isso ele é o único que fica fora desta tabela
   it('leaves only the rocket out of the table, because only the rocket moves no coefficient', () => {
-    expect(EFFECTFUL).toHaveLength(24)
+    expect(EFFECTFUL).toHaveLength(28)
     expect(EFFECTFUL.map((work) => work.id)).not.toContain('rocket')
   })
 
@@ -387,6 +390,72 @@ describe('the permanent layer of the works', () => {
         }
       }
     }
+  })
+
+  // FEAT: o teste que separa fator de parcela, e é o único que importa: uma parcela constante
+  // subtrairia o mesmo de todo mundo, e o fator morde proporcionalmente ao veneno que existe
+  it('bites the smoke in proportion, which a parcel could never do', () => {
+    const rungs = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
+      (id, i) => ({ def: workIndex(id), done: 0, record: i }),
+    )
+    const at = (energy: number, works: readonly Work[]) =>
+      derived(makeState({ energy, population: 4e6, technology: 20, works })).pollution
+    const lean = at(6, []) - at(6, rungs)
+    const poisoned = at(6 * 6.336, []) - at(6 * 6.336, rungs)
+    expect(lean).toBeGreaterThan(0)
+    // FEAT: a escada de energia é 6,336×, e o corte cresce na mesma proporção — uma parcela daria 1
+    expect(poisoned / lean).toBeCloseTo(6.336, 6)
+  })
+
+  // FEAT: `smoke` multiplica o termo INTEIRO, inclusive a parcela que a química acrescenta
+  it('holds back the chemical parcel too, because the factor is over the whole term', () => {
+    const chemistry = { def: workIndex('chemistry'), done: 0, record: 0 }
+    const filters = { def: workIndex('filters'), done: 0, record: 1 }
+    const state = (works: readonly Work[]) =>
+      makeState({ energy: 0, population: 0, technology: 0, works })
+    // FEAT: sem energia e sem gente o termo base é zero, então o que resta é a parcela sozinha
+    const parcel = derived(state([chemistry])).pollution
+    expect(parcel).toBeCloseTo(0.04, 12)
+    expect(derived(state([chemistry, filters])).pollution).toBeCloseTo(0.04 * 0.8, 12)
+    expect(derived(state([filters])).pollution).toBe(0)
+  })
+
+  // FEAT: fator positivo nunca deixa a poluição negativa, e é por isso que esta chave é a única da
+  // camada que não precisa de piso — `spoil` e `mortality` precisam porque são parcelas
+  it('needs no floor, because a positive factor can never turn the pollution negative', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      def: workIndex('closedCycle'),
+      done: 0,
+      record: i,
+    }))
+    expect(workMods(many).smoke).toBeLessThan(0.02)
+    expect(workMods(many).smoke).toBeGreaterThan(0)
+    const s = makeState({ energy: 40, population: 4e6, technology: 20, works: many })
+    expect(derived(s).pollution).toBeGreaterThan(0)
+  })
+
+  // FEAT: a escada de mitigação contra a escada de energia, medida uma contra a outra — e ela NÃO
+  // apaga o veneno: sobram 2,26×, a tensão fica, e é aí que a conservação passa a decidir o fim
+  it('holds the energy ladder back without ever cancelling it', () => {
+    const energy = (['steam', 'electrification', 'reactor'] as const).map((id, i) => ({
+      def: workIndex(id),
+      done: 0,
+      record: i,
+    }))
+    const clean = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
+      (id, i) => ({ def: workIndex(id), done: 0, record: 3 + i }),
+    )
+    expect(workMods(energy).energy).toBeCloseTo(6.336, 10)
+    expect(workMods(clean).smoke).toBeCloseTo(0.357, 10)
+    // FEAT: a escada de energia multiplica o ALVO e é o NÍVEL que a poluição lê, então a medida é a
+    // mesma civilização no nível que cada uma alcança — 7,8 sem obra nenhuma, 6,336× disso com elas
+    const s = (level: number, works: readonly Work[]) =>
+      makeState({ energy: level, population: 4e6, technology: 20, works })
+    const bare = derived(s(7.8, [])).pollution
+    const held = derived(s(7.8 * 6.336, [...energy, ...clean])).pollution
+    expect(held / bare).toBeCloseTo(6.336 * 0.357, 6)
+    expect(held).toBeGreaterThan(bare)
+    expect(held).toBeLessThan(3 * bare)
   })
 
   // FIX: uma taxa de perda negativa criaria comida do nada, então ela para em zero

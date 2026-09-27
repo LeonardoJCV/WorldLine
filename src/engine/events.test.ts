@@ -558,6 +558,20 @@ describe('the works in the causal chain', () => {
     expect(crisis(s)?.some((cause) => cause.kind === 'event')).toBe(false)
   })
 
+  // FEAT: `smoke` acima de 1 é mais poluição, então a chave empurra o ambiente para baixo — e a obra
+  // de mitigação, cujo fator fica ABAIXO de 1, nunca é culpada pela crise que ela veio segurar
+  // FEAT: nenhuma obra do catálogo fuma MAIS, e o único evento sobre ambiente rompe para baixo, então
+  // hoje a direção desta chave não é observável na culpa: a tabela a declara para quando for
+  it('never blames the mitigation ladder for the crisis it was built to hold back', () => {
+    for (const id of ['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const) {
+      const s = world(EVENTS, { works: [{ def: workIndex(id), done: 40, record: 12 }] })
+      expect(
+        crisis(s)?.some((cause) => cause.kind === 'event'),
+        id,
+      ).toBe(false)
+    }
+  })
+
   // FIX: e só para o lado do rompimento — uma obra que empurra a métrica para o lado bom não é
   // causa da quebra dela, senão toda crise vira culpa das melhorias que vieram antes
   const named = (works: readonly Work[], metrics: Metrics, event: EventId, seed = 1) =>

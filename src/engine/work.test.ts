@@ -14,9 +14,9 @@ import {
 import { Era } from './state.ts'
 
 describe('the works catalogue', () => {
-  it('has twenty-five works with unique ids', () => {
-    expect(WORKS).toHaveLength(25)
-    expect(new Set(WORKS.map((w) => w.id)).size).toBe(25)
+  it('has twenty-nine works with unique ids', () => {
+    expect(WORKS).toHaveLength(29)
+    expect(new Set(WORKS.map((w) => w.id)).size).toBe(29)
   })
 
   it('pins the catalogue order, because work.def enters a hash later', () => {
@@ -46,6 +46,10 @@ describe('the works catalogue', () => {
       'shipyard',
       'arcology',
       'reactor',
+      'reforestation',
+      'filters',
+      'cleanGrid',
+      'closedCycle',
     ])
   })
 
@@ -113,12 +117,50 @@ describe('the works catalogue', () => {
     shipyard: { needs: ['rocket'], effect: { colonyCost: 0.7 } },
     arcology: { needs: ['computer'], effect: { capacity: 1.3 } },
     reactor: { needs: ['electrification', 'computer'], effect: { energy: 2.2 } },
+    reforestation: { needs: ['roads'], effect: { smoke: 0.85 } },
+    filters: { needs: ['steam'], effect: { smoke: 0.8 } },
+    cleanGrid: { needs: ['electrification'], effect: { smoke: 0.75 } },
+    closedCycle: { needs: ['reactor'], effect: { smoke: 0.7 } },
   }
 
   it('pins every work to its exact needs list and its exact effect map', () => {
     for (const work of WORKS) {
       expect(work.needs).toEqual(EXPECTED[work.id].needs)
       expect(work.effect).toEqual(EXPECTED[work.id].effect)
+    }
+  })
+
+  // FEAT: a escada de mitigação — uma resposta por degrau da escada de energia, e cada resposta
+  // apendada ao fim do catálogo mas pendurada na obra que criou o problema que ela responde
+  it('answers every rung of the energy ladder with a rung of its own', () => {
+    const smokers = WORKS.filter((work) => work.effect.smoke !== undefined)
+    expect(smokers.map((work) => work.id)).toEqual([
+      'reforestation',
+      'filters',
+      'cleanGrid',
+      'closedCycle',
+    ])
+    expect(smokers.map((work) => work.era)).toEqual([
+      Era.classical,
+      Era.industrial,
+      Era.electric,
+      Era.space,
+    ])
+    for (const work of smokers) expect(work.effect.smoke).toBeLessThan(1)
+    // FEAT: e um fator, nunca uma parcela: positivo, então poluição multiplicada por ele não vira
+    // negativa, e é por isso que esta chave não tem piso nenhum em `derive()`
+    for (const work of smokers) expect(work.effect.smoke).toBeGreaterThan(0)
+  })
+
+  // FEAT: cada resposta vem DEPOIS do problema na árvore: você eletrifica, se envenena, e então
+  // tem o que construir — o pré-requisito de cada degrau é o degrau de energia que ele responde
+  it('hangs each answer on the work whose smoke it answers', () => {
+    const needs = (id: WorkId) => findWork(id).needs
+    expect(needs('filters')).toEqual(['steam'])
+    expect(needs('cleanGrid')).toEqual(['electrification'])
+    expect(needs('closedCycle')).toEqual(['reactor'])
+    for (const id of ['steam', 'electrification', 'reactor'] as const) {
+      expect(findWork(id).effect.energy).toBeGreaterThan(1)
     }
   })
 
@@ -143,6 +185,22 @@ describe('NEUTRAL_MODS', () => {
 describe('workMods', () => {
   it('is the neutral element with no works', () => {
     expect(workMods([])).toEqual(NEUTRAL_MODS)
+  })
+
+  // FEAT: a décima segunda chave com neutro inexato moveria os dezessete fingerprints de uma vez
+  it('leaves the new twelfth key at exactly one with no works', () => {
+    expect(workMods([]).smoke).toBe(1)
+    expect(NEUTRAL_MODS.smoke).toBe(1)
+    expect(FACTOR_KEYS).toContain('smoke')
+    expect(TERM_KEYS).not.toContain('smoke' as never)
+  })
+
+  it('multiplies the four rungs of the mitigation ladder into one factor', () => {
+    const ladder = (['reforestation', 'filters', 'cleanGrid', 'closedCycle'] as const).map(
+      (id, i) => ({ def: workIndex(id), done: i, record: i }),
+    )
+    expect(workMods(ladder).smoke).toBeCloseTo(0.85 * 0.8 * 0.75 * 0.7, 10)
+    expect(workMods(ladder).pollution).toBe(0)
   })
 
   it('leaves no key undefined, so no arithmetic can produce NaN', () => {
