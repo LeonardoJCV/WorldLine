@@ -62,9 +62,11 @@ describe('CausalPanel', () => {
     expect(html).toContain('Built: Granary')
   })
 
-  // FIX: duas obras de confluências diferentes partilham o sentinela NEVER; o cartão causal não pode
-  // apontar para nenhuma das duas com confiança — precisa recuar ao texto genérico
-  it('refuses to name a work that arrived by confluence, instead of naming the wrong one', () => {
+  // FIX: depois de uma confluência um work_done registrado pode ficar sem dono; o cartão não pode
+  // apontar para nenhuma das obras presentes com confiança — precisa recuar ao texto genérico.
+  // (o sentinela em si, passado direto, já é testado em build.test.ts; describe() só chega aqui
+  // porque `events[node.record]` existe — node.record nunca é o próprio NEVER)
+  it('falls back to the generic text when no work in state claims the record', () => {
     const events: readonly EventRecord[] = [{ event: 'work_done', start: 10, end: 10, causes: [] }]
     const works: readonly Work[] = [
       { def: workIndex('granary'), done: 10, record: NEVER },

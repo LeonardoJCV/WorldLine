@@ -66,9 +66,11 @@ describe('EventsPanel', () => {
     expect(html).not.toContain('>Work completed<')
   })
 
-  // FIX: uma obra de confluência carrega o sentinela NEVER, e duas confluências partilham o mesmo
-  // valor — o painel precisa recuar para o texto genérico em vez de apontar para a obra errada
-  it('falls back to the generic text for a work that arrived by confluence', () => {
+  // FIX: depois de uma confluência um work_done já registrado pode ficar sem dono — o Work que o
+  // reivindicava passa a carregar NEVER, e é isto que o painel vê: um índice que nenhuma obra tem.
+  // (o sentinela em si, passado direto, já é testado em build.test.ts; aqui `row.index` é sempre um
+  // índice real, nunca NEVER — o painel nunca lhe passa o sentinela)
+  it('falls back to the generic text when no work in state claims the record', () => {
     const events: readonly EventRecord[] = [
       { event: 'work_done', start: 10, end: 10, causes: [] },
       { event: 'work_done', start: 20, end: 20, causes: [] },

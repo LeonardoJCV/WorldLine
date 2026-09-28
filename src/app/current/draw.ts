@@ -134,10 +134,14 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       ctx.stroke()
       if (chosen) {
         const text = input.label(marker.event, marker.index)
-        // FIX: perto do presente o rótulo escolhido pode não caber à direita do traço até a borda
-        const overflow = marker.x + 6 + ctx.measureText(text).width > frame.right
-        ctx.textAlign = overflow ? 'right' : 'left'
-        ctx.fillText(text, overflow ? marker.x - 6 : marker.x + 6, frame.centerY + 20)
+        const width = ctx.measureText(text).width
+        // FIX: preso às duas bordas, não só afastado de uma, senão a ponta cortada troca de lado
+        // (mesma regra de eraLabelsFit: sem caber, o rótulo não é desenhado)
+        if (width <= frame.right - frame.left) {
+          const x = Math.min(Math.max(marker.x + 6, frame.left), frame.right - width)
+          ctx.textAlign = 'left'
+          ctx.fillText(text, x, frame.centerY + 20)
+        }
       }
     }
   }

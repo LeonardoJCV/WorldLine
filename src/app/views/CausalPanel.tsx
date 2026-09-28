@@ -55,7 +55,8 @@ export function CausalPanel() {
   }, [selected, rootRow, markEdges])
 
   const root = selected === null ? undefined : events[selected]
-  if (!tree || !root) {
+  // FIX: o rótulo acessível também nomeia a obra, então `selected` já sai estreito aqui
+  if (selected === null || !tree || !root) {
     return (
       <section className="panel causal" aria-labelledby="causal-title">
         <h2 className="panel__title" id="causal-title">
@@ -139,7 +140,7 @@ export function CausalPanel() {
         onScroll={markEdges}
         tabIndex={0}
         role="group"
-        aria-label={t('causal.label', { event: t(`event.${root.event}`) })}
+        aria-label={t('causal.label', { event: workEventTitle(t, works, root.event, selected) })}
       >
         <div className="causal__canvas" style={{ width, height }}>
           <svg className="causal__links" width={width} height={height} aria-hidden="true">
