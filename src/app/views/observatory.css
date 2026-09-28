@@ -1062,6 +1062,10 @@ button.state__row:hover,
 .panel.causal[data-wide] {
   width: min(var(--causal-width, 100%), var(--causal-max));
   max-width: 100%;
+  /* FIX: na folha o painel não tem altura definida, então o `100%` do teto da rolagem não resolve e
+     a caixa do painel fica do tamanho da cadeia inteira — um vão morto embaixo do cartão; o mesmo
+     teto aqui fecha o vão, e na coluna do palco 46vh nunca é o menor, então lá nada muda */
+  max-height: min(var(--causal-height, 264px), 46vh);
 }
 
 .causal__scroll {
