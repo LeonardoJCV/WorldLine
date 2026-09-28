@@ -15,7 +15,7 @@ import { mergeWeights } from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation, WorldState } from '../engine/state.ts'
 import { system } from '../engine/system.ts'
-import { WORKS, workMods } from '../engine/work.ts'
+import { WORKS, workIndex, workMods } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
 import {
   runCollapseCheck,
@@ -428,6 +428,20 @@ describe('SimulationHost: what the Snapshot carries about the works', () => {
       allocation: { ...line.present.allocation, works: 0 },
     }
     expect(toSnapshot(idle).rate).toBe(0)
+  })
+
+  // FIX: WORKS_CASE em 900 não tem nenhuma obra de pé com fator `production`, então trocar
+  // workMods por NEUTRAL_MODS passaria despercebido ali; este teste exige a diferença por si
+  it('feeds the standing works into the rate, not a neutral placeholder', () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const line = goldenWorld(WORKS_CASE.seed, plan)
+    line.advance(WORKS_CASE.year)
+    const bare: WorldState = { ...line.present, works: [] }
+    const forged: WorldState = {
+      ...line.present,
+      works: [{ def: workIndex('metallurgy'), done: line.present.tick, record: 0 }],
+    }
+    expect(toSnapshot(forged).rate).toBeGreaterThan(toSnapshot(bare).rate)
   })
 
   // FEAT: hashState só lê WorldState, então nenhum campo do Snapshot pode mover um fingerprint —
