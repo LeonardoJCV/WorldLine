@@ -380,6 +380,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'build.commissionWork': 'Comissionar {work}',
   'build.replaceYear': '{next} substituiria {current} e perderia um ano já construído.',
   'build.replaceYears': '{next} substituiria {current} e perderia {years} anos já construídos.',
+  'build.cancel': 'Cancelar',
   'era.agricultural': 'Era agrícola',
   'era.industrial': 'Era industrial',
   'effect.harvest': 'Colheita',

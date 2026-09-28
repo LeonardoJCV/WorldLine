@@ -9,6 +9,7 @@ import {
   type WorkKey,
 } from '../../engine/work.ts'
 import type { Snapshot } from '../../worker/protocol.ts'
+import type { MessageKey } from '../i18n/en.ts'
 
 export type WorkState = 'done' | 'building' | 'open' | 'locked'
 
@@ -121,4 +122,17 @@ export function yearsLost(snapshot: Snapshot): number | null {
 // lê o instantâneo de novo, e as duas precisam valer ao mesmo tempo para o ponto não virar ruído
 export function buildReady(rows: readonly WorkRow[]): boolean {
   return !rows.some((row) => row.state === 'building') && rows.some((row) => row.state === 'open')
+}
+
+export interface ReplaceWarning {
+  readonly key: MessageKey
+  readonly next: WorkId
+  readonly current: WorkId
+  readonly years: number
+}
+
+// FEAT: a chave (singular ou plural) e os dois nomes envolvidos são dados; a tela só traduz — assim
+// nenhuma obra fica fixa no texto, e o ano 1 escolhe a chave certa sem precisar de um clique para provar
+export function replaceWarning(next: WorkId, current: WorkId, years: number): ReplaceWarning {
+  return { key: years === 1 ? 'build.replaceYear' : 'build.replaceYears', next, current, years }
 }

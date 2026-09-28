@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import type { WorkId } from '../../engine/work.ts'
 import {
   eraKey,
   formatCompact,
@@ -9,12 +11,21 @@ import {
 } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
-import { buildGroups, effectsOf, siteProgress, yearsLost, type WorkRow } from './build.ts'
+import {
+  buildGroups,
+  effectsOf,
+  replaceWarning,
+  siteProgress,
+  yearsLost,
+  type WorkRow,
+} from './build.ts'
 
 export function BuildPanel() {
   const t = useT()
   const locale = useLocale()
   const present = useSimulation((s) => s.present)
+  // FEAT: só pede confirmação quando trocar custaria algo; um canteiro vazio não tem o que perder
+  const [confirming, setConfirming] = useState<WorkId | null>(null)
 
   if (present === null) {
     return (
@@ -42,6 +53,11 @@ export function BuildPanel() {
     })
   }
 
+  function commit(work: WorkId) {
+    simulation.getState().commission(work)
+    setConfirming(null)
+  }
+
   return (
     <section className="panel build" aria-labelledby="build-title">
       <h2 className="panel__title" id="build-title">
@@ -63,6 +79,10 @@ export function BuildPanel() {
             {group.rows.map((row) => {
               const changes = effectsOf(row.def)
               const years = when(row)
+              const warning =
+                row.state === 'open' && site !== null && lost !== null
+                  ? replaceWarning(row.id, site.id, lost)
+                  : null
               return (
                 <li key={row.id} className="build__work" data-state={row.state}>
                   <span className="build__name">{t(`work.${row.id}`)}</span>
@@ -111,29 +131,36 @@ export function BuildPanel() {
                       })}
                     </span>
                   )}
-                  {row.state === 'open' && (
-                    <span className="build__action">
-                      <button
-                        type="button"
-                        className="build__commission"
-                        aria-label={t('build.commissionWork', { work: t(`work.${row.id}`) })}
-                        onClick={() => simulation.getState().commission(row.id)}
-                      >
-                        {t('build.commission')}
-                      </button>
-                      {/* FEAT: comissionar substitui o canteiro em curso e perde o que já está de pé —
-                          o aviso mora ao lado do botão, antes do gesto, e diz o ano real, não uma frase genérica */}
-                      {site !== null && lost !== null && (
-                        <span className="build__warn" role="note">
-                          {t(lost === 1 ? 'build.replaceYear' : 'build.replaceYears', {
-                            next: t(`work.${row.id}`),
-                            current: t(`work.${site.id}`),
-                            years: formatCompact(lost, locale),
+                  {row.state === 'open' &&
+                    (confirming === row.id ? (
+                      // FIX: só chega aqui quando `warning` não é nulo — a troca é o único caminho
+                      // que pede confirmação, e ela sempre tem o que dizer
+                      <span className="build__action build__confirm" role="alert">
+                        {warning &&
+                          t(warning.key, {
+                            next: t(`work.${warning.next}`),
+                            current: t(`work.${warning.current}`),
+                            years: formatCompact(warning.years, locale),
                           })}
-                        </span>
-                      )}
-                    </span>
-                  )}
+                        <button type="button" onClick={() => commit(row.id)}>
+                          {t('build.commission')}
+                        </button>
+                        <button type="button" onClick={() => setConfirming(null)}>
+                          {t('build.cancel')}
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="build__action">
+                        <button
+                          type="button"
+                          className="build__commission"
+                          aria-label={t('build.commissionWork', { work: t(`work.${row.id}`) })}
+                          onClick={() => (warning ? setConfirming(row.id) : commit(row.id))}
+                        >
+                          {t('build.commission')}
+                        </button>
+                      </span>
+                    ))}
                 </li>
               )
             })}

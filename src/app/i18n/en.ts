@@ -380,6 +380,7 @@ export const en = {
   'build.commissionWork': 'Commission {work}',
   'build.replaceYear': '{next} would replace {current} and lose one year already built.',
   'build.replaceYears': '{next} would replace {current} and lose {years} years already built.',
+  'build.cancel': 'Cancel',
   'era.agricultural': 'Agricultural age',
   'era.industrial': 'Industrial age',
   'effect.harvest': 'Harvest',

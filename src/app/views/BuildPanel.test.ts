@@ -167,7 +167,8 @@ describe('BuildPanel', () => {
     expect(html).toContain('Precisa de Escrita')
     expect(html).not.toContain('Harvest')
     expect(html).toContain('Comissionar Celeiro')
-    expect(html).toContain('Celeiro substituiria Arado e perderia 100 anos já construídos.')
+    // FIX: a troca é dita só depois de um clique confirmar; o primeiro render nunca a antecipa
+    expect(html).not.toContain('substituiria')
   })
 
   it('offers a way to commission every work within reach, named for the work it starts', () => {
@@ -179,11 +180,13 @@ describe('BuildPanel', () => {
     expect(html).not.toContain('aria-label="Commission Irrigation"')
   })
 
-  // FEAT: 1200 (ano corrente) menos 1100 (início do canteiro) é 100 — o número real de anos que o
-  // canteiro já levou, não uma fração do custo do Arado nem uma frase sem número nenhum
-  it('warns with the years that would be lost, not with a generic sentence', () => {
+  // FIX: a troca é a única que pede confirmação, e o primeiro render nunca a adianta — o texto real
+  // (quem substitui quem e quantos anos) é provado à parte, em build.test.ts, sem depender de um clique
+  it('keeps the replace warning behind a confirm click, on every open work, not just one', () => {
     const html = render()
-    expect(html).toContain('Granary would replace Plough and lose 100 years already built.')
+    expect(html).not.toContain('would replace')
+    expect(html).toContain('aria-label="Commission Granary"')
+    expect(html).toContain('aria-label="Commission Pottery"')
   })
 
   it('says nothing about replacing when the yard is empty', () => {

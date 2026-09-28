@@ -15,6 +15,7 @@ import {
   buildReady,
   buildView,
   effectsOf,
+  replaceWarning,
   siteProgress,
   yearsLost,
   type WorkRow,
@@ -252,5 +253,29 @@ describe('buildReady', () => {
     // FEAT: nenhuma era aberta ainda — o canteiro está livre, mas não há o que começar nele
     const rows = buildView(snapshot({ eras: 0 }))
     expect(buildReady(rows)).toBe(false)
+  })
+})
+
+describe('replaceWarning', () => {
+  it('names whichever pair of works is involved, never just one hand-picked pair', () => {
+    expect(replaceWarning('granary', 'plough', 47)).toEqual({
+      key: 'build.replaceYears',
+      next: 'granary',
+      current: 'plough',
+      years: 47,
+    })
+    // FEAT: um par totalmente diferente — nada aqui pode estar preso a uma obra só
+    expect(replaceWarning('writing', 'irrigation', 12)).toEqual({
+      key: 'build.replaceYears',
+      next: 'writing',
+      current: 'irrigation',
+      years: 12,
+    })
+  })
+
+  it('picks the singular key at exactly one year, and the plural everywhere else', () => {
+    expect(replaceWarning('granary', 'plough', 1).key).toBe('build.replaceYear')
+    expect(replaceWarning('granary', 'plough', 0).key).toBe('build.replaceYears')
+    expect(replaceWarning('granary', 'plough', 2).key).toBe('build.replaceYears')
   })
 })

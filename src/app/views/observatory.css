@@ -1658,10 +1658,19 @@ button.causal__node:hover {
   border-color: var(--dim);
 }
 
-.build__warn {
+.build__confirm {
   max-width: 40ch;
   color: var(--v-food);
+}
+
+.build__confirm button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--starlight);
   font-size: var(--text-xs);
+  cursor: pointer;
 }
 
 .build__work[data-state='done'] .build__state {
