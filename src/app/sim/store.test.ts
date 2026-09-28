@@ -85,10 +85,9 @@ function fakePreview(shock: number, tick = 2000): SeamPreview {
 }
 
 describe('MODES', () => {
-  it('offers a button for every mode there is', () => {
-    // FIX: a barra desenha um botão por entrada daqui; nada some porque foi copiado à mão em outro lugar
+  // FIX: isto fixa a ordem; se a barra realmente desenha um botão por modo, TopBar.test.ts prova
+  it('lists exactly these five modes, in the order the bar shows them', () => {
     expect(MODES).toEqual(['observe', 'intervene', 'cross', 'merge', 'build'])
-    expect(new Set(MODES).size).toBe(MODES.length)
   })
 })
 

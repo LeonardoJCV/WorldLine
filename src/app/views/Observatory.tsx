@@ -16,16 +16,14 @@ import { PlanetView } from '../surface/PlanetView.tsx'
 import { SystemView } from '../system/SystemView.tsx'
 import { isCompatibleVersion, type MultiverseLink } from '../world/link.ts'
 import { useLinkSync } from '../world/useLinkSync.ts'
-import { AllocationPanel } from './AllocationPanel.tsx'
 import { BottomSheet, usePhone } from './BottomSheet.tsx'
 import { CausalPanel } from './CausalPanel.tsx'
 import { ConfluenceNotice } from './ConfluenceNotice.tsx'
-import { CrossPanel } from './CrossPanel.tsx'
 import { EventsPanel } from './EventsPanel.tsx'
 import { sheetReserve } from './hud.ts'
 import { useSheet } from './hudStore.ts'
 import { InheritanceNotice } from './InheritanceNotice.tsx'
-import { MergePanel } from './MergePanel.tsx'
+import { ModePanels } from './ModePanels.tsx'
 import { PanelCard } from './PanelCard.tsx'
 import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
@@ -129,32 +127,7 @@ export function Observatory({
         <PanelCard id="state" title={t('state.title', { year: formatYear(observed?.tick ?? 0) })}>
           <StatePanel focus={focus} onFocus={setFocus} />
         </PanelCard>
-        {mode === 'intervene' && (
-          <PanelCard id="allocation" title={t('allocation.title')}>
-            <AllocationPanel key={remount} />
-          </PanelCard>
-        )}
-        {mode === 'cross' && (
-          <PanelCard id="cross" title={t('cross.title', { id: worldFocus })}>
-            <CrossPanel key={remount} />
-          </PanelCard>
-        )}
-        {mode === 'merge' && (
-          <PanelCard id="merge" title={t('mode.merge')}>
-            <MergePanel />
-          </PanelCard>
-        )}
-        {mode === 'build' && (
-          <PanelCard id="build" title={t('mode.build')}>
-            {/* FEAT: corpo provisório; a árvore de obras chega na próxima tarefa deste plano */}
-            <section className="panel build" aria-labelledby="build-title">
-              <h2 className="panel__title" id="build-title">
-                {t('mode.build')}
-              </h2>
-              <p className="panel__empty">{t('build.empty')}</p>
-            </section>
-          </PanelCard>
-        )}
+        <ModePanels mode={mode} worldFocus={worldFocus} remount={remount} />
       </div>
       {/* FEAT: à direita o que aconteceu e, logo abaixo, por que aconteceu */}
       <div className="hud__right">
