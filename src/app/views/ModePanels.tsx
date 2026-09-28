@@ -2,6 +2,7 @@ import type { WorldlineId } from '../../worker/protocol.ts'
 import { useT } from '../i18n/index.ts'
 import type { Mode } from '../sim/store.ts'
 import { AllocationPanel } from './AllocationPanel.tsx'
+import { BuildPanel } from './BuildPanel.tsx'
 import { CrossPanel } from './CrossPanel.tsx'
 import { MergePanel } from './MergePanel.tsx'
 import { PanelCard } from './PanelCard.tsx'
@@ -36,13 +37,7 @@ export function ModePanels({
       )}
       {mode === 'build' && (
         <PanelCard id="build" title={t('mode.build')}>
-          {/* FEAT: corpo provisório; a árvore de obras chega na próxima tarefa deste plano */}
-          <section className="panel build" aria-labelledby="build-title">
-            <h2 className="panel__title" id="build-title">
-              {t('mode.build')}
-            </h2>
-            <p className="panel__empty">{t('build.empty')}</p>
-          </section>
+          <BuildPanel />
         </PanelCard>
       )}
     </>

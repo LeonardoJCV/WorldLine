@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { EVENTS, EVENT_IDS } from '../../engine/events.ts'
 import { Era } from '../../engine/state.ts'
+import { FACTOR_KEYS, TERM_KEYS, WORKS } from '../../engine/work.ts'
 import { en } from './en.ts'
 import {
   embedLabel,
+  eraKey,
   formatChange,
   formatCompact,
   formatComparison,
@@ -14,6 +16,7 @@ import {
   formatVariable,
   formatYear,
   metricKey,
+  workKey,
 } from './format.ts'
 import { detectLocale, translate } from './index.ts'
 import { ptBR } from './pt-BR.ts'
@@ -38,8 +41,7 @@ describe('dictionaries', () => {
   // FEAT: a cobertura por acontecimento já é total no tipo — faltar `event.<id>` é erro de compilação
   // em en.ts e em pt-BR.ts, e em execução `translate` indexa o dicionário e lançaria em vez de mostrar
   // a chave crua; o que este teste acrescenta é o que o tipo não vê: quantas eras existem e que
-  // `work_done` está na união. Obra nenhuma tem nome traduzido em idioma nenhum, de propósito, porque
-  // nada as exibe até o Plano 24.
+  // `work_done` está na união.
   it('names every event, era included, in both languages', () => {
     for (const id of EVENT_IDS) {
       expect(translate('en', `event.${id}`).trim(), id).not.toBe('')
@@ -48,6 +50,29 @@ describe('dictionaries', () => {
     const eras = EVENTS.filter((def) => def.kind === 'era')
     expect(eras).toHaveLength(Object.keys(Era).length)
     expect(EVENT_IDS).toContain('work_done')
+  })
+
+  // FEAT: o nome da obra é conteúdo traduzido e o efeito dela é renderizado do catálogo, então o
+  // que precisa de tradução são os doze coeficientes — e três deles já tinham nome em outra tela
+  it('names every work, every coefficient a work moves and every era of the catalogue', () => {
+    for (const work of WORKS) {
+      expect(translate('en', `work.${work.id}`).trim(), work.id).not.toBe('')
+      expect(translate('pt-BR', `work.${work.id}`).trim(), work.id).not.toBe('')
+    }
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) {
+      expect(translate('en', workKey(key)).trim(), key).not.toBe('')
+      expect(translate('pt-BR', workKey(key)).trim(), key).not.toBe('')
+    }
+    for (const era of Object.values(Era)) {
+      expect(translate('en', eraKey(era)).trim(), String(era)).not.toBe('')
+      expect(translate('pt-BR', eraKey(era)).trim(), String(era)).not.toBe('')
+    }
+    expect(new Set(WORKS.map((work) => translate('en', `work.${work.id}`)))).toHaveLength(
+      WORKS.length,
+    )
+    expect(new Set(WORKS.map((work) => translate('pt-BR', `work.${work.id}`)))).toHaveLength(
+      WORKS.length,
+    )
   })
 })
 

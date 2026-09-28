@@ -1503,6 +1503,150 @@ button.causal__node:hover {
   font-weight: 600;
 }
 
+/* FEAT: o catálogo tem trinta e duas obras, então o painel rola por dentro do cartão e cada era é
+   um bloco com o seu próprio cabeçalho */
+.hud__left > .card--build > .panel.build {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.build__note {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.build__era {
+  max-width: 640px;
+}
+
+.build__eraName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  color: var(--dim);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* FEAT: a era ainda fechada continua na lista; ela só diz que nada nela está ao alcance */
+.build__closed {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.build__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build__work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name state'
+    'meta meta'
+    'missing missing';
+  align-items: baseline;
+  gap: 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.build__name {
+  grid-area: name;
+  min-width: 0;
+  font-size: var(--text-base);
+}
+
+.build__state {
+  grid-area: state;
+  justify-self: end;
+  color: var(--dim);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* FIX: efeito e prazo disputavam a mesma linha e se sobrepunham no telefone em português; numa
+   caixa que quebra eles cedem um ao outro em vez de se cobrirem */
+.build__meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-5);
+  min-width: 0;
+}
+
+/* FEAT: números tabulares, para o efeito e o prazo não dançarem de linha em linha */
+.build__effect,
+.build__when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  min-width: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.build__when:empty {
+  display: none;
+}
+
+/* FIX: o nome do coeficiente e o número dele são uma coisa só; sem isto "Economia" e "+8%" caíam
+   em linhas diferentes e o prazo se enfiava no meio dos dois */
+.build__change,
+.build__progress,
+.build__years {
+  white-space: nowrap;
+}
+
+.build__missing {
+  grid-area: missing;
+  margin-top: var(--space-1);
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+
+.build__work[data-state='done'] .build__state {
+  color: var(--v-environment);
+}
+
+/* FEAT: a obra em curso é a única com canteiro aberto, e o cartão dela se destaca por isso */
+.build__work[data-state='building'] {
+  background: rgb(27 20 64 / 0.55);
+  border-color: var(--haze);
+}
+
+.build__work[data-state='building'] .build__state,
+.build__progress {
+  color: var(--v-food);
+}
+
+.build__work[data-state='open'] .build__state {
+  color: var(--starlight);
+}
+
+.build__work[data-state='locked'] {
+  opacity: 0.6;
+}
+
 /* FEAT: o zoom mora em cima da ponta esquerda do minimapa, porque os dois mandam na mesma janela de tempo */
 .zoom {
   position: absolute;

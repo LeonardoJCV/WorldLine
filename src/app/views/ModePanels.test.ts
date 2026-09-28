@@ -8,6 +8,7 @@ import type { PanelId } from './hud.ts'
 vi.mock('./AllocationPanel.tsx', () => ({ AllocationPanel: () => null }))
 vi.mock('./CrossPanel.tsx', () => ({ CrossPanel: () => null }))
 vi.mock('./MergePanel.tsx', () => ({ MergePanel: () => null }))
+vi.mock('./BuildPanel.tsx', () => ({ BuildPanel: () => null }))
 
 const { ModePanels } = await import('./ModePanels.tsx')
 

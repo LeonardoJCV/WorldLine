@@ -1,5 +1,6 @@
 import type { EventId, Metric } from '../../engine/events.ts'
 import type { Sector, Variable } from '../../engine/state.ts'
+import type { WorkId } from '../../engine/work.ts'
 import type { Mode } from '../sim/store.ts'
 
 export const en = {
@@ -361,13 +362,69 @@ export const en = {
   'merge.alone': 'Only one history exists',
   'merge.loading': 'Measuring the seam…',
   'merge.playing': 'Pause the years first: the seam changes with every year.',
-  'build.empty': 'No works commissioned yet.',
+  'build.empty': 'No world to build in yet.',
+  'build.noRate': 'Nothing is allotted to works, so nothing is being built.',
+  'build.closed': 'Not within reach yet',
+  'build.state.done': 'Standing',
+  'build.state.building': 'On the site',
+  'build.state.open': 'Within reach',
+  'build.state.locked': 'Out of reach',
+  'build.years': '{years} years at this pace',
+  'build.year': 'One year at this pace',
+  'build.progress': '{percent} of it is standing',
+  'build.missing': 'Needs {works}',
+  'build.noEffect': 'Changes nothing on its own',
+  'era.agricultural': 'Agricultural age',
+  'era.industrial': 'Industrial age',
+  'effect.harvest': 'Harvest',
+  'effect.production': 'Production',
+  'effect.capacity': 'Carrying capacity',
+  'effect.colonyCost': 'Colony upkeep',
+  'effect.mortality': 'Mortality',
+  'effect.spoil': 'Food spoilage',
+  'effect.harvestNoise': 'Harvest swings',
+  'effect.pollution': 'Pollution',
+  'effect.smoke': 'All pollution',
+  'work.irrigation': 'Irrigation',
+  'work.plough': 'Plough',
+  'work.granary': 'Granary',
+  'work.calendar': 'Calendar',
+  'work.pottery': 'Pottery',
+  'work.writing': 'Writing',
+  'work.roads': 'Roads',
+  'work.coinage': 'Coinage',
+  'work.aqueduct': 'Aqueduct',
+  'work.navigation': 'Navigation',
+  'work.printing': 'Printing press',
+  'work.metallurgy': 'Metallurgy',
+  'work.steam': 'Steam engine',
+  'work.railway': 'Railway',
+  'work.sanitation': 'Sanitation',
+  'work.electrification': 'Electrification',
+  'work.telegraph': 'Telegraph',
+  'work.chemistry': 'Industrial chemistry',
+  'work.medicine': 'Modern medicine',
+  'work.computer': 'Computer',
+  'work.rocket': 'Rocket',
+  'work.orbit': 'Orbital station',
+  'work.shipyard': 'Orbital shipyard',
+  'work.arcology': 'Vertical city',
+  'work.reactor': 'Reactor',
+  'work.reforestation': 'Reforestation',
+  'work.filters': 'Smokestack filters',
+  'work.cleanGrid': 'Clean grid',
+  'work.closedCycle': 'Closed cycle',
+  'work.launchpad': 'Launch pad',
+  'work.telemetry': 'Telemetry',
+  'work.propellant': 'Propellant plant',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`
   | `sector.${Sector}`
   | `metric.${Exclude<Metric, Variable>}`
-  | `mode.${Mode}`,
+  | `mode.${Mode}`
+  // FEAT: sem este braço uma obra sem nome não é texto feio, é um TypeError quando a tela a mostra
+  | `work.${WorkId}`,
   string
 > &
   Record<string, string>
