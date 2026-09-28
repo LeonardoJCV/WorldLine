@@ -67,6 +67,9 @@ function fakeSnapshot(shock: number): Snapshot {
     status: 'running',
     home: null,
     debts: [],
+    works: [],
+    building: null,
+    rate: 0,
   }
 }
 

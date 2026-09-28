@@ -40,6 +40,9 @@ function snapshot(
     status: 'running',
     home: null,
     debts,
+    works: [],
+    building: null,
+    rate: 0,
   }
 }
 
