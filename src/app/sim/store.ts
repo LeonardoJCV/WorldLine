@@ -19,7 +19,9 @@ import type {
 import type { MultiverseLink } from '../world/link.ts'
 import type { SimulationClient } from './client.ts'
 
-export type Mode = 'observe' | 'intervene' | 'cross' | 'merge'
+// FEAT: fonte única dos modos; a barra deriva os botões daqui em vez de copiar a lista à mão
+export const MODES = ['observe', 'intervene', 'cross', 'merge', 'build'] as const
+export type Mode = (typeof MODES)[number]
 
 export interface View {
   readonly span: number

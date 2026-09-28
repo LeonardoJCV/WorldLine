@@ -144,6 +144,17 @@ export function Observatory({
             <MergePanel />
           </PanelCard>
         )}
+        {mode === 'build' && (
+          <PanelCard id="build" title={t('mode.build')}>
+            {/* FEAT: corpo provisório; a árvore de obras chega na próxima tarefa deste plano */}
+            <section className="panel build" aria-labelledby="build-title">
+              <h2 className="panel__title" id="build-title">
+                {t('mode.build')}
+              </h2>
+              <p className="panel__empty">{t('build.empty')}</p>
+            </section>
+          </PanelCard>
+        )}
       </div>
       {/* FEAT: à direita o que aconteceu e, logo abaixo, por que aconteceu */}
       <div className="hud__right">

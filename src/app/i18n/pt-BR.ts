@@ -62,6 +62,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'mode.intervene': 'Intervir',
   'mode.cross': 'Cruzar',
   'mode.merge': 'Confluir',
+  'mode.build': 'Construir',
   'state.title': 'Estado no ano {year}',
   'state.change': 'Variação desde o ano anterior',
   'state.versus': 'vs {id}',
@@ -361,4 +362,5 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'merge.alone': 'Só existe uma história',
   'merge.loading': 'Medindo a costura…',
   'merge.playing': 'Pause os anos antes: a costura muda a cada ano.',
+  'build.empty': 'Nenhuma obra encomendada ainda.',
 }

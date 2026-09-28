@@ -3,7 +3,7 @@ import { HORIZON } from '../../engine/params.ts'
 import type { FromWorker, SeamPreview, Snapshot, ToWorker } from '../../worker/protocol.ts'
 import { currentLink } from '../world/current.ts'
 import { SimulationClient, type Port } from './client.ts'
-import { createSimulationStore } from './store.ts'
+import { createSimulationStore, MODES } from './store.ts'
 import { connectInProcess, flush } from './testing.ts'
 
 function setup() {
@@ -83,6 +83,14 @@ function fakePreview(shock: number, tick = 2000): SeamPreview {
     debtSettled: 0,
   }
 }
+
+describe('MODES', () => {
+  it('offers a button for every mode there is', () => {
+    // FIX: a barra desenha um botão por entrada daqui; nada some porque foi copiado à mão em outro lugar
+    expect(MODES).toEqual(['observe', 'intervene', 'cross', 'merge', 'build'])
+    expect(new Set(MODES).size).toBe(MODES.length)
+  })
+})
 
 describe('simulation store', () => {
   it('creates a world and shows year zero', async () => {
@@ -191,6 +199,17 @@ describe('simulation store', () => {
     store.getState().setMode('intervene')
     expect(store.getState().mode).toBe('intervene')
     expect(store.getState().cursor).toBe(10)
+  })
+
+  it('forgets a stray cross or merge pick when the fifth mode is entered', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    await flush()
+    store.getState().setMode('cross')
+    store.getState().setCrossOrigin('A')
+    store.getState().setMode('build')
+    expect(store.getState().mode).toBe('build')
+    expect(store.getState().crossOrigin).toBeNull()
   })
 
   it('starts a new world observing its whole history', async () => {

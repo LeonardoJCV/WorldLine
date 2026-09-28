@@ -97,8 +97,10 @@
   font-stretch: 87%;
 }
 
+/* FIX: o quinto modo, em português, não cabe mais numa linha só na largura do celular */
 .mode {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 
@@ -514,7 +516,8 @@
 /* FIX: o painel do modo pede mais largura que o de estado, e só ele estica a coluna */
 .hud:has(.card--allocation),
 .hud:has(.card--cross),
-.hud:has(.card--merge) {
+.hud:has(.card--merge),
+.hud:has(.card--build) {
   --hud-left: 34rem;
   grid-template-columns: minmax(280px, var(--hud-left)) minmax(80px, 1fr) minmax(230px, 21rem);
 }
@@ -576,10 +579,18 @@
   max-height: 100%;
 }
 
+/* FEAT: o cartão de obras cede à moldura da coluna do mesmo jeito que o de confluir */
+.hud__left > .card--build {
+  flex-shrink: 0;
+  min-height: 112px;
+  max-height: 100%;
+}
+
 /* FEAT: o painel do modo chega com um leve desvanecer, não de um só golpe */
 .card--allocation,
 .card--cross,
-.card--merge {
+.card--merge,
+.card--build {
   animation: card-in var(--motion-slow) var(--ease) both;
 }
 
@@ -593,7 +604,8 @@
 @media (prefers-reduced-motion: reduce) {
   .card--allocation,
   .card--cross,
-  .card--merge {
+  .card--merge,
+  .card--build {
     animation: none;
   }
 }

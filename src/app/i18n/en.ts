@@ -64,6 +64,7 @@ export const en = {
   'mode.intervene': 'Intervene',
   'mode.cross': 'Cross',
   'mode.merge': 'Merge',
+  'mode.build': 'Build',
   'state.title': 'State in year {year}',
   'state.change': 'Change since the previous year',
   'state.versus': 'vs {id}',
@@ -360,6 +361,7 @@ export const en = {
   'merge.alone': 'Only one history exists',
   'merge.loading': 'Measuring the seam…',
   'merge.playing': 'Pause the years first: the seam changes with every year.',
+  'build.empty': 'No works commissioned yet.',
 } as const satisfies Record<
   | `event.${EventId}`
   | `variable.${Variable}`

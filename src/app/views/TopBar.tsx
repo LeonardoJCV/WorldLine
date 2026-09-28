@@ -3,12 +3,11 @@ import { GraphicsMenu } from '../graphics/GraphicsMenu.tsx'
 import { formatYear } from '../i18n/format.ts'
 import { localeStore, useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
-import type { Mode } from '../sim/store.ts'
+import { MODES } from '../sim/store.ts'
 import { usePhone } from './BottomSheet.tsx'
 import { SetupMenu } from './SetupMenu.tsx'
 
 const OPTIONS: readonly Speed[] = [...SPEEDS, 'max']
-const MODES: readonly Mode[] = ['observe', 'intervene', 'cross', 'merge']
 
 export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const t = useT()
