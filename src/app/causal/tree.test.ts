@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Cause, EventId, EventRecord, Metric } from '../../engine/events.ts'
-import { MAX_DEPTH, buildCausalTree } from './tree.ts'
+import { MAX_DEPTH, buildCausalTree, type CausalNode } from './tree.ts'
 
 function record(event: EventId, start: number, causes: Cause[] = []): EventRecord {
   return { event, start, end: null, causes }
@@ -139,5 +139,121 @@ describe('buildCausalTree', () => {
     const gates = tree.nodes.filter((n) => n.kind === 'condition' && n.parent === era?.key)
     expect(gates).toHaveLength(3)
     expect(gates.every((n) => n.depth === 3)).toBe(true)
+  })
+})
+
+// FEAT: o corte das obras — o motor não ordena causas, então a interface conta em vez de escolher
+describe('folding the works a card names', () => {
+  const work = (start: number) => record('work_done', start)
+  const group = (tree: { nodes: readonly CausalNode[] }) =>
+    tree.nodes.find((n): n is Extract<CausalNode, { kind: 'works' }> => n.kind === 'works')
+
+  it('folds two or more works into one line that says how many', () => {
+    const records = [
+      work(10),
+      work(20),
+      record('space_era', 30, [
+        condition('technology', 91),
+        { kind: 'event', record: 0 },
+        { kind: 'event', record: 1 },
+      ]),
+    ]
+    const shut = buildCausalTree(records, 2)
+    expect(group(shut)).toMatchObject({ depth: 1, parent: 'e2', open: false, records: [0, 1] })
+    expect(shut.nodes.filter((n) => n.kind === 'event')).toHaveLength(1)
+    expect(shut.nodes).toHaveLength(3)
+
+    const wide = buildCausalTree(records, 2, MAX_DEPTH, new Set(['e2/w']))
+    expect(group(wide)).toMatchObject({ depth: 1, parent: 'e2', open: true, records: [0, 1] })
+    const hung = wide.nodes.filter((n) => n.parent === 'e2/w')
+    expect(hung.map((n) => [n.kind, n.depth])).toEqual([
+      ['event', 2],
+      ['event', 2],
+    ])
+    expect(hung.map((n) => (n.kind === 'event' ? n.record : null))).toEqual([0, 1])
+  })
+
+  it('leaves a single work as its own node, because a group of one is a lie', () => {
+    const records = [
+      work(10),
+      record('space_era', 30, [condition('technology', 91), { kind: 'event', record: 0 }]),
+    ]
+    const tree = buildCausalTree(records, 1)
+    expect(group(tree)).toBeUndefined()
+    expect(tree.nodes.find((n) => n.kind === 'event' && n.record === 0)).toMatchObject({
+      depth: 1,
+      parent: 'e1',
+      row: 1,
+    })
+    expect(tree.rows).toBe(2)
+  })
+
+  it('never folds a condition, an event or a decision', () => {
+    // FEAT: colônia e perda de colônia também são pulse, como a obra — dobrar por kind as levaria
+    const records = [
+      work(10),
+      work(20),
+      record('colony_founded', 25),
+      record('colony_lost', 26),
+      record('space_era', 50, [
+        condition('technology', 91),
+        condition('energy', 13),
+        { kind: 'event', record: 2 },
+        { kind: 'event', record: 0 },
+        { kind: 'event', record: 3 },
+        { kind: 'event', record: 1 },
+        { kind: 'decision', tick: 45, sectors: ['research'] },
+        { kind: 'crossing', tick: 40, crossing: 'knowledge' },
+        { kind: 'merge', tick: 48, other: 'B' },
+      ]),
+    ]
+    const tree = buildCausalTree(records, 4)
+    expect(tree.nodes.filter((n) => n.kind === 'works')).toHaveLength(1)
+    expect(group(tree)?.records).toEqual([0, 1])
+    expect(
+      tree.nodes.filter((n) => n.kind === 'event').map((n) => records[n.record]?.event),
+    ).toEqual(['colony_founded', 'colony_lost', 'space_era'])
+    expect(tree.nodes.filter((n) => n.kind === 'condition')).toHaveLength(2)
+    expect(tree.nodes.filter((n) => n.kind === 'decision')).toHaveLength(1)
+    expect(tree.nodes.filter((n) => n.kind === 'crossing')).toHaveLength(1)
+    expect(tree.nodes.filter((n) => n.kind === 'merge')).toHaveLength(1)
+  })
+
+  it('keeps the row arithmetic sound when a group replaces several siblings', () => {
+    const records = [
+      work(10),
+      work(20),
+      work(30),
+      record('space_era', 50, [
+        condition('technology', 91),
+        { kind: 'event', record: 0 },
+        { kind: 'event', record: 1 },
+        { kind: 'event', record: 2 },
+        condition('energy', 13),
+      ]),
+    ]
+    // FEAT: as três obras ocupavam três linhas; dobradas ocupam uma, e é essa que o pai usa de ponta
+    const shut = buildCausalTree(records, 3)
+    expect(shut.rows).toBe(3)
+    expect(group(shut)?.row).toBe(1)
+    expect(shut.nodes.filter((n) => n.kind === 'condition').map((n) => n.row)).toEqual([0, 2])
+    expect(shut.nodes.find((n) => n.depth === 0)?.row).toBe(1)
+
+    const wide = buildCausalTree(records, 3, MAX_DEPTH, new Set(['e3/w']))
+    expect(wide.rows).toBe(5)
+    expect(wide.nodes.filter((n) => n.parent === 'e3/w').map((n) => n.row)).toEqual([1, 2, 3])
+    expect(group(wide)?.row).toBe(2)
+    expect(wide.nodes.filter((n) => n.kind === 'condition').map((n) => n.row)).toEqual([0, 4])
+    expect(wide.nodes.find((n) => n.depth === 0)?.row).toBe(2)
+
+    // FEAT: a conta só fecha se cada linha inteira for de um nó folha e nenhuma sobrar ou repetir —
+    // é o que pega uma dobra que esquece de reservar a linha do grupo, ou que reserva duas
+    for (const tree of [shut, wide]) {
+      const keys = new Set(tree.nodes.map((n) => n.parent))
+      const leaves = tree.nodes.filter((n) => !keys.has(n.key)).map((n) => n.row)
+      expect(leaves.slice().sort((a, b) => a - b)).toEqual(
+        Array.from({ length: tree.rows }, (_, i) => i),
+      )
+    }
   })
 })

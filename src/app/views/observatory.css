@@ -1150,6 +1150,11 @@ button.state__row:hover,
   border-left: 3px dashed var(--starlight);
 }
 
+/* FEAT: a linha dobrada não é uma causa, é a contagem delas — o traço duplo diz que ali há várias */
+.causal__node[data-kind='works'] {
+  border-left: 4px double var(--starlight);
+}
+
 /* FEAT: a frase da travessia é longa e ocupa as duas linhas do nó */
 .causal__node[data-kind='crossing'] .causal__title {
   /* FIX: com a entrelinha de sempre as duas linhas pedem 39px e o nó só tem 30 — a segunda saía cortada ao meio */

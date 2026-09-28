@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
-import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { MAX_DEPTH, buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
@@ -11,6 +11,7 @@ const NODE_HEIGHT = 48
 const ROW = 60
 const PAD = 8
 const NO_WORKS = Object.freeze([])
+const NOTHING_OPEN: ReadonlySet<string> = new Set()
 
 export function CausalPanel() {
   const t = useT()
@@ -19,9 +20,18 @@ export function CausalPanel() {
   const works = useSimulation((s) => s.present?.works ?? NO_WORKS)
   const selected = useSimulation((s) => s.selected)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // FEAT: as chaves carregam o registro da raiz, então a abertura de um cartão nunca abre a de outro
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NOTHING_OPEN)
+  const toggle = useCallback((key: string) => {
+    setOpened((current) => {
+      const next = new Set(current)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  }, [])
   const tree = useMemo(
-    () => (selected === null ? null : buildCausalTree(events, selected)),
-    [events, selected],
+    () => (selected === null ? null : buildCausalTree(events, selected, MAX_DEPTH, opened)),
+    [events, selected, opened],
   )
   // FEAT: a fila de causas de um acontecimento já gravado não muda, então a linha da raiz é estável
   // por todo o tempo em que ele fica selecionado — só troca quando `selected` troca
@@ -111,6 +121,13 @@ export function CausalPanel() {
           t('causal.merge', { other: node.cause.other, year: formatYear(node.cause.tick) }),
           '',
         ]
+      // FEAT: a linha diz quantas obras estão ali e nenhum nome, porque escolher um nome seria
+      // ordenar causas que o motor se recusa a ordenar
+      case 'works':
+        return [
+          t('causal.works', { count: node.records.length }),
+          t(node.open ? 'causal.worksHide' : 'causal.worksShow'),
+        ]
     }
   }
 
@@ -189,10 +206,13 @@ export function CausalPanel() {
                 data-kind={node.kind}
                 data-root={node.depth === 0}
                 style={style}
+                aria-expanded={node.kind === 'works' ? node.open : undefined}
                 onClick={
                   node.kind === 'event'
                     ? () => select(node.record)
-                    : () => setCursor(node.cause.tick)
+                    : node.kind === 'works'
+                      ? () => toggle(node.key)
+                      : () => setCursor(node.cause.tick)
                 }
               >
                 {body}

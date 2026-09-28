@@ -76,4 +76,31 @@ describe('CausalPanel', () => {
     expect(html).toContain('>Work completed<')
     expect(html).not.toContain('Built:')
   })
+
+  // FEAT: dobradas, as obras não são nomeadas — o cartão diz quantas são e oferece abrir
+  it('draws the folded works as one counted line instead of naming any of them', () => {
+    const events: readonly EventRecord[] = [
+      { event: 'work_done', start: 10, end: 10, causes: [] },
+      { event: 'work_done', start: 20, end: 20, causes: [] },
+      {
+        event: 'space_era',
+        start: 30,
+        end: null,
+        causes: [
+          { kind: 'event', record: 0 },
+          { kind: 'event', record: 1 },
+        ],
+      },
+    ]
+    const works: readonly Work[] = [
+      { def: workIndex('granary'), done: 10, record: 0 },
+      { def: workIndex('irrigation'), done: 20, record: 1 },
+    ]
+    const html = render(events, works, 2)
+    expect(html).toContain('>2 works, grouped<')
+    expect(html).toContain('>show each one<')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('Granary')
+    expect(html).not.toContain('Irrigation')
+  })
 })
