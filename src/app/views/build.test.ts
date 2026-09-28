@@ -10,11 +10,14 @@ import {
   type WorkId,
 } from '../../engine/work.ts'
 import type { Snapshot } from '../../worker/protocol.ts'
+import type { MessageKey } from '../i18n/en.ts'
+import { translate, type Params } from '../i18n/index.ts'
 import {
   buildGroups,
   buildReady,
   buildView,
   effectsOf,
+  foldedWorksText,
   replaceWarning,
   siteProgress,
   workOfRecord,
@@ -299,5 +302,18 @@ describe('replaceWarning', () => {
     expect(replaceWarning('granary', 'plough', 1).key).toBe('build.replaceYear')
     expect(replaceWarning('granary', 'plough', 0).key).toBe('build.replaceYears')
     expect(replaceWarning('granary', 'plough', 2).key).toBe('build.replaceYears')
+  })
+})
+
+describe('foldedWorksText', () => {
+  // FEAT: o painel estático nunca chega ao estado aberto, então as duas faces da linha se provam
+  // aqui — e com o texto real dos dois idiomas, não com a chave que a função devolveria de qualquer jeito
+  it('counts the works and says what the click does, in both states and both languages', () => {
+    const en = (key: MessageKey, params?: Params) => translate('en', key, params)
+    const pt = (key: MessageKey, params?: Params) => translate('pt-BR', key, params)
+    expect(foldedWorksText(en, 12, false)).toEqual(['12 works, grouped', 'show each one'])
+    expect(foldedWorksText(en, 12, true)).toEqual(['12 works, grouped', 'group them again'])
+    expect(foldedWorksText(pt, 2, false)).toEqual(['2 obras, agrupadas', 'mostrar cada uma'])
+    expect(foldedWorksText(pt, 2, true)).toEqual(['2 obras, agrupadas', 'agrupar de novo'])
   })
 })

@@ -189,34 +189,70 @@ describe('folding the works a card names', () => {
   })
 
   it('never folds a condition, an event or a decision', () => {
-    // FEAT: colônia e perda de colônia também são pulse, como a obra — dobrar por kind as levaria
+    // FEAT: os seis outros pulses entram como causa-evento, cada um pelo nome que o registro tem —
+    // é o que distingue dobrar `work_done` de dobrar a família inteira, `merge` e herança incluídas
+    const PULSES = [
+      'colony_founded',
+      'colony_lost',
+      'inheritance',
+      'merge',
+      'merged_away',
+      'debt_settled',
+    ] as const
     const records = [
       work(10),
       work(20),
-      record('colony_founded', 25),
-      record('colony_lost', 26),
+      ...PULSES.map((event, i) => record(event, 25 + i)),
       record('space_era', 50, [
         condition('technology', 91),
         condition('energy', 13),
-        { kind: 'event', record: 2 },
+        ...PULSES.map((_, i) => ({ kind: 'event', record: 2 + i }) as const),
         { kind: 'event', record: 0 },
-        { kind: 'event', record: 3 },
         { kind: 'event', record: 1 },
         { kind: 'decision', tick: 45, sectors: ['research'] },
         { kind: 'crossing', tick: 40, crossing: 'knowledge' },
         { kind: 'merge', tick: 48, other: 'B' },
       ]),
     ]
-    const tree = buildCausalTree(records, 4)
+    const tree = buildCausalTree(records, records.length - 1)
     expect(tree.nodes.filter((n) => n.kind === 'works')).toHaveLength(1)
     expect(group(tree)?.records).toEqual([0, 1])
     expect(
       tree.nodes.filter((n) => n.kind === 'event').map((n) => records[n.record]?.event),
-    ).toEqual(['colony_founded', 'colony_lost', 'space_era'])
+    ).toEqual([...PULSES, 'space_era'])
     expect(tree.nodes.filter((n) => n.kind === 'condition')).toHaveLength(2)
     expect(tree.nodes.filter((n) => n.kind === 'decision')).toHaveLength(1)
     expect(tree.nodes.filter((n) => n.kind === 'crossing')).toHaveLength(1)
     expect(tree.nodes.filter((n) => n.kind === 'merge')).toHaveLength(1)
+  })
+
+  it('never folds where the line could not open, and never draws past the depth limit', () => {
+    const records = [
+      work(10),
+      work(20),
+      record('space_era', 30, [
+        { kind: 'event', record: 0 },
+        { kind: 'event', record: 1 },
+      ]),
+      record('recession', 40, [{ kind: 'event', record: 2 }]),
+      record('famine', 50, [{ kind: 'event', record: 3 }]),
+    ]
+    // FEAT: o grupo pede a coluna seguinte para as obras, então ele só existe onde ela existe
+    const mid = buildCausalTree(records, 3)
+    expect(group(mid)).toMatchObject({ depth: 2, open: false })
+    const key = group(mid)?.key ?? ''
+    const wide = buildCausalTree(records, 3, MAX_DEPTH, new Set([key]))
+    expect(wide.nodes.filter((n) => n.parent === key).map((n) => n.depth)).toEqual([3, 3])
+    expect(wide.depth).toBe(MAX_DEPTH)
+    expect(wide.nodes.every((n) => n.depth <= MAX_DEPTH)).toBe(true)
+
+    // FEAT: na última coluna as obras seguem nós próprios, com nome — nada some por causa da dobra
+    const deep = buildCausalTree(records, 4)
+    expect(group(deep)).toBeUndefined()
+    expect(
+      deep.nodes.flatMap((n) => (n.kind === 'event' && n.depth === MAX_DEPTH ? [n.record] : [])),
+    ).toEqual([0, 1])
+    expect(deep.nodes.every((n) => n.depth <= MAX_DEPTH)).toBe(true)
   })
 
   it('keeps the row arithmetic sound when a group replaces several siblings', () => {

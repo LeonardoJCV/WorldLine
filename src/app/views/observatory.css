@@ -97,7 +97,7 @@
   font-stretch: 87%;
 }
 
-/* FIX: o quinto modo, em português, não cabe mais numa linha só na largura do celular */
+/* FIX: quebrar é a rede para um rótulo mais longo que os cinco de hoje, não o comportamento normal */
 .mode {
   display: flex;
   flex-wrap: wrap;
@@ -460,8 +460,9 @@
     min-width: 44px;
   }
 
-  /* FIX: os cinco modos cabem numa linha só no celular; só a almofada lateral cede, não a vertical */
+  /* FIX: os cinco modos numa linha só: cede a almofada lateral, nunca os 44px que o dedo pede */
   .mode button {
+    min-width: 44px;
     padding-inline: var(--space-2);
   }
 }

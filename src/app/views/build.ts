@@ -148,6 +148,16 @@ export function workOfRecord(works: readonly Work[], record: number): WorkId | n
   return work === undefined ? null : (WORKS[work.def]?.id ?? null)
 }
 
+// FEAT: o texto da linha dobrada, título e detalhe, fora do painel porque o estado aberto dela não
+// chega ao desenho estático — aqui as duas faces têm teste
+export function foldedWorksText(
+  t: (key: MessageKey, params?: Params) => string,
+  count: number,
+  open: boolean,
+): readonly [string, string] {
+  return [t('causal.works', { count }), t(open ? 'causal.worksHide' : 'causal.worksShow')]
+}
+
 // FEAT: os três lugares que narram a crônica (painel de eventos, cartão causal, corrente 2D) chamam
 // esta mesma função, para nenhum deles decidir sozinho o que fazer quando a obra não se identifica
 export function workEventTitle(

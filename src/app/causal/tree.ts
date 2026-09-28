@@ -71,7 +71,9 @@ export function buildCausalTree(
     deepest = Math.max(deepest, depth)
 
     const works = causes.filter(isWork)
-    const group = works.length >= FOLD_WORKS ? `${key}/w` : null
+    // FIX: dobra só onde a linha pode abrir dentro do limite: na última coluna as obras já são
+    // folhas e uma linha que não abre esconderia o que hoje se lê
+    const group = works.length >= FOLD_WORKS && depth + 2 <= maxDepth ? `${key}/w` : null
     const at = group === null ? -1 : causes.findIndex(isWork)
     const open = group !== null && expanded.has(group)
 

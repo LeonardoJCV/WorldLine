@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { MAX_DEPTH, buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
-import { workEventTitle } from './build.ts'
+import { foldedWorksText, workEventTitle } from './build.ts'
 
 const COLUMN = 232
 const NODE_WIDTH = 200
@@ -22,7 +30,12 @@ export function CausalPanel() {
   const scrollRef = useRef<HTMLDivElement>(null)
   // FEAT: as chaves carregam o registro da raiz, então a abertura de um cartão nunca abre a de outro
   const [opened, setOpened] = useState<ReadonlySet<string>>(NOTHING_OPEN)
-  const toggle = useCallback((key: string) => {
+  const held = useRef<{ key: string; offset: number } | null>(null)
+  // FIX: abrir o grupo muda a linha dele e a da raiz, e sem guardar onde o dedo o deixou o cartão
+  // rolava para outro trecho da cadeia — levando embora as obras reveladas e o botão de desfazer
+  const toggle = useCallback((key: string, row: number) => {
+    const element = scrollRef.current
+    held.current = element === null ? null : { key, offset: PAD + row * ROW - element.scrollTop }
     setOpened((current) => {
       const next = new Set(current)
       if (!next.delete(key)) next.add(key)
@@ -51,18 +64,35 @@ export function CausalPanel() {
 
   // FIX: sem centralizar a raiz na vertical, uma árvore com dois ramos (como a herança, que sobe
   // tanto pelo colapso quanto pela colônia) deixa o ramo mais baixo fora da faixa visível
+  const centred = useRef<number | null>(null)
   useEffect(() => {
     const element = scrollRef.current
     if (!element) return
-    element.scrollLeft = element.scrollWidth
-    if (rootRow !== undefined) {
-      element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
+    // FIX: centraliza uma vez por acontecimento escolhido, não a cada dobra que move a raiz
+    if (centred.current !== selected) {
+      centred.current = selected
+      element.scrollLeft = element.scrollWidth
+      if (rootRow !== undefined) {
+        element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
+      }
     }
     markEdges()
     const observer = new ResizeObserver(markEdges)
     observer.observe(element)
     return () => observer.disconnect()
   }, [selected, rootRow, markEdges])
+
+  // FEAT: devolve o nó dobrado ao ponto exato em que foi clicado, já com a árvore nova desenhada
+  useLayoutEffect(() => {
+    const element = scrollRef.current
+    const pending = held.current
+    held.current = null
+    if (!element || !pending || !tree) return
+    const node = tree.nodes.find((candidate) => candidate.key === pending.key)
+    if (!node) return
+    element.scrollTop = PAD + node.row * ROW - pending.offset
+    markEdges()
+  }, [tree, markEdges])
 
   const root = selected === null ? undefined : events[selected]
   // FIX: o rótulo acessível também nomeia a obra, então `selected` já sai estreito aqui
@@ -124,10 +154,7 @@ export function CausalPanel() {
       // FEAT: a linha diz quantas obras estão ali e nenhum nome, porque escolher um nome seria
       // ordenar causas que o motor se recusa a ordenar
       case 'works':
-        return [
-          t('causal.works', { count: node.records.length }),
-          t(node.open ? 'causal.worksHide' : 'causal.worksShow'),
-        ]
+        return foldedWorksText(t, node.records.length, node.open)
     }
   }
 
@@ -211,7 +238,7 @@ export function CausalPanel() {
                   node.kind === 'event'
                     ? () => select(node.record)
                     : node.kind === 'works'
-                      ? () => toggle(node.key)
+                      ? () => toggle(node.key, node.row)
                       : () => setCursor(node.cause.tick)
                 }
               >

@@ -60,6 +60,8 @@ describe('CausalPanel', () => {
     const works: readonly Work[] = [{ def: workIndex('granary'), done: 10, record: 0 }]
     const html = render(events, works, 0)
     expect(html).toContain('Built: Granary')
+    // FEAT: só a linha dobrada é um botão que abre; nenhum outro nó anuncia abrir e fechar
+    expect(html).not.toContain('aria-expanded')
   })
 
   // FIX: depois de uma confluência um work_done registrado pode ficar sem dono; o cartão não pode
