@@ -1635,7 +1635,7 @@ button.causal__node:hover {
 }
 
 .build__work[data-state='building'] .build__state,
-.build__progress {
+.build__work[data-state='building'] .build__progress {
   color: var(--v-food);
 }
 

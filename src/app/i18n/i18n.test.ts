@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EVENTS, EVENT_IDS } from '../../engine/events.ts'
-import { Era } from '../../engine/state.ts'
-import { FACTOR_KEYS, TERM_KEYS, WORKS } from '../../engine/work.ts'
+import { Era, type EraValue } from '../../engine/state.ts'
+import { FACTOR_KEYS, TERM_KEYS, WORKS, type WorkKey } from '../../engine/work.ts'
 import { en } from './en.ts'
 import {
   embedLabel,
@@ -20,6 +20,31 @@ import {
 } from './format.ts'
 import { detectLocale, translate } from './index.ts'
 import { ptBR } from './pt-BR.ts'
+
+// FEAT: o rótulo esperado de cada coeficiente, escrito à mão nos dois idiomas — é a única coisa que
+// prova que a junção aponta para o nome certo e não só para um nome que existe
+const EFFECT_LABELS: Readonly<Record<WorkKey, readonly [string, string]>> = {
+  harvest: ['Harvest', 'Colheita'],
+  production: ['Production', 'Produção'],
+  research: ['Research', 'Pesquisa'],
+  energy: ['Energy', 'Energia'],
+  economy: ['Economy', 'Economia'],
+  capacity: ['Carrying capacity', 'Capacidade de suporte'],
+  colonyCost: ['Colony upkeep', 'Manutenção das colônias'],
+  smoke: ['Pollution', 'Poluição'],
+  mortality: ['Mortality rate', 'Taxa de mortalidade'],
+  spoil: ['Food spoilage', 'Perda de comida'],
+  harvestNoise: ['Harvest variance', 'Variação das safras'],
+  pollution: ['Extra pollution', 'Poluição extra'],
+}
+
+const ERA_LABELS: Readonly<Record<EraValue, readonly [string, string]>> = {
+  [Era.agricultural]: ['Agricultural age', 'Era agrícola'],
+  [Era.classical]: ['Classical age', 'Era clássica'],
+  [Era.industrial]: ['Industrial age', 'Era industrial'],
+  [Era.electric]: ['Electric age', 'Era elétrica'],
+  [Era.space]: ['Space age', 'Era espacial'],
+}
 
 const values = {
   population: 4_200_000,
@@ -73,6 +98,26 @@ describe('dictionaries', () => {
     expect(new Set(WORKS.map((work) => translate('pt-BR', `work.${work.id}`)))).toHaveLength(
       WORKS.length,
     )
+  })
+
+  // FEAT: `workKey` e `eraKey` são tabelas de junção, e o tipo só garante que o destino EXISTE —
+  // apontar `research` para o rótulo da indústria compila e tem texto. Esta tabela diz qual é o certo
+  it('points every coefficient and every era at the label that means it', () => {
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) {
+      const [english, portuguese] = EFFECT_LABELS[key]
+      expect(translate('en', workKey(key)), key).toBe(english)
+      expect(translate('pt-BR', workKey(key)), key).toBe(portuguese)
+    }
+    for (const era of Object.values(Era)) {
+      const [english, portuguese] = ERA_LABELS[era]
+      expect(translate('en', eraKey(era)), String(era)).toBe(english)
+      expect(translate('pt-BR', eraKey(era)), String(era)).toBe(portuguese)
+    }
+    // FEAT: duas entradas na mesma chave dariam o mesmo nome a dois coeficientes, e uma era sumiria
+    const coefficients = [...FACTOR_KEYS, ...TERM_KEYS].map(workKey)
+    expect(new Set(coefficients)).toHaveLength(coefficients.length)
+    const eras = Object.values(Era).map(eraKey)
+    expect(new Set(eras)).toHaveLength(eras.length)
   })
 })
 

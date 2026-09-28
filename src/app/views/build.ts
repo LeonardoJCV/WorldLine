@@ -1,4 +1,4 @@
-import { Era } from '../../engine/state.ts'
+import { Era, type EraValue } from '../../engine/state.ts'
 import {
   FACTOR_KEYS,
   PRESENTATION_ORDER,
@@ -31,7 +31,8 @@ export function buildView(snapshot: Snapshot): readonly WorkRow[] {
     if (work === undefined) continue
     const done = standing.has(work.id)
     const building = site !== null && site.def === def
-    // FEAT: só `isCommissionable` decide o que se pode encomendar; a tela não repete a condição dele
+    // FEAT: a condição de encomendar é de `isCommissionable`; o canteiro aberto é a ÚNICA recusa
+    // que a tela acrescenta, porque o motor aceitaria trocar de obra e perder o que já está de pé
     const state: WorkState = done
       ? 'done'
       : building
@@ -40,9 +41,9 @@ export function buildView(snapshot: Snapshot): readonly WorkRow[] {
           ? 'open'
           : 'locked'
     const progress = building ? site.progress : 0
-    // FEAT: duas divisões sobre números que o motor reportou, nunca um segundo cálculo da produção
+    // FIX: a guarda é `> 0` e não `<= 0` porque uma taxa NaN escapa da segunda e chega à tela
     const years =
-      done || snapshot.rate <= 0 ? null : Math.ceil((work.cost - progress) / snapshot.rate)
+      !done && snapshot.rate > 0 ? Math.ceil((work.cost - progress) / snapshot.rate) : null
     rows.push({
       def,
       id: work.id,
@@ -55,7 +56,7 @@ export function buildView(snapshot: Snapshot): readonly WorkRow[] {
   return rows
 }
 
-export const ERAS: readonly number[] = [
+export const ERAS: readonly EraValue[] = [
   Era.agricultural,
   Era.classical,
   Era.industrial,
@@ -64,7 +65,7 @@ export const ERAS: readonly number[] = [
 ]
 
 export interface EraGroup {
-  readonly era: number
+  readonly era: EraValue
   readonly open: boolean
   readonly rows: readonly WorkRow[]
 }

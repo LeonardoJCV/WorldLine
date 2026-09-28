@@ -101,9 +101,18 @@ describe('buildView', () => {
 
   it('says nothing about years when the civilization allots nothing to works', () => {
     const idle = buildView(snapshot({ rate: 0 }))
-    expect(idle.map((row) => row.years)).toEqual(idle.map(() => null))
+    // FIX: o esperado sai de WORKS, não do próprio resultado — assim uma lista vazia falha em vez
+    // de passar contra si mesma
+    expect(idle.map((row) => row.years)).toEqual(WORKS.map(() => null))
     const working = buildView(snapshot({ rate: 100 }))
+    expect(working).toHaveLength(WORKS.length)
     expect(working.every((row) => row.years !== null && Number.isFinite(row.years))).toBe(true)
+  })
+
+  it('says nothing about years when the rate is not a number at all', () => {
+    // FEAT: `NaN <= 0` é falso e deixaria a divisão correr; só a guarda `> 0` segura os dois casos
+    const rows = buildView(snapshot({ rate: Number.NaN }))
+    expect(rows.map((row) => row.years)).toEqual(WORKS.map(() => null))
   })
 
   it('never offers a work the engine would refuse', () => {

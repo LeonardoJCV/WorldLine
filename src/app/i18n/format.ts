@@ -1,5 +1,5 @@
 import type { Metric } from '../../engine/events.ts'
-import { Era, type Variable } from '../../engine/state.ts'
+import { Era, type EraValue, type Variable } from '../../engine/state.ts'
 import type { WorkKey } from '../../engine/work.ts'
 import type { Locale } from './index.ts'
 import type { MessageKey } from './en.ts'
@@ -225,16 +225,21 @@ export function workKey(key: WorkKey): MessageKey {
   return WORK_KEYS[key]
 }
 
-const ERA_KEYS: Readonly<Record<(typeof Era)[keyof typeof Era], MessageKey>> = {
-  [Era.agricultural]: 'era.agricultural',
-  [Era.classical]: 'event.era_classical',
-  [Era.industrial]: 'era.industrial',
-  [Era.electric]: 'event.era_electric',
-  [Era.space]: 'event.space_era',
-}
-
-export function eraKey(era: number): MessageKey {
-  return ERA_KEYS[era as (typeof Era)[keyof typeof Era]] ?? 'era.agricultural'
+// FIX: a era chega como valor da união, não como número solto, e assim o switch é exaustivo e não
+// precisa de um retorno de emergência que nomearia a era errada
+export function eraKey(era: EraValue): MessageKey {
+  switch (era) {
+    case Era.agricultural:
+      return 'era.agricultural'
+    case Era.classical:
+      return 'event.era_classical'
+    case Era.industrial:
+      return 'era.industrial'
+    case Era.electric:
+      return 'event.era_electric'
+    case Era.space:
+      return 'event.space_era'
+  }
 }
 
 // FEAT: um fator vale 1 quando não muda nada, então o que se mostra é a distância dele até 1

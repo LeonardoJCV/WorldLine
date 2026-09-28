@@ -62,19 +62,21 @@ export function BuildPanel() {
               return (
                 <li key={row.id} className="build__work" data-state={row.state}>
                   <span className="build__name">{t(`work.${row.id}`)}</span>
-                  <span className="build__state">{t(`build.state.${row.state}`)}</span>
+                  {/* FEAT: numa era fechada o cabeçalho já disse que nada ali alcança, e repetir
+                      "fora de alcance" em cada uma das linhas dela não acrescenta nada */}
+                  {!(row.state === 'locked' && !group.open) && (
+                    <span className="build__state">{t(`build.state.${row.state}`)}</span>
+                  )}
                   {/* FEAT: o que muda e quanto demora fluem na mesma linha que quebra, porque em
                       português os dois juntos não cabem na largura de um telefone */}
                   <span className="build__meta">
                     <span className="build__effect">
                       {changes.length === 0
-                        ? t('build.noEffect')
+                        ? // FEAT: o foguete é a única obra sem efeito por desenho, e o que ele abre
+                          // é `canColonise`, não um coeficiente
+                          t(row.id === 'rocket' ? 'build.rocket' : 'build.noEffect')
                         : changes.map((change) => (
-                            <span
-                              key={change.key}
-                              className="build__change"
-                              data-kind={change.kind}
-                            >
+                            <span key={change.key} className="build__change">
                               {t(workKey(change.key))}{' '}
                               {change.kind === 'factor'
                                 ? formatSignedPercent(change.value - 1, locale)
@@ -93,7 +95,9 @@ export function BuildPanel() {
                       {years !== null && <span className="build__years">{years}</span>}
                     </span>
                   </span>
-                  {row.missing.length > 0 && (
+                  {/* FEAT: o que falta só é acionável numa era já aberta; numa fechada a obra
+                      espera a era, e listar pré-requisitos ali seria dizer o degrau errado */}
+                  {group.open && row.missing.length > 0 && (
                     <span className="build__missing">
                       {t('build.missing', {
                         works: formatList(
