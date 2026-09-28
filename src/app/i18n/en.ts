@@ -58,6 +58,7 @@ export const en = {
   'event.merged_away': 'Outflow',
   'event.debt_settled': 'Accounts settled',
   'event.work_done': 'Work completed',
+  'event.work_done.named': 'Built: {work}',
   'event.era_classical': 'Classical age',
   'event.era_electric': 'Electric age',
   'mode.label': 'Mode',

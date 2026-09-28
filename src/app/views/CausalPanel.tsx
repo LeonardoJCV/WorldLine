@@ -3,17 +3,20 @@ import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
+import { workEventTitle } from './build.ts'
 
 const COLUMN = 232
 const NODE_WIDTH = 200
 const NODE_HEIGHT = 48
 const ROW = 60
 const PAD = 8
+const NO_WORKS = Object.freeze([])
 
 export function CausalPanel() {
   const t = useT()
   const locale = useLocale()
   const events = useSimulation((s) => s.events)
+  const works = useSimulation((s) => s.present?.works ?? NO_WORKS)
   const selected = useSimulation((s) => s.selected)
   const scrollRef = useRef<HTMLDivElement>(null)
   const tree = useMemo(
@@ -79,7 +82,10 @@ export function CausalPanel() {
           record.end === null || record.end === record.start
             ? formatYear(record.start)
             : `${formatYear(record.start)}–${formatYear(record.end)}`
-        return [t(`event.${record.event}`), node.repeated ? t('causal.repeated') : years]
+        return [
+          workEventTitle(t, works, record.event, node.record),
+          node.repeated ? t('causal.repeated') : years,
+        ]
       }
       case 'condition': {
         const { metric, value, op, threshold } = node.cause

@@ -1,15 +1,18 @@
-import { Era, type EraValue } from '../../engine/state.ts'
+import type { EventId } from '../../engine/events.ts'
+import { Era, NEVER, type EraValue } from '../../engine/state.ts'
 import {
   FACTOR_KEYS,
   PRESENTATION_ORDER,
   TERM_KEYS,
   WORKS,
   isCommissionable,
+  type Work,
   type WorkId,
   type WorkKey,
 } from '../../engine/work.ts'
 import type { Snapshot } from '../../worker/protocol.ts'
 import type { MessageKey } from '../i18n/en.ts'
+import type { Params } from '../i18n/index.ts'
 
 export type WorkState = 'done' | 'building' | 'open' | 'locked'
 
@@ -135,4 +138,25 @@ export interface ReplaceWarning {
 // nenhuma obra fica fixa no texto, e o ano 1 escolhe a chave certa sem precisar de um clique para provar
 export function replaceWarning(next: WorkId, current: WorkId, years: number): ReplaceWarning {
   return { key: years === 1 ? 'build.replaceYear' : 'build.replaceYears', next, current, years }
+}
+
+// FIX: uma obra vinda de confluência carrega `record: NEVER`, e duas confluências partilham o mesmo
+// valor — o sentinela nunca casa, senão a crônica nomearia a obra errada com toda a confiança
+export function workOfRecord(works: readonly Work[], record: number): WorkId | null {
+  if (record === NEVER) return null
+  const work = works.find((candidate) => candidate.record === record)
+  return work === undefined ? null : (WORKS[work.def]?.id ?? null)
+}
+
+// FEAT: os três lugares que narram a crônica (painel de eventos, cartão causal, corrente 2D) chamam
+// esta mesma função, para nenhum deles decidir sozinho o que fazer quando a obra não se identifica
+export function workEventTitle(
+  t: (key: MessageKey, params?: Params) => string,
+  works: readonly Work[],
+  event: EventId,
+  record: number,
+): string {
+  if (event !== 'work_done') return t(`event.${event}`)
+  const id = workOfRecord(works, record)
+  return id === null ? t('event.work_done') : t('event.work_done.named', { work: t(`work.${id}`) })
 }

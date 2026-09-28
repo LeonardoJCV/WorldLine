@@ -4,6 +4,7 @@ import { useT } from '../i18n/index.ts'
 import type { WorldlineId } from '../../worker/protocol.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
+import { workEventTitle } from '../views/build.ts'
 import { LABEL_WIDTH, drawCurrent } from './draw.ts'
 import {
   companionAt,
@@ -21,6 +22,8 @@ import {
 import { currentKey } from './keys.ts'
 import type { Strand } from './normalize.ts'
 import { resolveView, zoomView } from './view.ts'
+
+const NO_WORKS = Object.freeze([])
 
 interface CurrentProps {
   readonly width: number
@@ -40,6 +43,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   const present = useSimulation((s) => s.present?.tick ?? 0)
   const cursor = useSimulation((s) => s.cursor)
   const events = useSimulation((s) => s.events)
+  const works = useSimulation((s) => s.present?.works ?? NO_WORKS)
   const seed = useSimulation((s) => s.seed ?? 0)
   const view = useSimulation((s) => s.view)
   const selected = useSimulation((s) => s.selected)
@@ -158,7 +162,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         cursor,
         focus,
         phase: seedPhase(seed),
-        label: (event) => t(`event.${event}`),
+        label: (event, index) => workEventTitle(t, works, event, index),
         yearLabel: formatYear,
         companions,
         crossings,
@@ -180,6 +184,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     focus,
     seed,
     t,
+    works,
     companions,
     crossings,
   ])

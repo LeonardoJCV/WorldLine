@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Era } from '../../engine/state.ts'
+import { Era, NEVER } from '../../engine/state.ts'
 import {
   PRESENTATION_ORDER,
   TERM_KEYS,
@@ -17,6 +17,7 @@ import {
   effectsOf,
   replaceWarning,
   siteProgress,
+  workOfRecord,
   yearsLost,
   type WorkRow,
 } from './build.ts'
@@ -253,6 +254,27 @@ describe('buildReady', () => {
     // FEAT: nenhuma era aberta ainda — o canteiro está livre, mas não há o que começar nele
     const rows = buildView(snapshot({ eras: 0 }))
     expect(buildReady(rows)).toBe(false)
+  })
+})
+
+describe('workOfRecord', () => {
+  it('names the work a record belongs to', () => {
+    const works = standing('irrigation', 'granary', 'pottery')
+    expect(workOfRecord(works, 1)).toBe('granary')
+    expect(workOfRecord(works, 0)).toBe('irrigation')
+    expect(workOfRecord(works, 2)).toBe('pottery')
+    // FEAT: nenhuma obra carrega este registro — a busca não pode inventar um nome para ele
+    expect(workOfRecord(works, 9)).toBeNull()
+  })
+
+  it('refuses to name a work that arrived by confluence, instead of naming the wrong one', () => {
+    // FIX: duas obras vindas de confluências diferentes partilham o sentinela NEVER; a primeira que
+    // um "find" ingênuo encontrasse seria uma resposta errada dita com toda a confiança
+    const works: readonly Work[] = [
+      { def: workIndex('irrigation'), done: 50, record: NEVER },
+      { def: workIndex('granary'), done: 80, record: NEVER },
+    ]
+    expect(workOfRecord(works, NEVER)).toBeNull()
   })
 })
 

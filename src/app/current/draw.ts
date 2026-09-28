@@ -31,7 +31,7 @@ export interface DrawInput {
   readonly cursor: number | null
   readonly focus: Strand | null
   readonly phase: number
-  readonly label: (event: EventId) => string
+  readonly label: (event: EventId, index: number) => string
   readonly yearLabel: (year: number) => string
   readonly companions: readonly {
     readonly id: string
@@ -112,7 +112,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       if (marker.row >= 0 && labelled) {
         ctx.textAlign = marker.align === 'end' ? 'right' : 'left'
         ctx.fillText(
-          input.label(marker.event),
+          input.label(marker.event, marker.index),
           marker.align === 'end' ? marker.x - 6 : marker.x + 6,
           y,
         )
@@ -121,7 +121,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       const y = episodeY(frame, marker.row)
       ctx.fillStyle = chosen ? BRIGHT : MUTED
       ctx.fillRect(marker.x, y, Math.max(2, marker.x2 - marker.x), 3)
-      const text = input.label(marker.event)
+      const text = input.label(marker.event, marker.index)
       if (chosen || marker.x2 - marker.x > ctx.measureText(text).width + 12) {
         ctx.fillText(text, marker.x, y + 12)
       }
@@ -132,7 +132,13 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       ctx.moveTo(marker.x, frame.centerY + 6)
       ctx.lineTo(marker.x, frame.centerY + 14)
       ctx.stroke()
-      if (chosen) ctx.fillText(input.label(marker.event), marker.x + 6, frame.centerY + 20)
+      if (chosen) {
+        const text = input.label(marker.event, marker.index)
+        // FIX: perto do presente o rótulo escolhido pode não caber à direita do traço até a borda
+        const overflow = marker.x + 6 + ctx.measureText(text).width > frame.right
+        ctx.textAlign = overflow ? 'right' : 'left'
+        ctx.fillText(text, overflow ? marker.x - 6 : marker.x + 6, frame.centerY + 20)
+      }
     }
   }
   ctx.restore()

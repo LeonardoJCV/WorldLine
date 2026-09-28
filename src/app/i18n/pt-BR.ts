@@ -55,6 +55,7 @@ export const ptBR: Readonly<Record<MessageKey, string>> = {
   'event.merged_away': 'Deságue',
   'event.debt_settled': 'Contas acertadas',
   'event.work_done': 'Obra concluída',
+  'event.work_done.named': 'Obra concluída: {work}',
   'event.era_classical': 'Era clássica',
   'event.era_electric': 'Era elétrica',
   'mode.label': 'Modo',
