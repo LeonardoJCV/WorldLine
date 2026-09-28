@@ -109,3 +109,16 @@ export function siteProgress(snapshot: Snapshot): number | null {
   if (cost === undefined || cost <= 0) return null
   return site.progress / cost
 }
+
+// FEAT: o que se perde ao trocar de canteiro é o tempo real que ele já levou, não uma fração do
+// custo — é isso que faz o aviso dizer um número que o jogador sente, não uma conta abstrata
+export function yearsLost(snapshot: Snapshot): number | null {
+  const site = snapshot.building
+  return site === null ? null : snapshot.tick - site.since
+}
+
+// FEAT: as duas condições do ponto no botão vêm das mesmas linhas que o painel já mostra — nenhuma
+// lê o instantâneo de novo, e as duas precisam valer ao mesmo tempo para o ponto não virar ruído
+export function buildReady(rows: readonly WorkRow[]): boolean {
+  return !rows.some((row) => row.state === 'building') && rows.some((row) => row.state === 'open')
+}

@@ -188,6 +188,27 @@ describe('simulation store', () => {
     expect(store.getState().decisions).toEqual([{ tick: 30, allocation }])
   })
 
+  // FEAT: mesma forma de decide — dispara e esquece, sem id de pedido — e o mesmo alvo: o mundo em foco
+  it('commissions a work in the world that is in focus', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(600)
+    await flush()
+    store.getState().commission('irrigation')
+    store.getState().step(30)
+    await flush()
+    expect(store.getState().worlds[0]?.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+  })
+
+  // FIX: a rota é `get().focus`, não uma realidade fixa — sem isto um comissionamento sempre sairia para 'A'
+  it('routes the commission through whichever world the store has in focus', () => {
+    const { port, sent } = recordingPort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.setState({ focus: 'B' })
+    store.getState().commission('irrigation')
+    expect(sent).toContainEqual({ type: 'commission', world: 'B', work: 'irrigation' })
+  })
+
   it('keeps the cursor on the observed year when entering Intervene', async () => {
     const { store } = setup()
     store.getState().create(482913)

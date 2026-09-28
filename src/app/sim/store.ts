@@ -7,6 +7,7 @@ import type { EventRecord } from '../../engine/events.ts'
 import type { Merge } from '../../engine/merge.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
+import type { WorkId } from '../../engine/work.ts'
 import type {
   EndReason,
   EventUpdate,
@@ -84,6 +85,7 @@ export interface SimulationState {
   setMergeOther(id: WorldlineId | null): void
   select(index: number | null): void
   decide(allocation: Allocation): void
+  commission(work: WorkId): void
   branch(allocation: Allocation): void
   cross(kind: CrossingKind, dose: Dose): Promise<void>
   remove(id: WorldlineId): void
@@ -297,6 +299,11 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     },
     decide(allocation) {
       client.decide(get().focus, allocation)
+    },
+    // FEAT: mesma forma de decide: dispara e esquece, porque comissionar não tem como falhar de um
+    // jeito que a tela precise ouvir
+    commission(work) {
+      client.commission(get().focus, work)
     },
     branch(allocation) {
       const { focus, cursor, present } = get()

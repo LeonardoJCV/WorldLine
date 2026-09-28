@@ -8,8 +8,8 @@ import {
   workKey,
 } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
-import { useSimulation } from '../sim/runtime.ts'
-import { buildGroups, effectsOf, siteProgress, type WorkRow } from './build.ts'
+import { simulation, useSimulation } from '../sim/runtime.ts'
+import { buildGroups, effectsOf, siteProgress, yearsLost, type WorkRow } from './build.ts'
 
 export function BuildPanel() {
   const t = useT()
@@ -29,6 +29,10 @@ export function BuildPanel() {
 
   const groups = buildGroups(present)
   const share = siteProgress(present)
+  // FEAT: quem está no canteiro e o quanto se perderia — as duas coisas que o aviso de troca precisa,
+  // lidas uma vez só e não a cada linha
+  const site = groups.flatMap((group) => group.rows).find((row) => row.state === 'building') ?? null
+  const lost = yearsLost(present)
 
   function when(row: WorkRow) {
     if (row.state === 'done') return null
@@ -105,6 +109,29 @@ export function BuildPanel() {
                           locale,
                         ),
                       })}
+                    </span>
+                  )}
+                  {row.state === 'open' && (
+                    <span className="build__action">
+                      <button
+                        type="button"
+                        className="build__commission"
+                        aria-label={t('build.commissionWork', { work: t(`work.${row.id}`) })}
+                        onClick={() => simulation.getState().commission(row.id)}
+                      >
+                        {t('build.commission')}
+                      </button>
+                      {/* FEAT: comissionar substitui o canteiro em curso e perde o que já está de pé —
+                          o aviso mora ao lado do botão, antes do gesto, e diz o ano real, não uma frase genérica */}
+                      {site !== null && lost !== null && (
+                        <span className="build__warn" role="note">
+                          {t(lost === 1 ? 'build.replaceYear' : 'build.replaceYears', {
+                            next: t(`work.${row.id}`),
+                            current: t(`work.${site.id}`),
+                            years: formatCompact(lost, locale),
+                          })}
+                        </span>
+                      )}
                     </span>
                   )}
                 </li>

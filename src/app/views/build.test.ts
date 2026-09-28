@@ -10,7 +10,15 @@ import {
   type WorkId,
 } from '../../engine/work.ts'
 import type { Snapshot } from '../../worker/protocol.ts'
-import { buildGroups, buildView, effectsOf, siteProgress, type WorkRow } from './build.ts'
+import {
+  buildGroups,
+  buildReady,
+  buildView,
+  effectsOf,
+  siteProgress,
+  yearsLost,
+  type WorkRow,
+} from './build.ts'
 
 function standing(...ids: readonly WorkId[]): readonly Work[] {
   return ids.map((id, at) => ({ def: workIndex(id), done: 100 + at, record: at }))
@@ -210,5 +218,39 @@ describe('siteProgress', () => {
         snapshot({ building: { def: workIndex('irrigation'), progress: 150, since: 9 } }),
       ),
     ).toBeCloseTo(0.25, 10)
+  })
+})
+
+describe('yearsLost', () => {
+  it('counts the real years the site has stood, not a share of its cost', () => {
+    expect(yearsLost(snapshot())).toBeNull()
+    // FEAT: 550 de 600 já de pé (quase pronto) mas só 60 anos de canteiro — o aviso é sobre o
+    // tempo, e uma conta que confundisse as duas coisas diria 92%, não 60
+    expect(
+      yearsLost(
+        snapshot({ building: { def: workIndex('irrigation'), progress: 550, since: 940 } }),
+      ),
+    ).toBe(60)
+  })
+})
+
+describe('buildReady', () => {
+  it('marks the mode only when the yard is free AND something can be started', () => {
+    const free = buildView(snapshot({ works: standing('irrigation') }))
+    expect(buildReady(free)).toBe(true)
+    // FEAT: mesmo mundo, mesmas obras ao alcance — só o canteiro ocupado muda, e isso basta para apagar o ponto
+    const busy = buildView(
+      snapshot({
+        works: standing('irrigation'),
+        building: { def: workIndex('granary'), progress: 10, since: 900 },
+      }),
+    )
+    expect(buildReady(busy)).toBe(false)
+  })
+
+  it('does not mark it when the yard is free but nothing is within reach', () => {
+    // FEAT: nenhuma era aberta ainda — o canteiro está livre, mas não há o que começar nele
+    const rows = buildView(snapshot({ eras: 0 }))
+    expect(buildReady(rows)).toBe(false)
   })
 })

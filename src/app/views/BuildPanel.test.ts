@@ -166,5 +166,29 @@ describe('BuildPanel', () => {
     expect(html).toContain('25% dela já está de pé')
     expect(html).toContain('Precisa de Escrita')
     expect(html).not.toContain('Harvest')
+    expect(html).toContain('Comissionar Celeiro')
+    expect(html).toContain('Celeiro substituiria Arado e perderia 100 anos já construídos.')
+  })
+
+  it('offers a way to commission every work within reach, named for the work it starts', () => {
+    const html = render()
+    expect(html).toContain('aria-label="Commission Granary"')
+    expect(html).toContain('aria-label="Commission Pottery"')
+    // FEAT: a obra no canteiro e as já de pé não oferecem o gesto de novo
+    expect(html).not.toContain('aria-label="Commission Plough"')
+    expect(html).not.toContain('aria-label="Commission Irrigation"')
+  })
+
+  // FEAT: 1200 (ano corrente) menos 1100 (início do canteiro) é 100 — o número real de anos que o
+  // canteiro já levou, não uma fração do custo do Arado nem uma frase sem número nenhum
+  it('warns with the years that would be lost, not with a generic sentence', () => {
+    const html = render()
+    expect(html).toContain('Granary would replace Plough and lose 100 years already built.')
+  })
+
+  it('says nothing about replacing when the yard is empty', () => {
+    const html = render({ building: null })
+    expect(html).toContain('Commission')
+    expect(html).not.toContain('would replace')
   })
 })
