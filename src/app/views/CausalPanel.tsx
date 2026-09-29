@@ -218,9 +218,13 @@ export function CausalPanel() {
                 <span className="causal__detail">{detail}</span>
               </>
             )
-            if (node.kind === 'condition') {
+            // FIX: nó sem registro não é botão — a store recusa o índice, e um botão que nada faz
+            // continuaria convidando o clique
+            const inert =
+              node.kind === 'condition' || (node.kind === 'event' && !events[node.record])
+            if (inert) {
               return (
-                <div key={node.key} className="causal__node" data-kind="condition" style={style}>
+                <div key={node.key} className="causal__node" data-kind={node.kind} style={style}>
                   {body}
                 </div>
               )

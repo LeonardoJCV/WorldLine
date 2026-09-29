@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HORIZON } from '../../engine/params.ts'
+import { NEVER } from '../../engine/state.ts'
 import type { FromWorker, SeamPreview, Snapshot, ToWorker } from '../../worker/protocol.ts'
 import { currentLink } from '../world/current.ts'
 import { SimulationClient, type Port } from './client.ts'
@@ -175,6 +176,27 @@ describe('simulation store', () => {
     expect(store.getState().selected).toBe(index)
     expect(store.getState().cursor).toBe(start)
     expect(store.getState().inspected?.tick).toBe(start)
+  })
+
+  // FIX: uma obra que a confluência trouxe carrega `record: NEVER`, e o painel causal desenhava
+  // esse índice como causa; aceitá-lo aqui zerava o cartão e deixava o ano onde estava
+  it('refuses an index no record answers to, and keeps the choice it already had', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(200)
+    await flush()
+    const index = store.getState().events.findIndex((r) => r.event === 'golden_age')
+    store.getState().select(index)
+    await flush()
+    const cursor = store.getState().cursor
+    store.getState().select(NEVER)
+    // FEAT: o sentinela é negativo, mas a regra é o registro não existir — o fim da fila também não
+    store.getState().select(store.getState().events.length)
+    expect(store.getState().selected).toBe(index)
+    expect(store.getState().cursor).toBe(cursor)
+    // FEAT: e nada disto fecha a porta de largar a escolha
+    store.getState().select(null)
+    expect(store.getState().selected).toBeNull()
   })
 
   it('records decisions made at the present', async () => {

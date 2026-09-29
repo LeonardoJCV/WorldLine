@@ -655,8 +655,9 @@ test('names what the seam costs in food, and the famine that follows proves the 
   const sentence = page.locator('.merge__food')
   await expect(sentence).toBeVisible()
   const said = ((await sentence.textContent()) ?? '').trim()
+  // FEAT: o número de hoje é só da sobrevivente, e a frase o nomeia — 'in A alone', não 'apart'
   const numbers =
-    /^Food per person: ([\d.]+) apart, ([\d.]+) together — stores add up, harvests do not$/.exec(
+    /^Food per person: ([\d.]+) in A alone, ([\d.]+) together — stores add up, harvests do not$/.exec(
       said,
     )
   if (!numbers) throw new Error(`the panel never named the cost in food: ${said}`)
@@ -675,6 +676,80 @@ test('names what the seam costs in food, and the famine that follows proves the 
   await expect(page.locator('.events__item', { hasText: 'Famine' })).toContainText('0201')
   expect(compact(await stateValue(page, 'food'))).toBeLessThan(promised * 0.1)
 })
+
+// FIX: medido com a costura inteira aberta, nestas duas janelas e nos dois idiomas: o botão de
+// aceitar ficava 111px abaixo do pé da coluna, alcançável rolando a coluna — que é justo o que
+// ninguém adivinha fazer antes de aceitar
+for (const locale of ['en', 'pt-BR'] as const) {
+  for (const [width, height] of [
+    [1440, 680],
+    [1280, 660],
+  ] as const) {
+    test(`keeps the accept button inside the column in ${locale} at ${width}x${height}`, async ({
+      page,
+    }) => {
+      test.slow()
+      await page.addInitScript((value: string) => {
+        localStorage.setItem('worldline.locale', value)
+      }, locale)
+      await page.setViewportSize({ width, height })
+      await page.goto(pairAtYear(200))
+      await expect(page.getByTestId('year')).toHaveText('0200')
+      await page
+        .locator('.mode')
+        .getByRole('button', { name: locale === 'en' ? 'Merge' : 'Confluir' })
+        .click()
+      await page
+        .getByRole('button', {
+          name:
+            locale === 'en'
+              ? 'From history B, let it flow into this one'
+              : 'Da história B, deixar que ela deságue nesta',
+        })
+        .click()
+      await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
+      // FIX: o tipo variável chega depois do primeiro desenho e o piso do cartão de estado entra
+      // por transição; medir antes dos dois media uma coluna que o observador nunca chega a ver
+      await page.evaluate(() => document.fonts.ready)
+      await page.waitForFunction(() => {
+        const card = document.querySelector('.card--state')
+        if (!card) return false
+        const win = window as unknown as { __settled?: { height: number; frames: number } }
+        const height = Math.round(card.getBoundingClientRect().height)
+        const seen = win.__settled
+        win.__settled =
+          seen && seen.height === height
+            ? { height, frames: seen.frames + 1 }
+            : { height, frames: 1 }
+        return win.__settled.frames >= 5
+      })
+
+      const fits = await page.evaluate(() => {
+        const rail = document.querySelector('.hud__left')
+        const card = document.querySelector('.card--merge')
+        const seam = document.querySelector('.merge__seam')
+        const button = document.querySelector('button.merge__confirm')
+        const ends = document.querySelector('.merge__ends')
+        if (!rail || !card || !seam || !button || !ends) return null
+        const box = rail.getBoundingClientRect()
+        return {
+          below: Math.round(button.getBoundingClientRect().bottom - box.bottom),
+          endsBelow: Math.round(ends.getBoundingClientRect().bottom - box.bottom),
+          card: Math.round(card.getBoundingClientRect().height),
+          rail: rail.clientHeight,
+          seamScrolls: seam.scrollHeight > seam.clientHeight,
+        }
+      })
+      if (!fits) throw new Error('the merge rail did not render')
+      // FEAT: o botão e o aviso do fim, que é o que ele descreve, ficam os dois dentro da coluna
+      expect(fits.below).toBeLessThanOrEqual(0)
+      expect(fits.endsBelow).toBeLessThanOrEqual(0)
+      expect(fits.card).toBeLessThanOrEqual(fits.rail + 1)
+      // FEAT: o aperto degrada para a costura rolando por dentro, não para um botão fora da vista
+      expect(fits.seamScrolls).toBe(true)
+    })
+  }
+}
 
 test('never announces a confluence the observer did not watch happen', async ({ page }) => {
   test.slow()

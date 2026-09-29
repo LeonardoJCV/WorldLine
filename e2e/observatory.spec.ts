@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { en } from '../src/app/i18n/en.ts'
+import { EVENTS } from '../src/engine/events.ts'
 import { useGraphics } from './stage.ts'
+import { inheritanceLink } from './support.ts'
 
 test.beforeEach(async ({ page }) => {
   await useGraphics(page, '2d')
@@ -232,4 +235,103 @@ test('says out loud that a link written before the works cannot be replayed', as
   await expect(
     page.getByText('This link was made with model v1; the world may differ from what was shared.'),
   ).toBeVisible()
+})
+
+// FEAT: os nomes que a corrente desenha de verdade, lidos da tabela de acontecimentos
+const ERA_NAMES = EVENTS.flatMap((def) => (def.kind === 'era' ? [en[`event.${def.id}`]] : []))
+
+// FIX: medido a 1440x900 e a 1280x660 — o nome da era mais antiga era desenhado dentro do cartão
+// de estado, que é translúcido, e saía a 22% da tinta por cima das linhas do cartão. Nada no vitest
+// alcança a ligação que este portão fecha na janela maior: o observatório medindo o cartão e o
+// desenho evitando-o — sem ela geometry.test.ts passaria com o retângulo nunca chegando ao desenho
+test('never writes an era name into the rectangle the state card covers', async ({ page }) => {
+  test.slow()
+  // FEAT: cada chamada de fillText da página, que é a única prova do que o palco escreveu mesmo
+  await page.addInitScript(() => {
+    const ink: {
+      text: string
+      x: number
+      y: number
+      font: string
+      align: string
+      canvas: HTMLCanvasElement
+    }[] = []
+    ;(window as unknown as { __ink: typeof ink }).__ink = ink
+    const real = CanvasRenderingContext2D.prototype.fillText
+    CanvasRenderingContext2D.prototype.fillText = function (
+      this: CanvasRenderingContext2D,
+      text: string,
+      x: number,
+      y: number,
+      max?: number,
+    ) {
+      ink.push({ text, x, y, font: this.font, align: this.textAlign, canvas: this.canvas })
+      if (max === undefined) real.call(this, text, x, y)
+      else real.call(this, text, x, y, max)
+    }
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // FIX: o gancho só vale para um documento novo, e a semente do beforeEach não traz era nenhuma
+  await page.goto('about:blank')
+  await page.goto(inheritanceLink(3000))
+  await expect(page.getByTestId('year')).toHaveText('3000')
+  await page.evaluate(() => document.fonts.ready)
+  await page.waitForTimeout(1000)
+  // FIX: o gancho acumula toda chamada desde o carregamento, e ler o conjunto de todas elas lê
+  // quadros intermédios que ninguém viu; um pixel de largura força um quadro só, e é esse que vale
+  await page.evaluate(() => {
+    ;(window as unknown as { __ink: unknown[] }).__ink.length = 0
+  })
+  await page.setViewportSize({ width: 1441, height: 900 })
+  await page.waitForFunction(() => (window as unknown as { __ink: unknown[] }).__ink.length > 0)
+  await page.waitForTimeout(500)
+
+  const drawn = await page.evaluate((names: string[]) => {
+    type Ink = {
+      text: string
+      x: number
+      y: number
+      font: string
+      align: string
+      canvas: HTMLCanvasElement
+    }
+    const ink = (window as unknown as { __ink: Ink[] }).__ink
+    const card = document.querySelector('.card--state')
+    const ruler = document.createElement('canvas').getContext('2d')
+    if (!card || !ruler) return null
+    const box = card.getBoundingClientRect()
+    ruler.textBaseline = 'middle'
+    const eras = ink.filter((entry) => names.includes(entry.text))
+    // FEAT: a caixa da tinta de verdade, medida no mesmo tipo em que ela saiu — não a caixa
+    // nominal com que o desenho decide, senão o teste repetiria a conta que está medindo
+    const inside = eras.filter((entry) => {
+      ruler.font = entry.font
+      const metrics = ruler.measureText(entry.text)
+      const canvas = entry.canvas.getBoundingClientRect()
+      const x = canvas.left + entry.x
+      const y = canvas.top + entry.y
+      const left = entry.align === 'right' ? x - metrics.width : x
+      return (
+        left <= box.right &&
+        left + metrics.width >= box.left &&
+        y + metrics.actualBoundingBoxDescent >= box.top &&
+        y - metrics.actualBoundingBoxAscent <= box.bottom
+      )
+    })
+    return {
+      names: [...new Set(eras.map((entry) => entry.text))],
+      inside: [...new Set(inside.map((entry) => entry.text))],
+    }
+  }, ERA_NAMES)
+
+  if (!drawn) throw new Error('the state card never rendered')
+  expect(drawn.inside).toEqual([])
+  // FEAT: e o conjunto exato do que ficou, senão apagar nome nenhum passaria por conserto — as
+  // cinco eras estão abertas neste ano, e a agrícola é a única cuja tinta cai sobre o cartão
+  expect([...drawn.names].sort()).toEqual([
+    'Classical age',
+    'Electric age',
+    'Industrial revolution',
+    'Space age',
+  ])
 })

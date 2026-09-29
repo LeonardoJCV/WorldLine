@@ -6,6 +6,8 @@ import { STRAND_COLORS } from '../theme/palette.ts'
 import {
   buildRibbons,
   episodeY,
+  ERA_LABEL_GAP,
+  eraLabelClear,
   eraLabelY,
   eraLabelsFit,
   eraRowsUsed,
@@ -13,6 +15,7 @@ import {
   type CrossingLine,
   type Frame,
   type Marker,
+  type Reserved,
   type Ribbon,
 } from './geometry.ts'
 import type { Strand } from './normalize.ts'
@@ -23,6 +26,8 @@ export interface DrawInput {
   readonly frame: Frame
   readonly data: RangeResult | null
   readonly markers: readonly Marker[]
+  // FEAT: o que o cartão de estado cobre do palco, para nenhum nome de era ficar atrás dele
+  readonly reserved: Reserved | null
   readonly selected: number | null
   readonly decisions: readonly Decision[]
   readonly from: number
@@ -109,11 +114,15 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       ctx.beginPath()
       ctx.arc(marker.x, frame.centerY, chosen ? 4 : 2.5, 0, Math.PI * 2)
       ctx.fill()
-      if (marker.row >= 0 && labelled) {
+      if (
+        marker.row >= 0 &&
+        labelled &&
+        eraLabelClear(marker, frame, rows, LABEL_WIDTH, input.reserved)
+      ) {
         ctx.textAlign = marker.align === 'end' ? 'right' : 'left'
         ctx.fillText(
           input.label(marker.event, marker.index),
-          marker.align === 'end' ? marker.x - 6 : marker.x + 6,
+          marker.align === 'end' ? marker.x - ERA_LABEL_GAP : marker.x + ERA_LABEL_GAP,
           y,
         )
       }

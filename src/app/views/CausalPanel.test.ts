@@ -79,6 +79,30 @@ describe('CausalPanel', () => {
     expect(html).not.toContain('Built:')
   })
 
+  // FIX: uma causa pode apontar para um registro que esta história não tem — o sentinela que a
+  // confluência deixa, ou um índice fora da fila — e desenhá-la como botão convidava a um clique
+  // que zerava o cartão sem mover o ano; a store recusa o índice e o nó deixa de ser botão
+  it('draws a cause whose record does not exist as no button at all', () => {
+    const events: readonly EventRecord[] = [
+      {
+        event: 'famine',
+        start: 10,
+        end: 10,
+        causes: [
+          { kind: 'event', record: NEVER },
+          { kind: 'event', record: 7 },
+          { kind: 'condition', metric: 'foodSecurity', op: '<', threshold: 1, value: 0.4 },
+        ],
+      },
+    ]
+    const html = render(events, [], 0)
+    expect(html).toContain('Unknown event')
+    // FEAT: só a raiz, que tem registro, continua botão — nem o sentinela, nem o índice fora da
+    // fila, nem a condição
+    expect(html.match(/<button/g) ?? []).toHaveLength(1)
+    expect(html).toMatch(/<div class="causal__node" data-kind="event"/)
+  })
+
   // FEAT: dobradas, as obras não são nomeadas — o cartão diz quantas são e oferece abrir
   it('draws the folded works as one counted line instead of naming any of them', () => {
     const events: readonly EventRecord[] = [

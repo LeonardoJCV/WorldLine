@@ -292,9 +292,12 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     setMergeOther(id) {
       set({ mergeOther: id, mergePreview: null })
     },
+    // FIX: um índice sem registro não vira seleção, senão o sentinela de uma obra confluída zerava
+    // o cartão causal sem mover o ano — nenhum registro, nenhuma escolha
     select(index) {
-      set({ selected: index })
       const record = index === null ? undefined : get().events[index]
+      if (index !== null && record === undefined) return
+      set({ selected: index })
       if (record) get().setCursor(record.start)
     },
     decide(allocation) {

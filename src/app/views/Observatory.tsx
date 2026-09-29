@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Current } from '../current/Current.tsx'
-import { stageLayout } from '../current/geometry.ts'
+import { stageLayout, type Reserved } from '../current/geometry.ts'
 import { Minimap } from '../current/Minimap.tsx'
 import type { Strand } from '../current/normalize.ts'
 import { ZoomControls } from '../current/ZoomControls.tsx'
@@ -28,7 +28,7 @@ import { PanelCard } from './PanelCard.tsx'
 import { ParadoxNotice } from './ParadoxNotice.tsx'
 import { StatePanel } from './StatePanel.tsx'
 import { TopBar } from './TopBar.tsx'
-import { useElementSize } from './useElementSize.ts'
+import { useElementSize, useRelativeRect } from './useElementSize.ts'
 import { WorldActions } from './WorldActions.tsx'
 import { WorldsStrip } from './WorldsStrip.tsx'
 import './observatory.css'
@@ -87,6 +87,15 @@ export function Observatory({
   const [stripBand, setStripBand] = useState<HTMLDivElement | null>(null)
   const stripSize = useElementSize(stripBand)
   const canKeep = useSimulation((s) => s.seed !== null && s.worlds.length > 0)
+  const [stateCard, setStateCard] = useState<HTMLElement | null>(null)
+  // FEAT: o cartão de estado é sempre o primeiro da coluna, e a referência dela chega já com ele no DOM
+  const findStateCard = useCallback((node: HTMLDivElement | null) => {
+    setStateCard(node?.querySelector<HTMLElement>('.card--state') ?? null)
+  }, [])
+  const stateRect = useRelativeRect(stateCard, board)
+  // FIX: o cartão de estado mora sobre o canto do palco em que as eras se nomeiam; na folha do
+  // celular ele não cobre palco nenhum, e então nada há para o desenho evitar
+  const covered: Reserved | null = phone ? null : stateRect
   // FEAT: o chão é do aviso primeiro, do zoom e do minimapa depois, e só então dos cartões
   const reserve = phone && size && !lensOpen ? sheetReserve(sheet, size.height) : 0
   const band = phone && noticesSize && noticesSize.height > 0 ? noticesSize.height + NOTICE_GAP : 0
@@ -123,7 +132,7 @@ export function Observatory({
   const cards = (
     <>
       {/* FEAT: à esquerda mora o que se observa e o que se decide */}
-      <div className="hud__left">
+      <div className="hud__left" ref={findStateCard}>
         <PanelCard id="state" title={t('state.title', { year: formatYear(observed?.tick ?? 0) })}>
           <StatePanel focus={focus} onFocus={setFocus} />
         </PanelCard>
@@ -188,7 +197,13 @@ export function Observatory({
               detail={TIERS[tier].focus}
             />
           </div>
-          <Current width={size.width} height={size.height} frame={layout.frame} focus={focus} />
+          <Current
+            width={size.width}
+            height={size.height}
+            frame={layout.frame}
+            focus={focus}
+            reserved={covered}
+          />
         </>
       )}
     </main>

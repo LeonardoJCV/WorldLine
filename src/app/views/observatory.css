@@ -587,15 +587,27 @@
   flex-shrink: 0;
 }
 
-/* FIX: na confluência os dois cartões cedem: o estado rola por dentro e a costura também, mas
-   nenhum dos dois passa do pé da coluna, que é onde o botão de aceitar tem de continuar visível */
+/* FIX: na confluência é a soma dos dois cartões que tem de caber na coluna, e não cada um dela:
+   capado em 100%, o de costurar somava com o de estado e levava o botão de aceitar abaixo do pé */
 .hud__left > .card--merge {
   flex-shrink: 0;
-  min-height: 112px;
-  max-height: 100%;
+  /* FIX: o que não rola dentro do painel mede 182px nos dois idiomas — título, aviso do fim, botão
+     e anúncio — e os quatro portões de merge.spec.ts caem se crescer além da folga que sobra aqui */
+  min-height: 192px;
+  max-height: calc(100% - var(--merge-state) - var(--space-4));
 }
 
-/* FEAT: o cartão de obras cede à moldura da coluna do mesmo jeito que o de confluir */
+/* FIX: quem cede é o estado, que é a referência, como já cede à lista de rumos; a coluna guarda-lhe
+   este piso, e o cartão de costurar toma o resto — abaixo dele nada garante o botão de aceitar */
+.hud__left:has(> .card--merge) {
+  --merge-state: 48px;
+}
+
+.hud__left:has(> .card--merge) > .card--state[data-collapsed='false'] {
+  min-height: var(--merge-state);
+}
+
+/* FEAT: o cartão de obras cede à moldura da coluna, e rola por dentro como o de cruzar */
 .hud__left > .card--build {
   flex-shrink: 0;
   min-height: 112px;
@@ -1460,7 +1472,7 @@ button.causal__node:hover {
   font-size: var(--text-sm);
 }
 
-/* FEAT: o custo maior da costura lê com o peso e a largura do abalo, e numa linha só, ao lado dele */
+/* FEAT: o custo maior da costura lê com o peso e o tamanho do abalo, logo abaixo dele e colado a ele */
 .merge__food {
   margin: var(--space-1) 0 0;
   font-size: var(--text-sm);

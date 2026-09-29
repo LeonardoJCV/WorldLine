@@ -18,6 +18,7 @@ import {
   xToYear,
   type CompanionTrack,
   type Frame,
+  type Reserved,
 } from './geometry.ts'
 import { currentKey } from './keys.ts'
 import type { Strand } from './normalize.ts'
@@ -30,9 +31,11 @@ interface CurrentProps {
   readonly height: number
   readonly frame: Frame
   readonly focus: Strand | null
+  // FEAT: o retângulo que o cartão de estado cobre do palco, medido pelo observatório
+  readonly reserved: Reserved | null
 }
 
-export function Current({ width, height, frame, focus }: CurrentProps) {
+export function Current({ width, height, frame, focus, reserved }: CurrentProps) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [data, setData] = useState<RangeResult | null>(null)
@@ -154,6 +157,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         frame,
         data,
         markers,
+        reserved,
         selected,
         decisions,
         from: shownFrom,
@@ -175,6 +179,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     frame,
     data,
     markers,
+    reserved,
     selected,
     decisions,
     shownFrom,
@@ -235,7 +240,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       style={{ width, height }}
       onPointerDown={(event) => {
         const { x, y } = pointAt(event)
-        const hit = markerAt(markers, x, y, frame, LABEL_WIDTH)
+        const hit = markerAt(markers, x, y, frame, LABEL_WIDTH, reserved)
         if (hit) {
           select(hit.index)
           return
@@ -255,7 +260,8 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
           return
         }
         event.currentTarget.style.cursor =
-          markerAt(markers, x, y, frame, LABEL_WIDTH) || companionAt(companions, x, y, frame)
+          markerAt(markers, x, y, frame, LABEL_WIDTH, reserved) ||
+          companionAt(companions, x, y, frame)
             ? 'pointer'
             : ''
       }}

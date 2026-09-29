@@ -143,9 +143,10 @@ export function MergePanel() {
           <p className="merge__shock">
             {t('merge.shock', { shock: formatDecimal(seam.view.shock, locale, 1) })}
           </p>
-          {/* FEAT: o celeiro soma na linha acima, e esta frase diz que a colheita não soma com ele */}
+          {/* FIX: o número de hoje é a comida só da sobrevivente, e a frase nomeia de quem ele é */}
           <p className="merge__food">
             {t('merge.food', {
+              survivor: focus,
               now: formatMetric('foodSecurity', seam.view.food.now, locale),
               next: formatMetric('foodSecurity', seam.view.food.next, locale),
             })}
