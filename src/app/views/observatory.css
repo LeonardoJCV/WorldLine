@@ -571,44 +571,21 @@
   overflow: hidden;
 }
 
-/* FEAT: no aperto quem cede é a lista de referência; o painel em que se age continua inteiro */
-.hud__left > .card--allocation {
-  flex-shrink: 0;
-  max-height: 100%;
-}
-
-/* FIX: no cruzamento é o próprio cartão de cruzar que cede; o estado é a referência da comparação */
-.hud__left > .card--cross {
-  min-height: 112px;
-  max-height: 100%;
-}
-
-.hud__left:has(> .card--cross) > .card--state {
-  flex-shrink: 0;
-}
-
-/* FIX: na confluência é a soma dos dois cartões que tem de caber na coluna, e não cada um dela:
-   capado em 100%, o de costurar somava com o de estado e levava o botão de aceitar abaixo do pé */
-.hud__left > .card--merge {
-  flex-shrink: 0;
-  /* FIX: o que não rola dentro do painel mede 182px nos dois idiomas — título, aviso do fim, botão
-     e anúncio — e os quatro portões de merge.spec.ts caem se crescer além da folga que sobra aqui */
-  min-height: 192px;
-  max-height: calc(100% - var(--merge-state) - var(--space-4));
-}
-
-/* FIX: quem cede é o estado, que é a referência, como já cede à lista de rumos; a coluna guarda-lhe
-   este piso, e o cartão de costurar toma o resto — abaixo dele nada garante o botão de aceitar */
-.hud__left:has(> .card--merge) {
-  --merge-state: 48px;
-}
-
-.hud__left:has(> .card--merge) > .card--state[data-collapsed='false'] {
-  min-height: var(--merge-state);
-}
-
-/* FEAT: o cartão de obras cede à moldura da coluna, e rola por dentro como o de cruzar */
+/* FIX: capado em 100% o cartão do modo media contra a coluna inteira, somava com o piso do estado
+   acima dele e o par passava do pé; o teto reserva esse piso, e o painel destes três rola por
+   dentro até altura zero, então reservá-lo não corta nada */
+.hud__left > .card--allocation,
+.hud__left > .card--cross,
 .hud__left > .card--build {
+  flex-shrink: 0;
+  min-height: 112px;
+  max-height: calc(100% - 112px - var(--space-4));
+}
+
+/* FIX: a costura é a exceção da regra acima: o seu painel não rola por dentro, porque o aviso do
+   fim e o botão de aceitar são fixos, e reservar o piso do estado cortaria os dois — aqui quem rola
+   é a coluna, e o botão fica abaixo do pé dela em janela curta */
+.hud__left > .card--merge {
   flex-shrink: 0;
   min-height: 112px;
   max-height: 100%;

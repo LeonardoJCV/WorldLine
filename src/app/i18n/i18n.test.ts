@@ -63,6 +63,19 @@ describe('dictionaries', () => {
       expect(text.trim()).not.toBe('')
   })
 
+  // FIX: paridade de chaves não é paridade de parâmetros — soltar {survivor} da frase da comida em
+  // pt-BR deixava a suíte verde, e a tradução passava a esconder de quem era o número
+  it('fills the same named parameters in both languages, key by key', () => {
+    const named = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((hit) => hit[1]).sort()
+    const keys = Object.keys(en) as (keyof typeof en)[]
+    const parameterised = keys.filter((key) => named(en[key]).length > 0)
+    // FEAT: sem uma frase parametrizada na lista o portão passaria de graça
+    expect(parameterised.length).toBeGreaterThan(20)
+    for (const key of keys) {
+      expect(named(ptBR[key]), key).toEqual(named(en[key]))
+    }
+  })
+
   // FEAT: a cobertura por acontecimento já é total no tipo — faltar `event.<id>` é erro de compilação
   // em en.ts e em pt-BR.ts, e em execução `translate` indexa o dicionário e lançaria em vez de mostrar
   // a chave crua; o que este teste acrescenta é o que o tipo não vê: quantas eras existem e que

@@ -677,15 +677,16 @@ test('names what the seam costs in food, and the famine that follows proves the 
   expect(compact(await stateValue(page, 'food'))).toBeLessThan(promised * 0.1)
 })
 
-// FIX: medido com a costura inteira aberta, nestas duas janelas e nos dois idiomas: o botão de
-// aceitar ficava 111px abaixo do pé da coluna, alcançável rolando a coluna — que é justo o que
-// ninguém adivinha fazer antes de aceitar
+// FIX: numa coluna de 272px a confluência não cabe inteira, e o que não pode faltar são os números:
+// capar o cartão para o botão caber deixava a costura com 0 de 7 níveis, sem o abalo e sem a frase da
+// comida, e o observador aceitava uma união irreversível sem número nenhum na tela. O botão fica
+// abaixo do pé e se alcança rolando a coluna; estes portões prendem o que não pode ceder no lugar dele
 for (const locale of ['en', 'pt-BR'] as const) {
   for (const [width, height] of [
     [1440, 680],
     [1280, 660],
   ] as const) {
-    test(`keeps the accept button inside the column in ${locale} at ${width}x${height}`, async ({
+    test(`never hides the seam to fit the accept button in ${locale} at ${width}x${height}`, async ({
       page,
     }) => {
       test.slow()
@@ -708,45 +709,58 @@ for (const locale of ['en', 'pt-BR'] as const) {
         })
         .click()
       await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
-      // FIX: o tipo variável chega depois do primeiro desenho e o piso do cartão de estado entra
-      // por transição; medir antes dos dois media uma coluna que o observador nunca chega a ver
+      // FIX: o tipo variável chega depois do primeiro desenho e reflui as linhas; medir antes dele
+      // media uma coluna que o observador nunca chega a ver
       await page.evaluate(() => document.fonts.ready)
       await page.waitForFunction(() => {
-        const card = document.querySelector('.card--state')
-        if (!card) return false
-        const win = window as unknown as { __settled?: { height: number; frames: number } }
-        const height = Math.round(card.getBoundingClientRect().height)
+        const rail = document.querySelector('.hud__left')
+        if (!rail) return false
+        const win = window as unknown as { __settled?: { key: string; frames: number } }
+        const key = [...rail.children]
+          .map((card) => Math.round(card.getBoundingClientRect().height))
+          .join(',')
         const seen = win.__settled
         win.__settled =
-          seen && seen.height === height
-            ? { height, frames: seen.frames + 1 }
-            : { height, frames: 1 }
+          seen && seen.key === key ? { key, frames: seen.frames + 1 } : { key, frames: 1 }
         return win.__settled.frames >= 5
       })
 
-      const fits = await page.evaluate(() => {
+      const shown = await page.evaluate(() => {
         const rail = document.querySelector('.hud__left')
-        const card = document.querySelector('.card--merge')
+        const statePanel = document.querySelector('.panel.state')
         const seam = document.querySelector('.merge__seam')
         const button = document.querySelector('button.merge__confirm')
-        const ends = document.querySelector('.merge__ends')
-        if (!rail || !card || !seam || !button || !ends) return null
-        const box = rail.getBoundingClientRect()
+        if (!rail || !statePanel || !seam || !button) return null
+        const railBox = rail.getBoundingClientRect()
+        const seamBox = seam.getBoundingClientRect()
+        // FEAT: quanto de cada caixa a que a rola deixa mesmo aparecer
+        const whole = (node: Element, clip: DOMRect) => {
+          const box = node.getBoundingClientRect()
+          return box.top >= clip.top - 1 && box.bottom <= clip.bottom + 1
+        }
         return {
-          below: Math.round(button.getBoundingClientRect().bottom - box.bottom),
-          endsBelow: Math.round(ends.getBoundingClientRect().bottom - box.bottom),
-          card: Math.round(card.getBoundingClientRect().height),
-          rail: rail.clientHeight,
+          stateClient: statePanel.clientHeight,
+          stateRows: [...statePanel.querySelectorAll('.state__row')].filter((row) =>
+            whole(row, statePanel.getBoundingClientRect()),
+          ).length,
+          seamSeen: Math.round(seamBox.height),
           seamScrolls: seam.scrollHeight > seam.clientHeight,
+          seamRows: [...document.querySelectorAll('.merge__rows li')].filter((row) =>
+            whole(row, seamBox),
+          ).length,
+          reachable: button.getBoundingClientRect().bottom <= railBox.top + rail.scrollHeight + 1,
         }
       })
-      if (!fits) throw new Error('the merge rail did not render')
-      // FEAT: o botão e o aviso do fim, que é o que ele descreve, ficam os dois dentro da coluna
-      expect(fits.below).toBeLessThanOrEqual(0)
-      expect(fits.endsBelow).toBeLessThanOrEqual(0)
-      expect(fits.card).toBeLessThanOrEqual(fits.rail + 1)
-      // FEAT: o aperto degrada para a costura rolando por dentro, não para um botão fora da vista
-      expect(fits.seamScrolls).toBe(true)
+      if (!shown) throw new Error('the merge rail did not render')
+      // FEAT: o cartão de estado nunca vira uma tarja de altura zero com o foco preso lá dentro
+      expect(shown.stateClient).toBeGreaterThan(24)
+      expect(shown.stateRows).toBeGreaterThanOrEqual(1)
+      // FEAT: a costura mostra uma fatia legível dos níveis e rola para o resto
+      expect(shown.seamSeen).toBeGreaterThanOrEqual(60)
+      expect(shown.seamRows).toBeGreaterThanOrEqual(2)
+      expect(shown.seamScrolls).toBe(true)
+      // FEAT: e o botão, ainda que abaixo do pé, está dentro do que a coluna rola
+      expect(shown.reachable).toBe(true)
     })
   }
 }

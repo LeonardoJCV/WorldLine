@@ -759,20 +759,78 @@ test('in cross mode it is the crossing card that yields, not the state above it'
   await expect(page.locator('.panel.cross')).toBeVisible()
   const squeeze = await page.evaluate(() => {
     const statePanel = document.querySelector('.panel.state')
-    const stateCard = document.querySelector('.card--state')
+    const crossPanel = document.querySelector('.panel.cross')
     const crossCard = document.querySelector('.card--cross')
-    if (!statePanel || !stateCard || !crossCard) return null
+    if (!statePanel || !crossPanel || !crossCard) return null
+    const rail = document.querySelector('.hud__left')
+    if (!rail) return null
+    const railBox = rail.getBoundingClientRect()
+    const seen = (node: Element) => {
+      const box = node.getBoundingClientRect()
+      return Math.max(0, Math.min(box.bottom, railBox.bottom) - Math.max(box.top, railBox.top))
+    }
     return {
-      stateFits: statePanel.scrollHeight <= statePanel.clientHeight + 1,
+      stateClient: statePanel.clientHeight,
+      stateScrolls: statePanel.scrollHeight > statePanel.clientHeight,
       stateRows: statePanel.querySelectorAll('.state__row').length,
       crossHeight: crossCard.getBoundingClientRect().height,
+      crossSeen: Math.round(seen(crossPanel)),
     }
   })
   if (!squeeze) throw new Error('the cross rail did not render')
-  // FIX: o estado é a referência da comparação; quem cede altura agora é o cartão de cruzar
-  expect(squeeze.stateFits).toBe(true)
+  // FIX: com o estado inteiro nesta coluna o cartão de cruzar nascia abaixo do pé dela e não tinha
+  // um pixel visível; o estado cede até o seu piso e rola por dentro, e os dois se leem
+  expect(squeeze.stateClient).toBeGreaterThan(24)
+  expect(squeeze.stateScrolls).toBe(true)
   expect(squeeze.stateRows).toBeGreaterThan(0)
   expect(squeeze.crossHeight).toBeGreaterThanOrEqual(112)
+  expect(squeeze.crossSeen).toBeGreaterThan(24)
+})
+
+// FIX: os três cartões cujo painel rola por dentro passavam do pé da coluna por cima do piso do
+// estado — o de cruzar sem um pixel visível, o de obras com 124px de catálogo permanentemente fora
+test('keeps every mode card whose panel scrolls inside the column it lives in', async ({
+  page,
+}) => {
+  test.slow()
+  await useGraphics(page, '2d')
+  await page.setViewportSize({ width: 1280, height: 660 })
+  await worldAtYear(page, 5)
+  await branchFromStart(page)
+  for (const [mode, panel] of [
+    ['Cross', '.panel.cross'],
+    ['Build', '.panel.build'],
+    ['Intervene', '.panel.allocation'],
+  ] as const) {
+    await page.getByRole('button', { name: mode, exact: true }).click()
+    await expect(page.locator(panel)).toBeVisible()
+    const fits = await page.evaluate((selector: string) => {
+      const rail = document.querySelector('.hud__left')
+      const own = document.querySelector(selector)
+      const card = own?.closest('.card') ?? null
+      if (!rail || !own || !card) return null
+      const railBox = rail.getBoundingClientRect()
+      const state = document.querySelector('.card--state')
+      return {
+        rail: rail.clientHeight,
+        state: Math.round(state?.getBoundingClientRect().height ?? 0),
+        card: Math.round(card.getBoundingClientRect().height),
+        below: Math.round(card.getBoundingClientRect().bottom - railBox.bottom),
+        seen: Math.round(
+          Math.max(
+            0,
+            Math.min(own.getBoundingClientRect().bottom, railBox.bottom) -
+              Math.max(own.getBoundingClientRect().top, railBox.top),
+          ),
+        ),
+      }
+    }, panel)
+    if (!fits) throw new Error(`the ${mode} rail did not render`)
+    // FEAT: o cartão dentro da coluna a menos do vão que separa os dois, que é o que os dois pisos
+    // de 112px podem forçar numa coluna curta, e o painel com uma fatia legível dele à vista
+    expect(fits.below, `${mode} ${JSON.stringify(fits)}`).toBeLessThanOrEqual(12)
+    expect(fits.seen, `${mode} ${JSON.stringify(fits)}`).toBeGreaterThan(24)
+  }
 })
 
 test('the cards are read before the floor the stage keeps for itself', async ({ page }) => {

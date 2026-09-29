@@ -91,15 +91,20 @@ describe('CausalPanel', () => {
         causes: [
           { kind: 'event', record: NEVER },
           { kind: 'event', record: 7 },
+          // FEAT: uma causa que existe de verdade, senão o portão não sabe distinguir "sem
+          // registro" de "não é a raiz", e apagar o botão de toda causa passaria por conserto
+          { kind: 'event', record: 1 },
           { kind: 'condition', metric: 'foodSecurity', op: '<', threshold: 1, value: 0.4 },
         ],
       },
+      { event: 'golden_age', start: 4, end: 9, causes: [] },
     ]
     const html = render(events, [], 0)
     expect(html).toContain('Unknown event')
-    // FEAT: só a raiz, que tem registro, continua botão — nem o sentinela, nem o índice fora da
-    // fila, nem a condição
-    expect(html.match(/<button/g) ?? []).toHaveLength(1)
+    expect(html).toContain('Golden age')
+    // FEAT: a raiz e a causa que tem registro são botões; o sentinela, o índice fora da fila e a
+    // condição não são
+    expect(html.match(/<button/g) ?? []).toHaveLength(2)
     expect(html).toMatch(/<div class="causal__node" data-kind="event"/)
   })
 
