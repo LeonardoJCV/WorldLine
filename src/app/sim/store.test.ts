@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { HORIZON } from '../../engine/params.ts'
+import { NEVER } from '../../engine/state.ts'
 import type { FromWorker, SeamPreview, Snapshot, ToWorker } from '../../worker/protocol.ts'
 import { currentLink } from '../world/current.ts'
 import { SimulationClient, type Port } from './client.ts'
-import { createSimulationStore } from './store.ts'
+import { createSimulationStore, MODES } from './store.ts'
 import { connectInProcess, flush } from './testing.ts'
 
 function setup() {
@@ -67,6 +68,9 @@ function fakeSnapshot(shock: number): Snapshot {
     status: 'running',
     home: null,
     debts: [],
+    works: [],
+    building: null,
+    rate: 0,
   }
 }
 
@@ -80,6 +84,13 @@ function fakePreview(shock: number, tick = 2000): SeamPreview {
     debtSettled: 0,
   }
 }
+
+describe('MODES', () => {
+  // FIX: isto fixa a ordem; se a barra realmente desenha um botão por modo, TopBar.test.ts prova
+  it('lists exactly these five modes, in the order the bar shows them', () => {
+    expect(MODES).toEqual(['observe', 'intervene', 'cross', 'merge', 'build'])
+  })
+})
 
 describe('simulation store', () => {
   it('creates a world and shows year zero', async () => {
@@ -167,6 +178,27 @@ describe('simulation store', () => {
     expect(store.getState().inspected?.tick).toBe(start)
   })
 
+  // FIX: uma obra que a confluência trouxe carrega `record: NEVER`, e o painel causal desenhava
+  // esse índice como causa; aceitá-lo aqui zerava o cartão e deixava o ano onde estava
+  it('refuses an index no record answers to, and keeps the choice it already had', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(200)
+    await flush()
+    const index = store.getState().events.findIndex((r) => r.event === 'golden_age')
+    store.getState().select(index)
+    await flush()
+    const cursor = store.getState().cursor
+    store.getState().select(NEVER)
+    // FEAT: o sentinela é negativo, mas a regra é o registro não existir — o fim da fila também não
+    store.getState().select(store.getState().events.length)
+    expect(store.getState().selected).toBe(index)
+    expect(store.getState().cursor).toBe(cursor)
+    // FEAT: e nada disto fecha a porta de largar a escolha
+    store.getState().select(null)
+    expect(store.getState().selected).toBeNull()
+  })
+
   it('records decisions made at the present', async () => {
     const { store } = setup()
     const allocation = { agriculture: 60, industry: 15, research: 10, conservation: 10, works: 5 }
@@ -176,6 +208,27 @@ describe('simulation store', () => {
     store.getState().decide(allocation)
     await flush()
     expect(store.getState().decisions).toEqual([{ tick: 30, allocation }])
+  })
+
+  // FEAT: mesma forma de decide — dispara e esquece, sem id de pedido — e o mesmo alvo: o mundo em foco
+  it('commissions a work in the world that is in focus', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    store.getState().step(600)
+    await flush()
+    store.getState().commission('irrigation')
+    store.getState().step(30)
+    await flush()
+    expect(store.getState().worlds[0]?.commissions).toEqual([{ tick: 600, work: 'irrigation' }])
+  })
+
+  // FIX: a rota é `get().focus`, não uma realidade fixa — sem isto um comissionamento sempre sairia para 'A'
+  it('routes the commission through whichever world the store has in focus', () => {
+    const { port, sent } = recordingPort()
+    const store = createSimulationStore(new SimulationClient(port))
+    store.setState({ focus: 'B' })
+    store.getState().commission('irrigation')
+    expect(sent).toContainEqual({ type: 'commission', world: 'B', work: 'irrigation' })
   })
 
   it('keeps the cursor on the observed year when entering Intervene', async () => {
@@ -188,6 +241,17 @@ describe('simulation store', () => {
     store.getState().setMode('intervene')
     expect(store.getState().mode).toBe('intervene')
     expect(store.getState().cursor).toBe(10)
+  })
+
+  it('forgets a stray cross or merge pick when the fifth mode is entered', async () => {
+    const { store } = setup()
+    store.getState().create(482913)
+    await flush()
+    store.getState().setMode('cross')
+    store.getState().setCrossOrigin('A')
+    store.getState().setMode('build')
+    expect(store.getState().mode).toBe('build')
+    expect(store.getState().crossOrigin).toBeNull()
   })
 
   it('starts a new world observing its whole history', async () => {

@@ -1,24 +1,50 @@
-import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
-import { buildCausalTree, type CausalNode } from '../causal/tree.ts'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
+import { MAX_DEPTH, buildCausalTree, type CausalNode } from '../causal/tree.ts'
 import { formatComparison, formatYear, metricKey } from '../i18n/format.ts'
 import { useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
+import { foldedWorksText, workEventTitle } from './build.ts'
 
 const COLUMN = 232
 const NODE_WIDTH = 200
 const NODE_HEIGHT = 48
 const ROW = 60
 const PAD = 8
+const NO_WORKS = Object.freeze([])
+const NOTHING_OPEN: ReadonlySet<string> = new Set()
 
 export function CausalPanel() {
   const t = useT()
   const locale = useLocale()
   const events = useSimulation((s) => s.events)
+  const works = useSimulation((s) => s.present?.works ?? NO_WORKS)
   const selected = useSimulation((s) => s.selected)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // FEAT: as chaves carregam o registro da raiz, então a abertura de um cartão nunca abre a de outro
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NOTHING_OPEN)
+  const held = useRef<{ key: string; offset: number } | null>(null)
+  // FIX: abrir o grupo muda a linha dele e a da raiz, e sem guardar onde o dedo o deixou o cartão
+  // rolava para outro trecho da cadeia — levando embora as obras reveladas e o botão de desfazer
+  const toggle = useCallback((key: string, row: number) => {
+    const element = scrollRef.current
+    held.current = element === null ? null : { key, offset: PAD + row * ROW - element.scrollTop }
+    setOpened((current) => {
+      const next = new Set(current)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  }, [])
   const tree = useMemo(
-    () => (selected === null ? null : buildCausalTree(events, selected)),
-    [events, selected],
+    () => (selected === null ? null : buildCausalTree(events, selected, MAX_DEPTH, opened)),
+    [events, selected, opened],
   )
   // FEAT: a fila de causas de um acontecimento já gravado não muda, então a linha da raiz é estável
   // por todo o tempo em que ele fica selecionado — só troca quando `selected` troca
@@ -38,12 +64,17 @@ export function CausalPanel() {
 
   // FIX: sem centralizar a raiz na vertical, uma árvore com dois ramos (como a herança, que sobe
   // tanto pelo colapso quanto pela colônia) deixa o ramo mais baixo fora da faixa visível
+  const centred = useRef<number | null>(null)
   useEffect(() => {
     const element = scrollRef.current
     if (!element) return
-    element.scrollLeft = element.scrollWidth
-    if (rootRow !== undefined) {
-      element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
+    // FIX: centraliza uma vez por acontecimento escolhido, não a cada dobra que move a raiz
+    if (centred.current !== selected) {
+      centred.current = selected
+      element.scrollLeft = element.scrollWidth
+      if (rootRow !== undefined) {
+        element.scrollTop = PAD + rootRow * ROW + NODE_HEIGHT / 2 - element.clientHeight / 2
+      }
     }
     markEdges()
     const observer = new ResizeObserver(markEdges)
@@ -51,8 +82,21 @@ export function CausalPanel() {
     return () => observer.disconnect()
   }, [selected, rootRow, markEdges])
 
+  // FEAT: devolve o nó dobrado ao ponto exato em que foi clicado, já com a árvore nova desenhada
+  useLayoutEffect(() => {
+    const element = scrollRef.current
+    const pending = held.current
+    held.current = null
+    if (!element || !pending || !tree) return
+    const node = tree.nodes.find((candidate) => candidate.key === pending.key)
+    if (!node) return
+    element.scrollTop = PAD + node.row * ROW - pending.offset
+    markEdges()
+  }, [tree, markEdges])
+
   const root = selected === null ? undefined : events[selected]
-  if (!tree || !root) {
+  // FIX: o rótulo acessível também nomeia a obra, então `selected` já sai estreito aqui
+  if (selected === null || !tree || !root) {
     return (
       <section className="panel causal" aria-labelledby="causal-title">
         <h2 className="panel__title" id="causal-title">
@@ -79,7 +123,10 @@ export function CausalPanel() {
           record.end === null || record.end === record.start
             ? formatYear(record.start)
             : `${formatYear(record.start)}–${formatYear(record.end)}`
-        return [t(`event.${record.event}`), node.repeated ? t('causal.repeated') : years]
+        return [
+          workEventTitle(t, works, record.event, node.record),
+          node.repeated ? t('causal.repeated') : years,
+        ]
       }
       case 'condition': {
         const { metric, value, op, threshold } = node.cause
@@ -104,6 +151,10 @@ export function CausalPanel() {
           t('causal.merge', { other: node.cause.other, year: formatYear(node.cause.tick) }),
           '',
         ]
+      // FEAT: a linha diz quantas obras estão ali e nenhum nome, porque escolher um nome seria
+      // ordenar causas que o motor se recusa a ordenar
+      case 'works':
+        return foldedWorksText(t, node.records.length, node.open)
     }
   }
 
@@ -133,7 +184,7 @@ export function CausalPanel() {
         onScroll={markEdges}
         tabIndex={0}
         role="group"
-        aria-label={t('causal.label', { event: t(`event.${root.event}`) })}
+        aria-label={t('causal.label', { event: workEventTitle(t, works, root.event, selected) })}
       >
         <div className="causal__canvas" style={{ width, height }}>
           <svg className="causal__links" width={width} height={height} aria-hidden="true">
@@ -167,9 +218,13 @@ export function CausalPanel() {
                 <span className="causal__detail">{detail}</span>
               </>
             )
-            if (node.kind === 'condition') {
+            // FIX: nó sem registro não é botão — a store recusa o índice, e um botão que nada faz
+            // continuaria convidando o clique
+            const inert =
+              node.kind === 'condition' || (node.kind === 'event' && !events[node.record])
+            if (inert) {
               return (
-                <div key={node.key} className="causal__node" data-kind="condition" style={style}>
+                <div key={node.key} className="causal__node" data-kind={node.kind} style={style}>
                   {body}
                 </div>
               )
@@ -182,10 +237,13 @@ export function CausalPanel() {
                 data-kind={node.kind}
                 data-root={node.depth === 0}
                 style={style}
+                aria-expanded={node.kind === 'works' ? node.open : undefined}
                 onClick={
                   node.kind === 'event'
                     ? () => select(node.record)
-                    : () => setCursor(node.cause.tick)
+                    : node.kind === 'works'
+                      ? () => toggle(node.key, node.row)
+                      : () => setCursor(node.cause.tick)
                 }
               >
                 {body}

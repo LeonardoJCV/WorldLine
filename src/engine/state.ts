@@ -29,6 +29,8 @@ export const Era = {
   space: 16,
 } as const
 
+export type EraValue = (typeof Era)[keyof typeof Era]
+
 export const NEVER = -1_000_000
 
 export interface Decision {

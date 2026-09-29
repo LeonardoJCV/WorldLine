@@ -4,6 +4,7 @@ type ConditionCause = Extract<Cause, { kind: 'condition' }>
 type DecisionCause = Extract<Cause, { kind: 'decision' }>
 type CrossingCause = Extract<Cause, { kind: 'crossing' }>
 type MergeCause = Extract<Cause, { kind: 'merge' }>
+type EventCause = Extract<Cause, { kind: 'event' }>
 
 interface NodeBase {
   readonly key: string
@@ -19,6 +20,13 @@ export type CausalNode =
   | (NodeBase & { readonly kind: 'crossing'; readonly cause: CrossingCause })
   // FEAT: nomeia a outra história sem apontar nela, igual a crossing
   | (NodeBase & { readonly kind: 'merge'; readonly cause: MergeCause })
+  // FEAT: as obras que um acontecimento nomeia, contadas numa linha só; `open` diz se os nós de
+  // cada uma estão pendurados nela neste desenho
+  | (NodeBase & {
+      readonly kind: 'works'
+      readonly records: readonly number[]
+      readonly open: boolean
+    })
 
 export interface CausalTree {
   readonly nodes: readonly CausalNode[]
@@ -28,14 +36,25 @@ export interface CausalTree {
 
 export const MAX_DEPTH = 3
 
+// FEAT: duas obras já são um grupo; uma só continua sendo ela mesma
+const FOLD_WORKS = 2
+
+const NONE: ReadonlySet<string> = new Set()
+
 export function buildCausalTree(
   records: readonly EventRecord[],
   root: number,
   maxDepth = MAX_DEPTH,
+  expanded: ReadonlySet<string> = NONE,
 ): CausalTree {
   const nodes: CausalNode[] = []
   let nextRow = 0
   let deepest = 0
+
+  // FEAT: obra se reconhece pelo registro apontado, nunca por `kind` — `work_done` é pulse como a
+  // colônia, a herança e a confluência, e dobrar por kind varreria todas para a mesma linha
+  const isWork = (cause: Cause): cause is EventCause =>
+    cause.kind === 'event' && records[cause.record]?.event === 'work_done'
 
   const visit = (
     index: number,
@@ -51,7 +70,34 @@ export function buildCausalTree(
     const rows: number[] = []
     deepest = Math.max(deepest, depth)
 
+    const works = causes.filter(isWork)
+    // FIX: dobra só onde a linha pode abrir dentro do limite: na última coluna as obras já são
+    // folhas e uma linha que não abre esconderia o que hoje se lê
+    const group = works.length >= FOLD_WORKS && depth + 2 <= maxDepth ? `${key}/w` : null
+    const at = group === null ? -1 : causes.findIndex(isWork)
+    const open = group !== null && expanded.has(group)
+
     causes.forEach((cause, c) => {
+      if (group !== null && isWork(cause)) {
+        // FIX: a linha nasce no lugar da primeira obra; as outras já estão contadas nela
+        if (c !== at) return
+        const inner: number[] = []
+        if (open) for (const work of works) inner.push(visit(work.record, depth + 2, group, within))
+        const row = open ? ((inner[0] ?? 0) + (inner.at(-1) ?? 0)) / 2 : nextRow++
+        deepest = Math.max(deepest, depth + 1)
+        const folded = works.map((work) => work.record)
+        nodes.push({
+          key: group,
+          kind: 'works',
+          depth: depth + 1,
+          row,
+          parent: key,
+          records: folded,
+          open,
+        })
+        rows.push(row)
+        return
+      }
       if (cause.kind === 'event') {
         rows.push(visit(cause.record, depth + 1, key, within))
         return

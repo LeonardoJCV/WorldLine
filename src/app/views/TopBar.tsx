@@ -3,12 +3,12 @@ import { GraphicsMenu } from '../graphics/GraphicsMenu.tsx'
 import { formatYear } from '../i18n/format.ts'
 import { localeStore, useLocale, useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
-import type { Mode } from '../sim/store.ts'
+import { MODES } from '../sim/store.ts'
 import { usePhone } from './BottomSheet.tsx'
+import { buildReady, buildView } from './build.ts'
 import { SetupMenu } from './SetupMenu.tsx'
 
 const OPTIONS: readonly Speed[] = [...SPEEDS, 'max']
-const MODES: readonly Mode[] = ['observe', 'intervene', 'cross', 'merge']
 
 export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const t = useT()
@@ -21,7 +21,11 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const speed = useSimulation((s) => s.speed)
   const ended = useSimulation((s) => s.ended)
   const mode = useSimulation((s) => s.mode)
+  const present = useSimulation((s) => s.present)
   const { togglePlay, step, setSpeed, setCursor, setMode } = simulation.getState()
+  // FEAT: o ponto avisa que o canteiro está livre e algo está ao alcance, sem interromper como os
+  // avisos de paradoxo e confluência — uma obra termina a cada ~90 anos, cedo demais para um aviso
+  const ready = present !== null && buildReady(buildView(present))
   const other = locale === 'en' ? 'pt-BR' : 'en'
   const playName = playing ? t('transport.pause') : t('transport.play')
   const stepName = t('transport.step')
@@ -53,16 +57,21 @@ export function TopBar({ onLeave }: { readonly onLeave: () => void }) {
   const controls = (
     <div className="topbar__controls">
       <div className="mode" role="group" aria-label={t('mode.label')}>
-        {MODES.map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={mode === option}
-            onClick={() => setMode(option)}
-          >
-            {t(`mode.${option}`)}
-          </button>
-        ))}
+        {MODES.map((option) => {
+          const marked = option === 'build' && ready
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={mode === option}
+              aria-label={marked ? t('mode.buildReady', { name: t(`mode.${option}`) }) : undefined}
+              onClick={() => setMode(option)}
+            >
+              {t(`mode.${option}`)}
+              {marked && <span className="mode__ready" aria-hidden="true" />}
+            </button>
+          )
+        })}
       </div>
 
       <div className="transport" role="group" aria-label={t('transport.label')}>

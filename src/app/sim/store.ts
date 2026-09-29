@@ -7,6 +7,7 @@ import type { EventRecord } from '../../engine/events.ts'
 import type { Merge } from '../../engine/merge.ts'
 import { MODEL_VERSION } from '../../engine/params.ts'
 import type { Allocation, Decision } from '../../engine/state.ts'
+import type { WorkId } from '../../engine/work.ts'
 import type {
   EndReason,
   EventUpdate,
@@ -19,7 +20,9 @@ import type {
 import type { MultiverseLink } from '../world/link.ts'
 import type { SimulationClient } from './client.ts'
 
-export type Mode = 'observe' | 'intervene' | 'cross' | 'merge'
+// FEAT: fonte única dos modos; a barra deriva os botões daqui em vez de copiar a lista à mão
+export const MODES = ['observe', 'intervene', 'cross', 'merge', 'build'] as const
+export type Mode = (typeof MODES)[number]
 
 export interface View {
   readonly span: number
@@ -82,6 +85,7 @@ export interface SimulationState {
   setMergeOther(id: WorldlineId | null): void
   select(index: number | null): void
   decide(allocation: Allocation): void
+  commission(work: WorkId): void
   branch(allocation: Allocation): void
   cross(kind: CrossingKind, dose: Dose): Promise<void>
   remove(id: WorldlineId): void
@@ -288,13 +292,21 @@ export function createSimulationStore(client: SimulationClient): SimulationStore
     setMergeOther(id) {
       set({ mergeOther: id, mergePreview: null })
     },
+    // FIX: um índice sem registro não vira seleção, senão o sentinela de uma obra confluída zerava
+    // o cartão causal sem mover o ano — nenhum registro, nenhuma escolha
     select(index) {
-      set({ selected: index })
       const record = index === null ? undefined : get().events[index]
+      if (index !== null && record === undefined) return
+      set({ selected: index })
       if (record) get().setCursor(record.start)
     },
     decide(allocation) {
       client.decide(get().focus, allocation)
+    },
+    // FEAT: mesma forma de decide: dispara e esquece, porque comissionar não tem como falhar de um
+    // jeito que a tela precise ouvir
+    commission(work) {
+      client.commission(get().focus, work)
     },
     branch(allocation) {
       const { focus, cursor, present } = get()

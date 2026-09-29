@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { EVENTS, EVENT_IDS } from '../../engine/events.ts'
-import { Era } from '../../engine/state.ts'
+import { Era, type EraValue } from '../../engine/state.ts'
+import { FACTOR_KEYS, TERM_KEYS, WORKS, type WorkKey } from '../../engine/work.ts'
 import { en } from './en.ts'
 import {
   embedLabel,
+  eraKey,
   formatChange,
   formatCompact,
   formatComparison,
@@ -14,9 +16,35 @@ import {
   formatVariable,
   formatYear,
   metricKey,
+  workKey,
 } from './format.ts'
 import { detectLocale, translate } from './index.ts'
 import { ptBR } from './pt-BR.ts'
+
+// FEAT: o rótulo esperado de cada coeficiente, escrito à mão nos dois idiomas — é a única coisa que
+// prova que a junção aponta para o nome certo e não só para um nome que existe
+const EFFECT_LABELS: Readonly<Record<WorkKey, readonly [string, string]>> = {
+  harvest: ['Harvest', 'Colheita'],
+  production: ['Production', 'Produção'],
+  research: ['Research', 'Pesquisa'],
+  energy: ['Energy', 'Energia'],
+  economy: ['Economy', 'Economia'],
+  capacity: ['Carrying capacity', 'Capacidade de suporte'],
+  colonyCost: ['Colony upkeep', 'Manutenção das colônias'],
+  smoke: ['Pollution', 'Poluição'],
+  mortality: ['Mortality rate', 'Taxa de mortalidade'],
+  spoil: ['Food spoilage', 'Perda de comida'],
+  harvestNoise: ['Harvest variance', 'Variação das safras'],
+  pollution: ['Extra pollution', 'Poluição extra'],
+}
+
+const ERA_LABELS: Readonly<Record<EraValue, readonly [string, string]>> = {
+  [Era.agricultural]: ['Agricultural age', 'Era agrícola'],
+  [Era.classical]: ['Classical age', 'Era clássica'],
+  [Era.industrial]: ['Industrial age', 'Era industrial'],
+  [Era.electric]: ['Electric age', 'Era elétrica'],
+  [Era.space]: ['Space age', 'Era espacial'],
+}
 
 const values = {
   population: 4_200_000,
@@ -35,11 +63,23 @@ describe('dictionaries', () => {
       expect(text.trim()).not.toBe('')
   })
 
+  // FIX: paridade de chaves não é paridade de parâmetros — soltar {survivor} da frase da comida em
+  // pt-BR deixava a suíte verde, e a tradução passava a esconder de quem era o número
+  it('fills the same named parameters in both languages, key by key', () => {
+    const named = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((hit) => hit[1]).sort()
+    const keys = Object.keys(en) as (keyof typeof en)[]
+    const parameterised = keys.filter((key) => named(en[key]).length > 0)
+    // FEAT: sem uma frase parametrizada na lista o portão passaria de graça
+    expect(parameterised.length).toBeGreaterThan(20)
+    for (const key of keys) {
+      expect(named(ptBR[key]), key).toEqual(named(en[key]))
+    }
+  })
+
   // FEAT: a cobertura por acontecimento já é total no tipo — faltar `event.<id>` é erro de compilação
   // em en.ts e em pt-BR.ts, e em execução `translate` indexa o dicionário e lançaria em vez de mostrar
   // a chave crua; o que este teste acrescenta é o que o tipo não vê: quantas eras existem e que
-  // `work_done` está na união. Obra nenhuma tem nome traduzido em idioma nenhum, de propósito, porque
-  // nada as exibe até o Plano 24.
+  // `work_done` está na união.
   it('names every event, era included, in both languages', () => {
     for (const id of EVENT_IDS) {
       expect(translate('en', `event.${id}`).trim(), id).not.toBe('')
@@ -48,6 +88,49 @@ describe('dictionaries', () => {
     const eras = EVENTS.filter((def) => def.kind === 'era')
     expect(eras).toHaveLength(Object.keys(Era).length)
     expect(EVENT_IDS).toContain('work_done')
+  })
+
+  // FEAT: o nome da obra é conteúdo traduzido e o efeito dela é renderizado do catálogo, então o
+  // que precisa de tradução são os doze coeficientes — e três deles já tinham nome em outra tela
+  it('names every work, every coefficient a work moves and every era of the catalogue', () => {
+    for (const work of WORKS) {
+      expect(translate('en', `work.${work.id}`).trim(), work.id).not.toBe('')
+      expect(translate('pt-BR', `work.${work.id}`).trim(), work.id).not.toBe('')
+    }
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) {
+      expect(translate('en', workKey(key)).trim(), key).not.toBe('')
+      expect(translate('pt-BR', workKey(key)).trim(), key).not.toBe('')
+    }
+    for (const era of Object.values(Era)) {
+      expect(translate('en', eraKey(era)).trim(), String(era)).not.toBe('')
+      expect(translate('pt-BR', eraKey(era)).trim(), String(era)).not.toBe('')
+    }
+    expect(new Set(WORKS.map((work) => translate('en', `work.${work.id}`)))).toHaveLength(
+      WORKS.length,
+    )
+    expect(new Set(WORKS.map((work) => translate('pt-BR', `work.${work.id}`)))).toHaveLength(
+      WORKS.length,
+    )
+  })
+
+  // FEAT: `workKey` e `eraKey` são tabelas de junção, e o tipo só garante que o destino EXISTE —
+  // apontar `research` para o rótulo da indústria compila e tem texto. Esta tabela diz qual é o certo
+  it('points every coefficient and every era at the label that means it', () => {
+    for (const key of [...FACTOR_KEYS, ...TERM_KEYS]) {
+      const [english, portuguese] = EFFECT_LABELS[key]
+      expect(translate('en', workKey(key)), key).toBe(english)
+      expect(translate('pt-BR', workKey(key)), key).toBe(portuguese)
+    }
+    for (const era of Object.values(Era)) {
+      const [english, portuguese] = ERA_LABELS[era]
+      expect(translate('en', eraKey(era)), String(era)).toBe(english)
+      expect(translate('pt-BR', eraKey(era)), String(era)).toBe(portuguese)
+    }
+    // FEAT: duas entradas na mesma chave dariam o mesmo nome a dois coeficientes, e uma era sumiria
+    const coefficients = [...FACTOR_KEYS, ...TERM_KEYS].map(workKey)
+    expect(new Set(coefficients)).toHaveLength(coefficients.length)
+    const eras = Object.values(Era).map(eraKey)
+    expect(new Set(eras)).toHaveLength(eras.length)
   })
 })
 

@@ -1,0 +1,172 @@
+import type { EventId } from '../../engine/events.ts'
+import { Era, NEVER, type EraValue } from '../../engine/state.ts'
+import {
+  FACTOR_KEYS,
+  PRESENTATION_ORDER,
+  TERM_KEYS,
+  WORKS,
+  isCommissionable,
+  type Work,
+  type WorkId,
+  type WorkKey,
+} from '../../engine/work.ts'
+import type { Snapshot } from '../../worker/protocol.ts'
+import type { MessageKey } from '../i18n/en.ts'
+import type { Params } from '../i18n/index.ts'
+
+export type WorkState = 'done' | 'building' | 'open' | 'locked'
+
+export interface WorkRow {
+  readonly def: number
+  readonly id: WorkId
+  readonly era: number
+  readonly state: WorkState
+  readonly years: number | null
+  readonly missing: readonly WorkId[]
+}
+
+export function buildView(snapshot: Snapshot): readonly WorkRow[] {
+  const site = snapshot.building
+  const standing = new Set(snapshot.works.map((work) => WORKS[work.def]?.id))
+  const rows: WorkRow[] = []
+  // FEAT: a ordem vem do motor, que já garante que nenhuma obra aparece antes de um pré-requisito seu
+  for (const def of PRESENTATION_ORDER) {
+    const work = WORKS[def]
+    if (work === undefined) continue
+    const done = standing.has(work.id)
+    const building = site !== null && site.def === def
+    // FEAT: a condição de encomendar é de `isCommissionable`; o canteiro aberto é a ÚNICA recusa
+    // que a tela acrescenta, porque o motor aceitaria trocar de obra e perder o que já está de pé
+    const state: WorkState = done
+      ? 'done'
+      : building
+        ? 'building'
+        : isCommissionable(snapshot, def)
+          ? 'open'
+          : 'locked'
+    const progress = building ? site.progress : 0
+    // FIX: a guarda é `> 0` e não `<= 0` porque uma taxa NaN escapa da segunda e chega à tela
+    const years =
+      !done && snapshot.rate > 0 ? Math.ceil((work.cost - progress) / snapshot.rate) : null
+    rows.push({
+      def,
+      id: work.id,
+      era: work.era,
+      state,
+      years,
+      missing: work.needs.filter((need) => !standing.has(need)),
+    })
+  }
+  return rows
+}
+
+export const ERAS: readonly EraValue[] = [
+  Era.agricultural,
+  Era.classical,
+  Era.industrial,
+  Era.electric,
+  Era.space,
+]
+
+export interface EraGroup {
+  readonly era: EraValue
+  readonly open: boolean
+  readonly rows: readonly WorkRow[]
+}
+
+export function buildGroups(snapshot: Snapshot): readonly EraGroup[] {
+  const rows = buildView(snapshot)
+  return ERAS.map((era) => ({
+    era,
+    open: (snapshot.eras & era) !== 0,
+    rows: rows.filter((row) => row.era === era),
+  }))
+}
+
+export interface WorkEffect {
+  readonly key: WorkKey
+  readonly kind: 'factor' | 'term'
+  readonly value: number
+}
+
+// FEAT: o efeito sai do próprio catálogo, então nenhuma frase escrita à mão pode discordar do número
+export function effectsOf(def: number): readonly WorkEffect[] {
+  const effect = WORKS[def]?.effect
+  if (effect === undefined) return []
+  const changes: WorkEffect[] = []
+  for (const key of FACTOR_KEYS) {
+    const value = effect[key]
+    if (value !== undefined) changes.push({ key, kind: 'factor', value })
+  }
+  for (const key of TERM_KEYS) {
+    const value = effect[key]
+    if (value !== undefined) changes.push({ key, kind: 'term', value })
+  }
+  return changes
+}
+
+// FEAT: quanto da obra em curso já está de pé, entre 0 e 1; null quando não há canteiro aberto
+export function siteProgress(snapshot: Snapshot): number | null {
+  const site = snapshot.building
+  if (site === null) return null
+  const cost = WORKS[site.def]?.cost
+  if (cost === undefined || cost <= 0) return null
+  return site.progress / cost
+}
+
+// FEAT: o que se perde ao trocar de canteiro é o tempo real que ele já levou, não uma fração do
+// custo — é isso que faz o aviso dizer um número que o jogador sente, não uma conta abstrata
+export function yearsLost(snapshot: Snapshot): number | null {
+  const site = snapshot.building
+  return site === null ? null : snapshot.tick - site.since
+}
+
+// FEAT: as duas condições do ponto no botão vêm das mesmas linhas que o painel já mostra — nenhuma
+// lê o instantâneo de novo, e as duas precisam valer ao mesmo tempo para o ponto não virar ruído
+export function buildReady(rows: readonly WorkRow[]): boolean {
+  return !rows.some((row) => row.state === 'building') && rows.some((row) => row.state === 'open')
+}
+
+export interface ReplaceWarning {
+  readonly key: MessageKey
+  readonly next: WorkId
+  readonly current: WorkId
+  readonly years: number
+}
+
+// FEAT: a chave (singular ou plural) e os dois nomes envolvidos são dados; a tela só traduz — assim
+// nenhuma obra fica fixa no texto, e o ano 1 escolhe a chave certa sem precisar de um clique para provar
+export function replaceWarning(next: WorkId, current: WorkId, years: number): ReplaceWarning {
+  return { key: years === 1 ? 'build.replaceYear' : 'build.replaceYears', next, current, years }
+}
+
+// FIX: uma obra vinda de confluência carrega `record: NEVER`, e duas confluências partilham o mesmo
+// valor — o sentinela nunca casa, senão a crônica nomearia a obra errada com toda a confiança
+export function workOfRecord(works: readonly Work[], record: number): WorkId | null {
+  if (record === NEVER) return null
+  const work = works.find((candidate) => candidate.record === record)
+  return work === undefined ? null : (WORKS[work.def]?.id ?? null)
+}
+
+// FEAT: o texto da linha dobrada, título e detalhe, fora do painel porque o estado aberto dela não
+// chega ao desenho estático — aqui as duas faces têm teste
+export function foldedWorksText(
+  t: (key: MessageKey, params?: Params) => string,
+  count: number,
+  open: boolean,
+): readonly [string, string] {
+  return [t('causal.works', { count }), t(open ? 'causal.worksHide' : 'causal.worksShow')]
+}
+
+// FEAT: os três lugares que narram a crônica (painel de eventos, cartão causal, corrente 2D) chamam
+// esta mesma função, para nenhum deles decidir sozinho o que fazer quando a obra não se identifica
+export function workEventTitle(
+  t: (key: MessageKey, params?: Params) => string,
+  works: readonly Work[],
+  event: EventId,
+  record: number,
+): string {
+  if (event !== 'work_done') return t(`event.${event}`)
+  const id = workOfRecord(works, record)
+  return id === null ? t('event.work_done') : t('event.work_done.named', { work: t(`work.${id}`) })
+}

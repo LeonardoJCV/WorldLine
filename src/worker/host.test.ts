@@ -2,13 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { crossingAmounts, crossingCost } from '../engine/crossing.ts'
 import { debtRatio, totalOwed } from '../engine/debt.ts'
 import { causalDistance } from '../engine/distance.ts'
-import { GOLDEN_SCRIPTS, INHERITANCE_CASE } from '../engine/golden.ts'
+import { progressWork } from '../engine/commission.ts'
 import { EVENTS, type EventRecord } from '../engine/events.ts'
+import {
+  GOLDEN_CASES,
+  GOLDEN_SCRIPTS,
+  INHERITANCE_CASE,
+  WORKS_CASE,
+  goldenWorld,
+} from '../engine/golden.ts'
 import { mergeWeights } from '../engine/merge.ts'
 import { HORIZON } from '../engine/params.ts'
 import type { Allocation, WorldState } from '../engine/state.ts'
 import { system } from '../engine/system.ts'
+import { WORKS, workIndex, workMods } from '../engine/work.ts'
 import { Worldline } from '../engine/worldline.ts'
+import {
+  runCollapseCheck,
+  runGoldenChecks,
+  runInheritanceCheck,
+  runMergeCheck,
+  runWorksCheck,
+} from '../verify/check.ts'
 import { SimulationHost } from './host.ts'
 import { toSnapshot, type FromWorker, type ToWorker, type WorldlineId } from './protocol.ts'
 import { FakeClock } from './testing.ts'
@@ -60,7 +75,7 @@ function world(sent: readonly FromWorker[], id: WorldlineId) {
 }
 
 // FEAT: o livro de acontecimentos que o observador de fato recebeu, remontado de TODOS os relatórios
-// como a tela o remonta — o `present` é um Snapshot e não carrega nem obra nem registro
+// como a tela o remonta — o `present` é um Snapshot e só guarda os ids ativos, nunca o EventRecord
 function ledger(sent: readonly FromWorker[], id: WorldlineId): (EventRecord | undefined)[] {
   const records: (EventRecord | undefined)[] = []
   for (const message of all(sent, 'progress')) {
@@ -385,6 +400,63 @@ describe('SimulationHost: commissioned works', () => {
     expect(ledger(sent, 'A')).toEqual(ledger(lived.sent, 'A'))
     expect(ledger(sent, 'B')).toEqual(ledger(lived.sent, 'B'))
     expect(ledger(sent, 'A').filter((r) => r?.event === 'work_done')).toHaveLength(1)
+  })
+})
+
+describe('SimulationHost: what the Snapshot carries about the works', () => {
+  it('streams the works a history has standing, and the one on the site', () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const line = goldenWorld(WORKS_CASE.seed, plan)
+    line.advance(WORKS_CASE.year)
+    const snapshot = toSnapshot(line.present)
+    expect(snapshot.works).toEqual(line.present.works)
+    expect(snapshot.works).toHaveLength(WORKS_CASE.done)
+    expect(snapshot.building).toEqual(line.present.building)
+    expect(snapshot.building && WORKS[snapshot.building.def]?.id).toBe(WORKS_CASE.under)
+  })
+
+  it("streams the year's progress rate, so the screen never has to derive it", () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const line = goldenWorld(WORKS_CASE.seed, plan)
+    line.advance(WORKS_CASE.year)
+    const building = toSnapshot(line.present)
+    expect(building.rate).toBeGreaterThan(0)
+    expect(building.rate).toBe(progressWork(line.present, workMods(line.present.works)))
+
+    const idle: WorldState = {
+      ...line.present,
+      allocation: { ...line.present.allocation, works: 0 },
+    }
+    expect(toSnapshot(idle).rate).toBe(0)
+  })
+
+  // FIX: WORKS_CASE em 900 não tem nenhuma obra de pé com fator `production`, então trocar
+  // workMods por NEUTRAL_MODS passaria despercebido ali; este teste exige a diferença por si
+  it('feeds the standing works into the rate, not a neutral placeholder', () => {
+    const plan = GOLDEN_SCRIPTS[WORKS_CASE.script]
+    const line = goldenWorld(WORKS_CASE.seed, plan)
+    line.advance(WORKS_CASE.year)
+    const bare: WorldState = { ...line.present, works: [] }
+    const forged: WorldState = {
+      ...line.present,
+      works: [{ def: workIndex('metallurgy'), done: line.present.tick, record: 0 }],
+    }
+    expect(toSnapshot(forged).rate).toBeGreaterThan(toSnapshot(bare).rate)
+  })
+
+  // FEAT: hashState só lê WorldState, então nenhum campo do Snapshot pode mover um fingerprint —
+  // os dezoito reproduzem exatamente como antes de o Snapshot ganhar works/building/rate
+  it('leaves every pinned fingerprint alone, because hashState never sees a Snapshot', () => {
+    const results = [
+      ...runGoldenChecks(),
+      runCollapseCheck(),
+      runInheritanceCheck(),
+      runMergeCheck(),
+      runWorksCheck(),
+    ]
+    expect(results).toHaveLength(GOLDEN_CASES.length + 4)
+    expect(results).toHaveLength(18)
+    expect(results.filter((result) => !result.ok)).toEqual([])
   })
 })
 

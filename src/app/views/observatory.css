@@ -97,9 +97,21 @@
   font-stretch: 87%;
 }
 
+/* FIX: quebrar é a rede para um rótulo mais longo que os cinco de hoje, não o comportamento normal */
 .mode {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
+}
+
+.mode__ready {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-start: var(--space-1);
+  border-radius: 999px;
+  background: var(--v-environment);
+  vertical-align: middle;
 }
 
 .topbar__end {
@@ -447,6 +459,12 @@
   .transport__step {
     min-width: 44px;
   }
+
+  /* FIX: os cinco modos numa linha só: cede a almofada lateral, nunca os 44px que o dedo pede */
+  .mode button {
+    min-width: 44px;
+    padding-inline: var(--space-2);
+  }
 }
 
 .current {
@@ -514,7 +532,8 @@
 /* FIX: o painel do modo pede mais largura que o de estado, e só ele estica a coluna */
 .hud:has(.card--allocation),
 .hud:has(.card--cross),
-.hud:has(.card--merge) {
+.hud:has(.card--merge),
+.hud:has(.card--build) {
   --hud-left: 34rem;
   grid-template-columns: minmax(280px, var(--hud-left)) minmax(80px, 1fr) minmax(230px, 21rem);
 }
@@ -552,24 +571,20 @@
   overflow: hidden;
 }
 
-/* FEAT: no aperto quem cede é a lista de referência; o painel em que se age continua inteiro */
-.hud__left > .card--allocation {
+/* FIX: capado em 100% o cartão do modo media contra a coluna inteira, somava com o piso do estado
+   acima dele e o par passava do pé; o teto reserva esse piso, e o painel destes três rola por
+   dentro até altura zero, então reservá-lo não corta nada */
+.hud__left > .card--allocation,
+.hud__left > .card--cross,
+.hud__left > .card--build {
   flex-shrink: 0;
-  max-height: 100%;
-}
-
-/* FIX: no cruzamento é o próprio cartão de cruzar que cede; o estado é a referência da comparação */
-.hud__left > .card--cross {
   min-height: 112px;
-  max-height: 100%;
+  max-height: calc(100% - 112px - var(--space-4));
 }
 
-.hud__left:has(> .card--cross) > .card--state {
-  flex-shrink: 0;
-}
-
-/* FIX: na confluência os dois cartões cedem: o estado rola por dentro e a costura também, mas
-   nenhum dos dois passa do pé da coluna, que é onde o botão de aceitar tem de continuar visível */
+/* FIX: a costura é a exceção da regra acima: o seu painel não rola por dentro, porque o aviso do
+   fim e o botão de aceitar são fixos, e reservar o piso do estado cortaria os dois — aqui quem rola
+   é a coluna, e o botão fica abaixo do pé dela em janela curta */
 .hud__left > .card--merge {
   flex-shrink: 0;
   min-height: 112px;
@@ -579,7 +594,8 @@
 /* FEAT: o painel do modo chega com um leve desvanecer, não de um só golpe */
 .card--allocation,
 .card--cross,
-.card--merge {
+.card--merge,
+.card--build {
   animation: card-in var(--motion-slow) var(--ease) both;
 }
 
@@ -593,7 +609,8 @@
 @media (prefers-reduced-motion: reduce) {
   .card--allocation,
   .card--cross,
-  .card--merge {
+  .card--merge,
+  .card--build {
     animation: none;
   }
 }
@@ -1040,6 +1057,10 @@ button.state__row:hover,
 .panel.causal[data-wide] {
   width: min(var(--causal-width, 100%), var(--causal-max));
   max-width: 100%;
+  /* FIX: na folha o painel não tem altura definida, então o `100%` do teto da rolagem não resolve e
+     a caixa do painel fica do tamanho da cadeia inteira — um vão morto embaixo do cartão; o mesmo
+     teto aqui fecha o vão, e na coluna do palco 46vh nunca é o menor, então lá nada muda */
+  max-height: min(var(--causal-height, 264px), 46vh);
 }
 
 .causal__scroll {
@@ -1126,6 +1147,11 @@ button.state__row:hover,
 
 .causal__node[data-kind='crossing'] {
   border-left: 3px dashed var(--starlight);
+}
+
+/* FEAT: a linha dobrada não é uma causa, é a contagem delas — o traço duplo diz que ali há várias */
+.causal__node[data-kind='works'] {
+  border-left: 4px double var(--starlight);
 }
 
 /* FEAT: a frase da travessia é longa e ocupa as duas linhas do nó */
@@ -1423,7 +1449,7 @@ button.causal__node:hover {
   font-size: var(--text-sm);
 }
 
-/* FEAT: o custo maior da costura lê com o peso e a largura do abalo, e numa linha só, ao lado dele */
+/* FEAT: o custo maior da costura lê com o peso e o tamanho do abalo, logo abaixo dele e colado a ele */
 .merge__food {
   margin: var(--space-1) 0 0;
   font-size: var(--text-sm);
@@ -1489,6 +1515,189 @@ button.causal__node:hover {
 .merge__status {
   color: var(--starlight);
   font-weight: 600;
+}
+
+/* FEAT: o catálogo tem trinta e duas obras, então o painel rola por dentro do cartão e cada era é
+   um bloco com o seu próprio cabeçalho */
+.hud__left > .card--build > .panel.build {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.build__note {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+
+.build__era {
+  max-width: 640px;
+}
+
+.build__eraName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  color: var(--dim);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* FEAT: a era ainda fechada continua na lista; ela só diz que nada nela está ao alcance */
+.build__closed {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.build__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build__work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name state'
+    'meta meta'
+    'missing missing'
+    'action action';
+  align-items: baseline;
+  gap: 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.build__name {
+  grid-area: name;
+  min-width: 0;
+  font-size: var(--text-base);
+}
+
+.build__state {
+  grid-area: state;
+  justify-self: end;
+  color: var(--dim);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* FIX: efeito e prazo disputavam a mesma linha e se sobrepunham no telefone em português; numa
+   caixa que quebra eles cedem um ao outro em vez de se cobrirem */
+.build__meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-5);
+  min-width: 0;
+}
+
+/* FEAT: números tabulares, para o efeito e o prazo não dançarem de linha em linha */
+.build__effect,
+.build__when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  min-width: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.build__when:empty {
+  display: none;
+}
+
+/* FIX: o nome do coeficiente e o número dele são uma coisa só; sem isto "Economia" e "+8%" caíam
+   em linhas diferentes e o prazo se enfiava no meio dos dois */
+.build__change,
+.build__progress,
+.build__years {
+  white-space: nowrap;
+}
+
+.build__missing {
+  grid-area: missing;
+  margin-top: var(--space-1);
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+
+.build__action {
+  grid-area: action;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.build__commission {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--starlight);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.build__commission:hover {
+  border-color: var(--dim);
+}
+
+.build__confirm {
+  max-width: 40ch;
+  color: var(--v-food);
+}
+
+.build__confirm button {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--haze);
+  border-radius: var(--radius);
+  color: var(--starlight);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.build__work[data-state='done'] .build__state {
+  color: var(--v-environment);
+}
+
+/* FEAT: a obra em curso é a única com canteiro aberto, e o cartão dela se destaca por isso */
+.build__work[data-state='building'] {
+  background: rgb(27 20 64 / 0.55);
+  border-color: var(--haze);
+}
+
+.build__work[data-state='building'] .build__state,
+.build__work[data-state='building'] .build__progress {
+  color: var(--v-food);
+}
+
+.build__work[data-state='open'] .build__state {
+  color: var(--starlight);
+}
+
+.build__work[data-state='locked'] {
+  opacity: 0.6;
 }
 
 /* FEAT: o zoom mora em cima da ponta esquerda do minimapa, porque os dois mandam na mesma janela de tempo */

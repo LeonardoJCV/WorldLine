@@ -1,5 +1,6 @@
 import type { Metric } from '../../engine/events.ts'
-import type { Variable } from '../../engine/state.ts'
+import { Era, type EraValue, type Variable } from '../../engine/state.ts'
+import type { WorkKey } from '../../engine/work.ts'
 import type { Locale } from './index.ts'
 import type { MessageKey } from './en.ts'
 
@@ -7,6 +8,8 @@ const compact = new Map<Locale, Intl.NumberFormat>()
 const decimal = new Map<string, Intl.NumberFormat>()
 const signedFormats = new Map<Locale, Intl.NumberFormat>()
 const percentFormats = new Map<Locale, Intl.NumberFormat>()
+const signedPercentFormats = new Map<Locale, Intl.NumberFormat>()
+const signedDecimalFormats = new Map<Locale, Intl.NumberFormat>()
 const listFormats = new Map<Locale, Intl.ListFormat>()
 const RELATIVE: ReadonlySet<Variable> = new Set(['population', 'food', 'energy', 'economy'])
 
@@ -200,4 +203,68 @@ const METRIC_KEYS: Readonly<Record<Metric, MessageKey>> = {
 
 export function metricKey(metric: Metric): MessageKey {
   return METRIC_KEYS[metric]
+}
+
+// FEAT: três coeficientes já têm nome em outra parte da tela, e repetir o texto era deixá-los divergir
+const WORK_KEYS: Readonly<Record<WorkKey, MessageKey>> = {
+  harvest: 'effect.harvest',
+  production: 'effect.production',
+  research: 'sector.research',
+  energy: 'variable.energy',
+  economy: 'variable.economy',
+  capacity: 'effect.capacity',
+  colonyCost: 'effect.colonyCost',
+  smoke: 'effect.smoke',
+  mortality: 'effect.mortality',
+  spoil: 'effect.spoil',
+  harvestNoise: 'effect.harvestNoise',
+  pollution: 'effect.pollution',
+}
+
+export function workKey(key: WorkKey): MessageKey {
+  return WORK_KEYS[key]
+}
+
+// FIX: a era chega como valor da união, não como número solto, e assim o switch é exaustivo e não
+// precisa de um retorno de emergência que nomearia a era errada
+export function eraKey(era: EraValue): MessageKey {
+  switch (era) {
+    case Era.agricultural:
+      return 'era.agricultural'
+    case Era.classical:
+      return 'event.era_classical'
+    case Era.industrial:
+      return 'era.industrial'
+    case Era.electric:
+      return 'event.era_electric'
+    case Era.space:
+      return 'event.space_era'
+  }
+}
+
+// FEAT: um fator vale 1 quando não muda nada, então o que se mostra é a distância dele até 1
+export function formatSignedPercent(value: number, locale: Locale): string {
+  let format = signedPercentFormats.get(locale)
+  if (!format) {
+    format = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 1,
+      signDisplay: 'exceptZero',
+    })
+    signedPercentFormats.set(locale, format)
+  }
+  return format.format(value)
+}
+
+// FEAT: um termo vale 0 quando não muda nada, e ele se soma à taxa, então vai cru e com sinal
+export function formatSignedDecimal(value: number, locale: Locale): string {
+  let format = signedDecimalFormats.get(locale)
+  if (!format) {
+    format = new Intl.NumberFormat(locale, {
+      maximumFractionDigits: 3,
+      signDisplay: 'exceptZero',
+    })
+    signedDecimalFormats.set(locale, format)
+  }
+  return format.format(value)
 }

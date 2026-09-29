@@ -4,6 +4,7 @@ import { useT } from '../i18n/index.ts'
 import type { WorldlineId } from '../../worker/protocol.ts'
 import type { RangeResult } from '../sim/client.ts'
 import { client, simulation, useSimulation } from '../sim/runtime.ts'
+import { workEventTitle } from '../views/build.ts'
 import { LABEL_WIDTH, drawCurrent } from './draw.ts'
 import {
   companionAt,
@@ -17,19 +18,24 @@ import {
   xToYear,
   type CompanionTrack,
   type Frame,
+  type Reserved,
 } from './geometry.ts'
 import { currentKey } from './keys.ts'
 import type { Strand } from './normalize.ts'
 import { resolveView, zoomView } from './view.ts'
+
+const NO_WORKS = Object.freeze([])
 
 interface CurrentProps {
   readonly width: number
   readonly height: number
   readonly frame: Frame
   readonly focus: Strand | null
+  // FEAT: o retângulo que o cartão de estado cobre do palco, medido pelo observatório
+  readonly reserved: Reserved | null
 }
 
-export function Current({ width, height, frame, focus }: CurrentProps) {
+export function Current({ width, height, frame, focus, reserved }: CurrentProps) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [data, setData] = useState<RangeResult | null>(null)
@@ -40,6 +46,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
   const present = useSimulation((s) => s.present?.tick ?? 0)
   const cursor = useSimulation((s) => s.cursor)
   const events = useSimulation((s) => s.events)
+  const works = useSimulation((s) => s.present?.works ?? NO_WORKS)
   const seed = useSimulation((s) => s.seed ?? 0)
   const view = useSimulation((s) => s.view)
   const selected = useSimulation((s) => s.selected)
@@ -150,6 +157,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         frame,
         data,
         markers,
+        reserved,
         selected,
         decisions,
         from: shownFrom,
@@ -158,7 +166,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
         cursor,
         focus,
         phase: seedPhase(seed),
-        label: (event) => t(`event.${event}`),
+        label: (event, index) => workEventTitle(t, works, event, index),
         yearLabel: formatYear,
         companions,
         crossings,
@@ -171,6 +179,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     frame,
     data,
     markers,
+    reserved,
     selected,
     decisions,
     shownFrom,
@@ -180,6 +189,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
     focus,
     seed,
     t,
+    works,
     companions,
     crossings,
   ])
@@ -230,7 +240,7 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
       style={{ width, height }}
       onPointerDown={(event) => {
         const { x, y } = pointAt(event)
-        const hit = markerAt(markers, x, y, frame, LABEL_WIDTH)
+        const hit = markerAt(markers, x, y, frame, LABEL_WIDTH, reserved)
         if (hit) {
           select(hit.index)
           return
@@ -250,7 +260,8 @@ export function Current({ width, height, frame, focus }: CurrentProps) {
           return
         }
         event.currentTarget.style.cursor =
-          markerAt(markers, x, y, frame, LABEL_WIDTH) || companionAt(companions, x, y, frame)
+          markerAt(markers, x, y, frame, LABEL_WIDTH, reserved) ||
+          companionAt(companions, x, y, frame)
             ? 'pointer'
             : ''
       }}

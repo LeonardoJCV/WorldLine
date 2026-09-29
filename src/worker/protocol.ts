@@ -1,5 +1,5 @@
 import type { Colony } from '../engine/colony.ts'
-import type { Commission } from '../engine/commission.ts'
+import { progressWork, type Commission } from '../engine/commission.ts'
 import type { Crossing, CrossingKind, Dose } from '../engine/crossing.ts'
 import type { Debt, Paradox } from '../engine/debt.ts'
 import { EVENTS, type EventId, type EventRecord } from '../engine/events.ts'
@@ -12,7 +12,7 @@ import {
   type Variable,
   type WorldState,
 } from '../engine/state.ts'
-import type { WorkId } from '../engine/work.ts'
+import { workMods, type Building, type Work, type WorkId } from '../engine/work.ts'
 
 export const SPEEDS = [1, 4, 16, 64, 256] as const
 export type Speed = (typeof SPEEDS)[number] | 'max'
@@ -33,6 +33,11 @@ export interface Snapshot {
   readonly home: number | null
   // FEAT: o livro-razão do estado que este snapshot descreve
   readonly debts: readonly Debt[]
+  // FEAT: a identidade da obra vive no estado, não no registro; sem ela a tela não sabe o que nomear
+  readonly works: readonly Work[]
+  readonly building: Building | null
+  // FEAT: a tela divide dois números que recebeu em vez de recalcular a produção do ano
+  readonly rate: number
 }
 
 // FEAT: a comida por pessoa que o motor lê nos dois estados, porque o estoque somar não é a colheita
@@ -232,5 +237,8 @@ export function toSnapshot(
     status: state.status,
     home: state.home,
     debts: state.debts,
+    works: state.works,
+    building: state.building,
+    rate: progressWork(state, workMods(state.works)),
   }
 }

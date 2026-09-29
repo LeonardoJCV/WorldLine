@@ -3,15 +3,18 @@ import { EVENTS } from '../../engine/events.ts'
 import { formatYear } from '../i18n/format.ts'
 import { useT } from '../i18n/index.ts'
 import { simulation, useSimulation } from '../sim/runtime.ts'
+import { workEventTitle } from './build.ts'
 import { historyRows } from './cross.ts'
 
 const EPISODES = new Set(EVENTS.filter((def) => def.kind === 'condition').map((def) => def.id))
 const LIMIT = 200
 const NO_CROSSINGS = Object.freeze([])
+const NO_WORKS = Object.freeze([])
 
 export function EventsPanel() {
   const t = useT()
   const events = useSimulation((s) => s.events)
+  const works = useSimulation((s) => s.present?.works ?? NO_WORKS)
   const selected = useSimulation((s) => s.selected)
   const world = useSimulation((s) => s.worlds.find((w) => w.info.id === s.focus))
   const fork = world?.info.fork ?? 0
@@ -40,7 +43,7 @@ export function EventsPanel() {
                   onClick={() => select(row.index)}
                 >
                   <span className="events__year">{formatYear(row.year)}</span>
-                  <span>{t(`event.${row.record.event}`)}</span>
+                  <span>{workEventTitle(t, works, row.record.event, row.index)}</span>
                   {row.year < fork && (
                     <span className="events__inherited">{t('events.inherited')}</span>
                   )}

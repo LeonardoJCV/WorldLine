@@ -6,6 +6,8 @@ import { STRAND_COLORS } from '../theme/palette.ts'
 import {
   buildRibbons,
   episodeY,
+  ERA_LABEL_GAP,
+  eraLabelClear,
   eraLabelY,
   eraLabelsFit,
   eraRowsUsed,
@@ -13,6 +15,7 @@ import {
   type CrossingLine,
   type Frame,
   type Marker,
+  type Reserved,
   type Ribbon,
 } from './geometry.ts'
 import type { Strand } from './normalize.ts'
@@ -23,6 +26,8 @@ export interface DrawInput {
   readonly frame: Frame
   readonly data: RangeResult | null
   readonly markers: readonly Marker[]
+  // FEAT: o que o cartão de estado cobre do palco, para nenhum nome de era ficar atrás dele
+  readonly reserved: Reserved | null
   readonly selected: number | null
   readonly decisions: readonly Decision[]
   readonly from: number
@@ -31,7 +36,7 @@ export interface DrawInput {
   readonly cursor: number | null
   readonly focus: Strand | null
   readonly phase: number
-  readonly label: (event: EventId) => string
+  readonly label: (event: EventId, index: number) => string
   readonly yearLabel: (year: number) => string
   readonly companions: readonly {
     readonly id: string
@@ -109,11 +114,15 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       ctx.beginPath()
       ctx.arc(marker.x, frame.centerY, chosen ? 4 : 2.5, 0, Math.PI * 2)
       ctx.fill()
-      if (marker.row >= 0 && labelled) {
+      if (
+        marker.row >= 0 &&
+        labelled &&
+        eraLabelClear(marker, frame, rows, LABEL_WIDTH, input.reserved)
+      ) {
         ctx.textAlign = marker.align === 'end' ? 'right' : 'left'
         ctx.fillText(
-          input.label(marker.event),
-          marker.align === 'end' ? marker.x - 6 : marker.x + 6,
+          input.label(marker.event, marker.index),
+          marker.align === 'end' ? marker.x - ERA_LABEL_GAP : marker.x + ERA_LABEL_GAP,
           y,
         )
       }
@@ -121,7 +130,7 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       const y = episodeY(frame, marker.row)
       ctx.fillStyle = chosen ? BRIGHT : MUTED
       ctx.fillRect(marker.x, y, Math.max(2, marker.x2 - marker.x), 3)
-      const text = input.label(marker.event)
+      const text = input.label(marker.event, marker.index)
       if (chosen || marker.x2 - marker.x > ctx.measureText(text).width + 12) {
         ctx.fillText(text, marker.x, y + 12)
       }
@@ -132,7 +141,17 @@ function drawEvents(ctx: CanvasRenderingContext2D, input: DrawInput): void {
       ctx.moveTo(marker.x, frame.centerY + 6)
       ctx.lineTo(marker.x, frame.centerY + 14)
       ctx.stroke()
-      if (chosen) ctx.fillText(input.label(marker.event), marker.x + 6, frame.centerY + 20)
+      if (chosen) {
+        const text = input.label(marker.event, marker.index)
+        const width = ctx.measureText(text).width
+        // FIX: preso às duas bordas, não só afastado de uma, senão a ponta cortada troca de lado
+        // (mesma regra de eraLabelsFit: sem caber, o rótulo não é desenhado)
+        if (width <= frame.right - frame.left) {
+          const x = Math.min(Math.max(marker.x + 6, frame.left), frame.right - width)
+          ctx.textAlign = 'left'
+          ctx.fillText(text, x, frame.centerY + 20)
+        }
+      }
     }
   }
   ctx.restore()

@@ -7,6 +7,7 @@ import { PLANET_BODY } from '../planet/uniforms.ts'
 import {
   COMPANION_SCALE,
   EPISODE_ROWS,
+  ERA_LABEL_GAP,
   ERA_LABEL_INK,
   ERA_ROW_HEIGHT,
   ERA_ROWS,
@@ -18,6 +19,7 @@ import {
   companionSide,
   crossingSegments,
   episodeY,
+  eraLabelClear,
   eraLabelY,
   eraLabelsFit,
   layoutEvents,
@@ -27,6 +29,7 @@ import {
   xToYear,
   yearToX,
   type Frame,
+  type Marker,
 } from './geometry.ts'
 import { STRANDS, normalize } from './normalize.ts'
 
@@ -425,26 +428,74 @@ describe('markerAt', () => {
   )
 
   it('finds an era by its stem or its label', () => {
-    expect(markerAt(markers, 100, frame.centerY - 20, frame, 120)?.event).toBe(
+    expect(markerAt(markers, 100, frame.centerY - 20, frame, 120, null)?.event).toBe(
       'agricultural_revolution',
     )
-    expect(markerAt(markers, 160, eraLabelY(frame, 0, 1), frame, 120)?.event).toBe(
+    expect(markerAt(markers, 160, eraLabelY(frame, 0, 1), frame, 120, null)?.event).toBe(
       'agricultural_revolution',
     )
   })
 
   it('finds an episode by its band and a pulse by its tick', () => {
-    expect(markerAt(markers, 400, episodeY(frame, 0) + 2, frame, 120)?.event).toBe('famine')
-    expect(markerAt(markers, 660, frame.centerY + 10, frame, 120)?.event).toBe('epidemic')
+    expect(markerAt(markers, 400, episodeY(frame, 0) + 2, frame, 120, null)?.event).toBe('famine')
+    expect(markerAt(markers, 660, frame.centerY + 10, frame, 120, null)?.event).toBe('epidemic')
   })
 
   it('misses empty space', () => {
-    expect(markerAt(markers, 500, frame.centerY - 150, frame, 120)).toBeNull()
+    expect(markerAt(markers, 500, frame.centerY - 150, frame, 120, null)).toBeNull()
   })
 
   it('clamps events that start before the window', () => {
     const [early] = layoutEvents([record('famine', 5, 50)], 20, 100, 100, frame, 120)
     expect(early?.x).toBe(frame.left)
+  })
+})
+
+describe('eraLabelClear', () => {
+  // FIX: medido em navegador a 1440x900 — o cartão de estado cobre 32..276 x 16..303 do palco, e
+  // dentro dele o nome da era saía a 22% da tinta, embaralhado com as linhas do próprio cartão
+  const CARD = { left: 32, right: 276, top: 16, bottom: 303 }
+  const desk = stageLayout(1440, 746).frame
+  const LABEL = 150
+
+  const era = (x: number, row: number, align: 'start' | 'end' = 'start'): Marker => ({
+    kind: 'era',
+    event: 'agricultural_revolution',
+    index: 0,
+    x,
+    x2: x,
+    row,
+    align,
+  })
+
+  it('drops the era name the state card covers and keeps the one that clears its edge', () => {
+    // a revolução agrícola do mundo medido, na haste de x=156: o nome nasce dentro do cartão
+    expect(eraLabelClear(era(156, 0), desk, ERA_ROWS, LABEL, CARD)).toBe(false)
+    // FEAT: o vão que o desenho abre entre a haste e a letra é a borda que decide
+    expect(eraLabelClear(era(276 - ERA_LABEL_GAP, 0), desk, ERA_ROWS, LABEL, CARD)).toBe(true)
+    // alinhado à direita o nome cresce para a esquerda, e é essa ponta que entra sob o cartão
+    expect(eraLabelClear(era(276 + LABEL, 0, 'end'), desk, ERA_ROWS, LABEL, CARD)).toBe(false)
+    expect(eraLabelClear(era(282 + LABEL, 0, 'end'), desk, ERA_ROWS, LABEL, CARD)).toBe(true)
+  })
+
+  it('clears every name when no card covers the stage, as on the phone sheet', () => {
+    expect(eraLabelClear(era(156, 0), desk, ERA_ROWS, LABEL, null)).toBe(true)
+    expect(eraLabelClear(era(156, 0, 'end'), desk, ERA_ROWS, LABEL, null)).toBe(true)
+  })
+
+  it('clears the name of a row that rose above the card', () => {
+    const tall = { ...CARD, bottom: 40 }
+    expect(eraLabelClear(era(156, 0), desk, ERA_ROWS, LABEL, tall)).toBe(true)
+  })
+
+  // FEAT: sem isto o nome coberto continuaria clicável — uma área de acerto sem tinta nenhuma
+  it('never offers a name to click where it drew none', () => {
+    const markers = [era(156, 0)]
+    const y = eraLabelY(desk, 0, 1)
+    expect(markerAt(markers, 200, y, desk, LABEL, CARD)).toBeNull()
+    expect(markerAt(markers, 200, y, desk, LABEL, null)?.x).toBe(156)
+    // FEAT: a haste no eixo segue alcançável, coberta ou não
+    expect(markerAt(markers, 156, desk.centerY, desk, LABEL, CARD)?.x).toBe(156)
   })
 })
 

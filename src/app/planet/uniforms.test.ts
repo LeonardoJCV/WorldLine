@@ -28,6 +28,9 @@ function snapshot(
     previous: null,
     home: null,
     debts: [],
+    works: [],
+    building: null,
+    rate: 0,
   }
 }
 

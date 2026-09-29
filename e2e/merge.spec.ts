@@ -655,8 +655,9 @@ test('names what the seam costs in food, and the famine that follows proves the 
   const sentence = page.locator('.merge__food')
   await expect(sentence).toBeVisible()
   const said = ((await sentence.textContent()) ?? '').trim()
+  // FEAT: o número de hoje é só da sobrevivente, e a frase o nomeia — 'in A alone', não 'apart'
   const numbers =
-    /^Food per person: ([\d.]+) apart, ([\d.]+) together — stores add up, harvests do not$/.exec(
+    /^Food per person: ([\d.]+) in A alone, ([\d.]+) together — stores add up, harvests do not$/.exec(
       said,
     )
   if (!numbers) throw new Error(`the panel never named the cost in food: ${said}`)
@@ -675,6 +676,94 @@ test('names what the seam costs in food, and the famine that follows proves the 
   await expect(page.locator('.events__item', { hasText: 'Famine' })).toContainText('0201')
   expect(compact(await stateValue(page, 'food'))).toBeLessThan(promised * 0.1)
 })
+
+// FIX: numa coluna de 272px a confluência não cabe inteira, e o que não pode faltar são os números:
+// capar o cartão para o botão caber deixava a costura com 0 de 7 níveis, sem o abalo e sem a frase da
+// comida, e o observador aceitava uma união irreversível sem número nenhum na tela. O botão fica
+// abaixo do pé e se alcança rolando a coluna; estes portões prendem o que não pode ceder no lugar dele
+for (const locale of ['en', 'pt-BR'] as const) {
+  for (const [width, height] of [
+    [1440, 680],
+    [1280, 660],
+  ] as const) {
+    test(`never hides the seam to fit the accept button in ${locale} at ${width}x${height}`, async ({
+      page,
+    }) => {
+      test.slow()
+      await page.addInitScript((value: string) => {
+        localStorage.setItem('worldline.locale', value)
+      }, locale)
+      await page.setViewportSize({ width, height })
+      await page.goto(pairAtYear(200))
+      await expect(page.getByTestId('year')).toHaveText('0200')
+      await page
+        .locator('.mode')
+        .getByRole('button', { name: locale === 'en' ? 'Merge' : 'Confluir' })
+        .click()
+      await page
+        .getByRole('button', {
+          name:
+            locale === 'en'
+              ? 'From history B, let it flow into this one'
+              : 'Da história B, deixar que ela deságue nesta',
+        })
+        .click()
+      await expect(page.locator('.merge__rows li')).toHaveCount(VARIABLES.length)
+      // FIX: o tipo variável chega depois do primeiro desenho e reflui as linhas; medir antes dele
+      // media uma coluna que o observador nunca chega a ver
+      await page.evaluate(() => document.fonts.ready)
+      await page.waitForFunction(() => {
+        const rail = document.querySelector('.hud__left')
+        if (!rail) return false
+        const win = window as unknown as { __settled?: { key: string; frames: number } }
+        const key = [...rail.children]
+          .map((card) => Math.round(card.getBoundingClientRect().height))
+          .join(',')
+        const seen = win.__settled
+        win.__settled =
+          seen && seen.key === key ? { key, frames: seen.frames + 1 } : { key, frames: 1 }
+        return win.__settled.frames >= 5
+      })
+
+      const shown = await page.evaluate(() => {
+        const rail = document.querySelector('.hud__left')
+        const statePanel = document.querySelector('.panel.state')
+        const seam = document.querySelector('.merge__seam')
+        const button = document.querySelector('button.merge__confirm')
+        if (!rail || !statePanel || !seam || !button) return null
+        const railBox = rail.getBoundingClientRect()
+        const seamBox = seam.getBoundingClientRect()
+        // FEAT: quanto de cada caixa a que a rola deixa mesmo aparecer
+        const whole = (node: Element, clip: DOMRect) => {
+          const box = node.getBoundingClientRect()
+          return box.top >= clip.top - 1 && box.bottom <= clip.bottom + 1
+        }
+        return {
+          stateClient: statePanel.clientHeight,
+          stateRows: [...statePanel.querySelectorAll('.state__row')].filter((row) =>
+            whole(row, statePanel.getBoundingClientRect()),
+          ).length,
+          seamSeen: Math.round(seamBox.height),
+          seamScrolls: seam.scrollHeight > seam.clientHeight,
+          seamRows: [...document.querySelectorAll('.merge__rows li')].filter((row) =>
+            whole(row, seamBox),
+          ).length,
+          reachable: button.getBoundingClientRect().bottom <= railBox.top + rail.scrollHeight + 1,
+        }
+      })
+      if (!shown) throw new Error('the merge rail did not render')
+      // FEAT: o cartão de estado nunca vira uma tarja de altura zero com o foco preso lá dentro
+      expect(shown.stateClient).toBeGreaterThan(24)
+      expect(shown.stateRows).toBeGreaterThanOrEqual(1)
+      // FEAT: a costura mostra uma fatia legível dos níveis e rola para o resto
+      expect(shown.seamSeen).toBeGreaterThanOrEqual(60)
+      expect(shown.seamRows).toBeGreaterThanOrEqual(2)
+      expect(shown.seamScrolls).toBe(true)
+      // FEAT: e o botão, ainda que abaixo do pé, está dentro do que a coluna rola
+      expect(shown.reachable).toBe(true)
+    })
+  }
+}
 
 test('never announces a confluence the observer did not watch happen', async ({ page }) => {
   test.slow()

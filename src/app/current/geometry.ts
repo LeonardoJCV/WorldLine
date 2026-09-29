@@ -12,6 +12,14 @@ export interface Frame {
   readonly height: number
 }
 
+// FEAT: o retângulo que um cartão do HUD cobre sobre o palco, nas coordenadas do quadro
+export interface Reserved {
+  readonly left: number
+  readonly right: number
+  readonly top: number
+  readonly bottom: number
+}
+
 export interface StageLayout {
   readonly frame: Frame
   readonly planet: { readonly size: number; readonly cx: number; readonly cy: number }
@@ -195,6 +203,8 @@ export const EPISODE_ROW_HEIGHT = 8
 // FEAT: measureText dá 10,86px de caixa aos nomes de era no tipo de 12px do rótulo (10,84 no
 // WebKit); arredondado para cima, é o que duas fileiras precisam distar para os nomes não colidirem
 export const ERA_LABEL_INK = 11
+// FEAT: o vão entre a haste e a primeira letra do nome, o mesmo que o desenho abre dos dois lados
+export const ERA_LABEL_GAP = 6
 
 // FEAT: a folga entre o eixo e o topo do quadro, repartida entre as fileiras realmente em uso
 export function eraLabelStep(frame: Frame, rows: number): number {
@@ -218,6 +228,29 @@ export function eraRowsUsed(markers: readonly Marker[]): number {
 // troca um nome engolido por cinco borrados; abaixo da altura do próprio texto, nenhum é desenhado
 export function eraLabelsFit(frame: Frame, rows: number): boolean {
   return eraLabelStep(frame, rows) >= ERA_LABEL_INK
+}
+
+// FIX: o cartão de estado cobre o canto onde as fileiras de era moram e deixa o nome a 22% da sua
+// tinta, ilegível e embaralhado com as linhas do cartão; como no limiar, o que não se lê não é
+// desenhado, e a haste no eixo continua sendo o marcador
+export function eraLabelClear(
+  marker: Marker,
+  frame: Frame,
+  rows: number,
+  labelWidth: number,
+  reserved: Reserved | null,
+): boolean {
+  if (reserved === null) return true
+  const left =
+    marker.align === 'end' ? marker.x - ERA_LABEL_GAP - labelWidth : marker.x + ERA_LABEL_GAP
+  const y = eraLabelY(frame, marker.row, rows)
+  const ink = ERA_LABEL_INK / 2
+  return (
+    left + labelWidth <= reserved.left ||
+    left >= reserved.right ||
+    y + ink <= reserved.top ||
+    y - ink >= reserved.bottom
+  )
 }
 
 export function episodeY(frame: Frame, row: number): number {
@@ -358,6 +391,7 @@ export function markerAt(
   y: number,
   frame: Frame,
   labelWidth: number,
+  reserved: Reserved | null,
 ): Marker | null {
   const rows = eraRowsUsed(markers)
   // FEAT: sem nome desenhado não há nome para acertar; a haste no eixo segue alcançável
@@ -371,6 +405,7 @@ export function markerAt(
       const left = marker.align === 'end' ? marker.x - labelWidth : marker.x
       const onLabel =
         labelled &&
+        eraLabelClear(marker, frame, rows, labelWidth, reserved) &&
         marker.row >= 0 &&
         x >= left &&
         x <= left + labelWidth &&
